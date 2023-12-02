@@ -1,3 +1,11 @@
+# MOS6502
+
+This is a toy project where I've created an assembler for the 6502 assembly language. An emulator is in the works and a dissasembler would be fun to do as well.
+
+
+
+## References
+
 https://skilldrick.github.io/easy6502/
 http://www.6502.org/tutorials/6502opcodes.html
 https://en.wikibooks.org/wiki/6502_Assembly#Load_and_Store
