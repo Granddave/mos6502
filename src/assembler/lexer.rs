@@ -20,6 +20,17 @@ impl Default for TokenType {
 pub struct Token {
     pub token: TokenType,
     pub literal: String,
+    pub line_number: usize, // Line number in file where token is found
+}
+
+impl Token {
+    pub fn new() -> Self {
+        Self {
+            token: TokenType::Eof,
+            literal: "".to_string(),
+            line_number: 1,
+        }
+    }
 }
 
 impl ToString for Token {
@@ -36,20 +47,13 @@ impl ToString for Token {
         }
     }
 }
-impl Token {
-    pub fn new(token_type: TokenType, literal: String) -> Self {
-        Self {
-            token: token_type,
-            literal,
-        }
-    }
-}
 
 pub struct Lexer<'a> {
     input: &'a str,       // Input string
     position: usize,      // Current position in input (points to current char)
     read_position: usize, // Current reading position in input (after current char)
     ch: Option<char>,     // Current char under examination
+    line_number: usize,   // Current line number in input
 }
 
 impl<'a> Lexer<'a> {
@@ -59,6 +63,7 @@ impl<'a> Lexer<'a> {
             position: 0,
             read_position: 0,
             ch: None,
+            line_number: 1,
         };
         lexer.read_char();
         lexer
@@ -84,6 +89,9 @@ impl<'a> Lexer<'a> {
 
     fn skip_whitespace(&mut self) {
         while self.ch.is_some() && self.ch.unwrap().is_whitespace() {
+            if self.ch.unwrap() == '\n' {
+                self.line_number += 1;
+            }
             self.read_char();
         }
     }
@@ -112,9 +120,17 @@ impl<'a> Lexer<'a> {
         self.input[position..self.position].to_string()
     }
 
+    fn create_token(&mut self, token: TokenType, literal: &str) -> Token {
+        Token {
+            token,
+            literal: literal.to_string(),
+            line_number: self.line_number,
+        }
+    }
+
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
-        let token = match self.ch {
+        match self.ch {
             Some(ch) => match ch {
                 ';' => {
                     self.skip_comment();
@@ -122,63 +138,39 @@ impl<'a> Lexer<'a> {
                 }
                 '$' => {
                     self.read_char();
-                    let token = Token {
-                        token: TokenType::Hex,
-                        literal: self.read_hex(),
-                    };
-                    Some(token)
+                    let hex = self.read_hex();
+                    Some(self.create_token(TokenType::Hex, &hex))
                 }
                 '#' => {
                     self.read_char();
-                    Some(Token {
-                        token: TokenType::LiteralNumber,
-                        literal: '#'.to_string(),
-                    })
+                    Some(self.create_token(TokenType::LiteralNumber, "#"))
                 }
                 ':' => {
                     self.read_char();
-                    Some(Token {
-                        token: TokenType::Colon,
-                        literal: ':'.to_string(),
-                    })
+                    Some(self.create_token(TokenType::Colon, ":"))
                 }
                 ',' => {
                     self.read_char();
-                    Some(Token {
-                        token: TokenType::Comma,
-                        literal: ','.to_string(),
-                    })
+                    Some(self.create_token(TokenType::Comma, ","))
                 }
                 '(' => {
                     self.read_char();
-                    Some(Token {
-                        token: TokenType::ParenLeft,
-                        literal: '('.to_string(),
-                    })
+                    Some(self.create_token(TokenType::ParenLeft, "("))
                 }
                 ')' => {
                     self.read_char();
-                    Some(Token {
-                        token: TokenType::ParenRight,
-                        literal: ')'.to_string(),
-                    })
+                    Some(self.create_token(TokenType::ParenRight, ")"))
                 }
-                'A'..='Z' | 'a'..='z' | '_' => Some(Token {
-                    token: TokenType::Identifier,
-                    literal: self.read_identifier(),
-                }),
+                'A'..='Z' | 'a'..='z' | '_' => {
+                    let identifier = self.read_identifier();
+                    Some(self.create_token(TokenType::Identifier, &identifier))
+                }
                 _ => {
                     panic!("Lexer: Unexpected character: '{}'", ch)
                 }
             },
-            None => Some(Token {
-                token: TokenType::Eof,
-                literal: "".to_string(),
-            }),
-        };
-
-        // eprintln!("Lexer: {:?}", token);
-        token
+            None => Some(self.create_token(TokenType::Eof, "")),
+        }
     }
 }
 
@@ -230,18 +222,22 @@ mod tests {
             Token {
                 token: TokenType::Identifier,
                 literal: "LDA".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::LiteralNumber,
                 literal: "#".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Hex,
                 literal: "00".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
+                line_number: 1,
             },
         ];
         let mut lexer = Lexer::new(input);
@@ -263,14 +259,17 @@ mod tests {
             Token {
                 token: TokenType::Identifier,
                 literal: "my_label".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Colon,
                 literal: ":".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
+                line_number: 1,
             },
         ];
         let mut lexer = Lexer::new(input);
@@ -287,23 +286,29 @@ mod tests {
 
     #[test]
     fn test_comment() {
-        let input = "; this is a comment\nLDA #$00 ; Another one\n;Last one";
+        let input = "; this is a comment
+LDA #$00 ; Another one
+;Last one";
         let result = vec![
             Token {
                 token: TokenType::Identifier,
                 literal: "LDA".to_string(),
+                line_number: 2,
             },
             Token {
                 token: TokenType::LiteralNumber,
                 literal: "#".to_string(),
+                line_number: 2,
             },
             Token {
                 token: TokenType::Hex,
                 literal: "00".to_string(),
+                line_number: 2,
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
+                line_number: 3,
             },
         ];
         let mut lexer = Lexer::new(input);
@@ -325,30 +330,37 @@ mod tests {
             Token {
                 token: TokenType::Identifier,
                 literal: "LDA".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::ParenLeft,
                 literal: "(".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Hex,
                 literal: "D2".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Comma,
                 literal: ",".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Identifier,
                 literal: "X".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::ParenRight,
                 literal: ")".to_string(),
+                line_number: 1,
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
+                line_number: 1,
             },
         ];
         let mut lexer = Lexer::new(input);

@@ -20,14 +20,8 @@ impl<'a> Parser<'a> {
 
         let mut s = Self {
             lexer,
-            current_token: Token {
-                token: TokenType::Eof,
-                literal: "".to_string(),
-            },
-            peek_token: Token {
-                token: TokenType::Eof,
-                literal: "".to_string(),
-            },
+            current_token: Token::new(),
+            peek_token: Token::new(),
         };
 
         s.next_token();
