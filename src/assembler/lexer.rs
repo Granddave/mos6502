@@ -1,5 +1,3 @@
-use super::{Token, TokenType};
-
 // Example code:
 //
 //   LDX #$00
@@ -23,8 +21,54 @@ use super::{Token, TokenType};
 // '$' = hex number, e.g. `$12`
 // '#' = literal hex number, e.g. `#$12`
 // ';' = comment, e.g. `; this is a comment`
+#[derive(Debug, PartialEq, Clone)]
+pub enum TokenType {
+    LiteralNumber, // '#'
+    Hex,           // '$'
+    Colon,         // ':'
+    Comma,         // ','
+    ParenLeft,     // '('
+    ParenRight,    // ')'
+    Identifier,
+    Eof,
+}
 
-struct Lexer<'a> {
+impl Default for TokenType {
+    fn default() -> Self {
+        Self::Eof
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct Token {
+    pub token: TokenType,
+    pub literal: String,
+}
+
+impl ToString for Token {
+    fn to_string(&self) -> String {
+        match self.token {
+            TokenType::LiteralNumber => self.literal.to_owned(),
+            TokenType::Hex => "$".to_string() + &self.literal,
+            TokenType::Colon => ":".to_owned(),
+            TokenType::Comma => ",".to_owned(),
+            TokenType::ParenLeft => "(".to_owned(),
+            TokenType::ParenRight => ")".to_owned(),
+            TokenType::Identifier => self.literal.to_owned(),
+            TokenType::Eof => "<eof>".to_owned(),
+        }
+    }
+}
+impl Token {
+    pub fn new(token_type: TokenType, literal: String) -> Self {
+        Self {
+            token: token_type,
+            literal,
+        }
+    }
+}
+
+pub struct Lexer<'a> {
     input: &'a str,       // Input string
     position: usize,      // Current position in input (points to current char)
     read_position: usize, // Current reading position in input (after current char)
@@ -32,7 +76,7 @@ struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str) -> Self {
         let mut lexer = Self {
             input,
             position: 0,
@@ -102,7 +146,7 @@ impl<'a> Lexer<'a> {
                 '$' => {
                     self.read_char();
                     let token = Token {
-                        token_type: TokenType::Hex,
+                        token: TokenType::Hex,
                         literal: self.read_hex(),
                     };
                     Some(token)
@@ -110,40 +154,40 @@ impl<'a> Lexer<'a> {
                 '#' => {
                     self.read_char();
                     Some(Token {
-                        token_type: TokenType::LiteralNumber,
+                        token: TokenType::LiteralNumber,
                         literal: '#'.to_string(),
                     })
                 }
                 ':' => {
                     self.read_char();
                     Some(Token {
-                        token_type: TokenType::Label,
+                        token: TokenType::Colon,
                         literal: ':'.to_string(),
                     })
                 }
                 ',' => {
                     self.read_char();
                     Some(Token {
-                        token_type: TokenType::Comma,
+                        token: TokenType::Comma,
                         literal: ','.to_string(),
                     })
                 }
                 '(' => {
                     self.read_char();
                     Some(Token {
-                        token_type: TokenType::ParenLeft,
+                        token: TokenType::ParenLeft,
                         literal: '('.to_string(),
                     })
                 }
                 ')' => {
                     self.read_char();
                     Some(Token {
-                        token_type: TokenType::ParenRight,
+                        token: TokenType::ParenRight,
                         literal: ')'.to_string(),
                     })
                 }
                 'A'..='Z' | 'a'..='z' | '_' => Some(Token {
-                    token_type: TokenType::Identifier,
+                    token: TokenType::Identifier,
                     literal: self.read_identifier(),
                 }),
                 _ => {
@@ -151,11 +195,12 @@ impl<'a> Lexer<'a> {
                 }
             },
             None => Some(Token {
-                token_type: TokenType::Eof,
+                token: TokenType::Eof,
                 literal: "".to_string(),
             }),
         };
 
+        // eprintln!("Lexer: {:?}", token);
         token
     }
 }
@@ -185,7 +230,7 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token().unwrap();
-            assert_eq!(token.token_type, TokenType::Hex);
+            assert_eq!(token.token, TokenType::Hex);
             assert_eq!(token.literal, expected);
         }
     }
@@ -196,7 +241,7 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token().unwrap();
-            assert_eq!(token.token_type, TokenType::Identifier);
+            assert_eq!(token.token, TokenType::Identifier);
             assert_eq!(token.literal, expected);
         }
     }
@@ -206,19 +251,19 @@ mod tests {
         let input = "LDA #$00";
         let result = vec![
             Token {
-                token_type: TokenType::Identifier,
+                token: TokenType::Identifier,
                 literal: "LDA".to_string(),
             },
             Token {
-                token_type: TokenType::LiteralNumber,
+                token: TokenType::LiteralNumber,
                 literal: "#".to_string(),
             },
             Token {
-                token_type: TokenType::Hex,
+                token: TokenType::Hex,
                 literal: "00".to_string(),
             },
             Token {
-                token_type: TokenType::Eof,
+                token: TokenType::Eof,
                 literal: "".to_string(),
             },
         ];
@@ -227,7 +272,7 @@ mod tests {
         loop {
             let token = lexer.next_token().unwrap();
             tokens.push(token.clone());
-            if token.token_type == TokenType::Eof {
+            if token.token == TokenType::Eof {
                 break;
             }
         }
@@ -239,15 +284,15 @@ mod tests {
         let input = "my_label:";
         let result = vec![
             Token {
-                token_type: TokenType::Identifier,
+                token: TokenType::Identifier,
                 literal: "my_label".to_string(),
             },
             Token {
-                token_type: TokenType::Label,
+                token: TokenType::Colon,
                 literal: ":".to_string(),
             },
             Token {
-                token_type: TokenType::Eof,
+                token: TokenType::Eof,
                 literal: "".to_string(),
             },
         ];
@@ -256,7 +301,7 @@ mod tests {
         loop {
             let token = lexer.next_token().unwrap();
             tokens.push(token.clone());
-            if token.token_type == TokenType::Eof {
+            if token.token == TokenType::Eof {
                 break;
             }
         }
@@ -268,19 +313,19 @@ mod tests {
         let input = "; this is a comment\nLDA #$00 ; Another one\n;Last one";
         let result = vec![
             Token {
-                token_type: TokenType::Identifier,
+                token: TokenType::Identifier,
                 literal: "LDA".to_string(),
             },
             Token {
-                token_type: TokenType::LiteralNumber,
+                token: TokenType::LiteralNumber,
                 literal: "#".to_string(),
             },
             Token {
-                token_type: TokenType::Hex,
+                token: TokenType::Hex,
                 literal: "00".to_string(),
             },
             Token {
-                token_type: TokenType::Eof,
+                token: TokenType::Eof,
                 literal: "".to_string(),
             },
         ];
@@ -289,7 +334,7 @@ mod tests {
         loop {
             let token = lexer.next_token().unwrap();
             tokens.push(token.clone());
-            if token.token_type == TokenType::Eof {
+            if token.token == TokenType::Eof {
                 break;
             }
         }
@@ -301,31 +346,31 @@ mod tests {
         let input = "LDA ($D2,X)";
         let result = vec![
             Token {
-                token_type: TokenType::Identifier,
+                token: TokenType::Identifier,
                 literal: "LDA".to_string(),
             },
             Token {
-                token_type: TokenType::ParenLeft,
+                token: TokenType::ParenLeft,
                 literal: "(".to_string(),
             },
             Token {
-                token_type: TokenType::Hex,
+                token: TokenType::Hex,
                 literal: "D2".to_string(),
             },
             Token {
-                token_type: TokenType::Comma,
+                token: TokenType::Comma,
                 literal: ",".to_string(),
             },
             Token {
-                token_type: TokenType::Identifier,
+                token: TokenType::Identifier,
                 literal: "X".to_string(),
             },
             Token {
-                token_type: TokenType::ParenRight,
+                token: TokenType::ParenRight,
                 literal: ")".to_string(),
             },
             Token {
-                token_type: TokenType::Eof,
+                token: TokenType::Eof,
                 literal: "".to_string(),
             },
         ];
@@ -334,7 +379,7 @@ mod tests {
         loop {
             let token = lexer.next_token().unwrap();
             tokens.push(token.clone());
-            if token.token_type == TokenType::Eof {
+            if token.token == TokenType::Eof {
                 break;
             }
         }

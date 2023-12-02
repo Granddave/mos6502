@@ -1,31 +1,17 @@
 /// Lexes code into tokens
-mod lexer;
+pub mod lexer;
+
+/// AST node types
+pub mod ast;
 
 /// Parses code into an AST
-mod parser;
+pub mod parser;
 
-/// Generates code from an AST
+/// Generates machine code from an AST
 mod codegen;
 
-#[derive(Debug, PartialEq, Clone)]
-enum TokenType {
-    Eof,
-    Identifier,
-    LiteralNumber,
-    Hex,
-    Label,
-    Comma,
-    ParenLeft,
-    ParenRight,
-}
+/////////
 
-#[derive(Debug, PartialEq, Clone)]
-struct Token {
-    token_type: TokenType,
-    literal: String,
-}
-
-// enum ASTNode {
-//     Instruction(Instruction, AddressingMode, Option<Operand>),
-//     Label(String),
+// pub struct Program {
+//     pub instructions: Vec<ASTNode>,
 // }
