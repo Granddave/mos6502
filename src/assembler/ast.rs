@@ -64,48 +64,76 @@ pub enum ASTMnemonic {
 
 impl ASTMnemonic {
     pub fn is_branch(&self) -> bool {
-        match self {
+        matches!(
+            self,
             ASTMnemonic::BCC
-            | ASTMnemonic::BCS
-            | ASTMnemonic::BEQ
-            | ASTMnemonic::BMI
-            | ASTMnemonic::BNE
-            | ASTMnemonic::BPL
-            | ASTMnemonic::BVC
-            | ASTMnemonic::BVS => true,
-            _ => false,
-        }
+                | ASTMnemonic::BCS
+                | ASTMnemonic::BEQ
+                | ASTMnemonic::BMI
+                | ASTMnemonic::BNE
+                | ASTMnemonic::BPL
+                | ASTMnemonic::BVC
+                | ASTMnemonic::BVS
+        )
     }
 
     pub fn is_implied(&self) -> bool {
-        match self {
+        matches!(
+            self,
             ASTMnemonic::BRK
-            | ASTMnemonic::CLC
-            | ASTMnemonic::CLD
-            | ASTMnemonic::CLI
-            | ASTMnemonic::CLV
-            | ASTMnemonic::DEX
-            | ASTMnemonic::DEY
-            | ASTMnemonic::INX
-            | ASTMnemonic::INY
-            | ASTMnemonic::NOP
-            | ASTMnemonic::PHA
-            | ASTMnemonic::PHP
-            | ASTMnemonic::PLA
-            | ASTMnemonic::PLP
-            | ASTMnemonic::RTI
-            | ASTMnemonic::RTS
-            | ASTMnemonic::SEC
-            | ASTMnemonic::SED
-            | ASTMnemonic::SEI
-            | ASTMnemonic::TAX
-            | ASTMnemonic::TAY
-            | ASTMnemonic::TSX
-            | ASTMnemonic::TXA
-            | ASTMnemonic::TXS
-            | ASTMnemonic::TYA => true,
-            _ => false,
-        }
+                | ASTMnemonic::CLC
+                | ASTMnemonic::CLD
+                | ASTMnemonic::CLI
+                | ASTMnemonic::CLV
+                | ASTMnemonic::DEX
+                | ASTMnemonic::DEY
+                | ASTMnemonic::INX
+                | ASTMnemonic::INY
+                | ASTMnemonic::NOP
+                | ASTMnemonic::PHA
+                | ASTMnemonic::PHP
+                | ASTMnemonic::PLA
+                | ASTMnemonic::PLP
+                | ASTMnemonic::RTI
+                | ASTMnemonic::RTS
+                | ASTMnemonic::SEC
+                | ASTMnemonic::SED
+                | ASTMnemonic::SEI
+                | ASTMnemonic::TAX
+                | ASTMnemonic::TAY
+                | ASTMnemonic::TSX
+                | ASTMnemonic::TXA
+                | ASTMnemonic::TXS
+                | ASTMnemonic::TYA
+        )
+        // match self {
+        //     ASTMnemonic::BRK
+        //     | ASTMnemonic::CLC
+        //     | ASTMnemonic::CLD
+        //     | ASTMnemonic::CLI
+        //     | ASTMnemonic::CLV
+        //     | ASTMnemonic::DEX
+        //     | ASTMnemonic::DEY
+        //     | ASTMnemonic::INX
+        //     | ASTMnemonic::INY
+        //     | ASTMnemonic::NOP
+        //     | ASTMnemonic::PHA
+        //     | ASTMnemonic::PHP
+        //     | ASTMnemonic::PLA
+        //     | ASTMnemonic::PLP
+        //     | ASTMnemonic::RTI
+        //     | ASTMnemonic::RTS
+        //     | ASTMnemonic::SEC
+        //     | ASTMnemonic::SED
+        //     | ASTMnemonic::SEI
+        //     | ASTMnemonic::TAX
+        //     | ASTMnemonic::TAY
+        //     | ASTMnemonic::TSX
+        //     | ASTMnemonic::TXA
+        //     | ASTMnemonic::TXS
+        //     | ASTMnemonic::TYA => true,
+        //     _ => false,
+        // }
     }
 }
 
@@ -150,13 +178,14 @@ impl fmt::Display for ASTOperand {
             ASTOperand::IndirectIndexedX(address) => write!(f, "(${:02X},X)", address),
             ASTOperand::IndirectIndexedY(address) => write!(f, "(${:02X}),Y", address),
             ASTOperand::Immediate(value) => write!(f, "#${:02X}", value),
-            ASTOperand::Implied => write!(f, ""),
+            ASTOperand::Implied => Ok(()),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ASTInstructionNode {
+    /// Mnemonic of the instruction
     pub mnemonic: ASTMnemonic,
     /// Combined addressing mode and operand
     pub operand: ASTOperand,

@@ -25,6 +25,12 @@ impl Memory {
     }
 }
 
+impl Default for Memory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bus for Memory {
     fn read(&self, address: u16) -> u8 {
         self.data[address as usize]

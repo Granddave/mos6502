@@ -42,12 +42,13 @@ impl Cpu {
         try_decode(opcode)
     }
 
-    pub fn run(&mut self, memory: &mut dyn Bus, cycles: usize) {
-        while cycles > 0 {
-            let instruction = self.fetch_and_decode(memory).expect("Valid opcode");
-
-            println!("{:?}", instruction);
-        }
+    pub fn run(&mut self, _memory: &mut dyn Bus, _cycles: usize) {
+        todo!();
+        // while cycles > 0 {
+        //     let instruction = self.fetch_and_decode(memory).expect("Valid opcode");
+        //
+        //     println!("{:?}", instruction);
+        // }
     }
 }
 

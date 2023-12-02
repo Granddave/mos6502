@@ -9,9 +9,3 @@ pub mod parser;
 
 /// Generates machine code from an AST
 mod codegen;
-
-/////////
-
-// pub struct Program {
-//     pub instructions: Vec<ASTNode>,
-// }

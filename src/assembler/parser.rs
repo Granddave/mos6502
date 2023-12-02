@@ -39,15 +39,14 @@ impl<'a> Parser<'a> {
     fn next_token(&mut self) {
         self.current_token = self.peek_token.clone(); // TODO: Can we avoid clone here?
         self.peek_token = self.lexer.next_token().expect("Next token");
-        // eprintln!("next_token: {}", self.peek_token.to_string());
     }
 
     fn current_token_is(&self, token_type: TokenType) -> bool {
-        &self.current_token.token == &token_type
+        self.current_token.token == token_type
     }
 
     fn peek_token_is(&self, token_type: TokenType) -> bool {
-        &self.peek_token.token == &token_type
+        self.peek_token.token == token_type
     }
 
     fn parse_label(&mut self) -> String {
@@ -122,12 +121,10 @@ impl<'a> Parser<'a> {
                             "Y" => ASTOperand::ZeroPageY(byte),
                             _ => panic!("Invalid ZeroPageX/Y operand"),
                         }
+                    } else if mnemonic.is_branch() {
+                        ASTOperand::Relative(byte as i8)
                     } else {
-                        if mnemonic.is_branch() {
-                            ASTOperand::Relative(byte as i8)
-                        } else {
-                            ASTOperand::ZeroPage(byte)
-                        }
+                        ASTOperand::ZeroPage(byte)
                     }
                 } else if let Some(word) = self.try_parse_hex_word() {
                     if self.peek_token_is(TokenType::Comma) {
@@ -208,7 +205,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_node(&mut self) -> ASTNode {
-        // eprintln!("parse_node: {:?}", self.current_token);
         match &self.current_token.token {
             TokenType::Identifier => {
                 if self.peek_token.token == TokenType::Colon {
@@ -450,9 +446,6 @@ secondloop:
         let mut lexer = Lexer::new(input);
         let mut parser = Parser::new(&mut lexer);
         let program = parser.parse_program();
-        for node in parser.parse_program() {
-            eprintln!("{:?}", node);
-        }
         assert_eq!(program, expected);
         assert_eq!(
             program

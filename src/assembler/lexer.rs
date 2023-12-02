@@ -1,36 +1,13 @@
-// Example code:
-//
-//   LDX #$00
-//   LDY #$00
-// firstloop:
-//   TXA
-//   STA $0200,Y
-//   PHA
-//   INX
-//   INY
-//   CPY #$10
-//   BNE firstloop ;loop until Y is $10
-// secondloop:
-//   PLA
-//   STA $0200,Y
-//   INY
-//   CPY #$20      ;loop until Y is $20
-//   BNE secondloop
-
-// ':' = label, e.g. `my_label:`
-// '$' = hex number, e.g. `$12`
-// '#' = literal hex number, e.g. `#$12`
-// ';' = comment, e.g. `; this is a comment`
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
-    LiteralNumber, // '#'
-    Hex,           // '$'
-    Colon,         // ':'
+    LiteralNumber, // '#' Literal number prefix
+    Hex,           // '$' Hex prefix
+    Colon,         // ':' Label suffix
     Comma,         // ','
     ParenLeft,     // '('
     ParenRight,    // ')'
-    Identifier,
-    Eof,
+    Identifier,    // Instruction mnemonic or label
+    Eof,           // End of file
 }
 
 impl Default for TokenType {
@@ -129,7 +106,7 @@ impl<'a> Lexer<'a> {
 
     fn read_hex(&mut self) -> String {
         let position = self.position;
-        while self.ch.is_some() && self.ch.unwrap().is_digit(16) {
+        while self.ch.is_some() && self.ch.unwrap().is_ascii_hexdigit() {
             self.read_char();
         }
         self.input[position..self.position].to_string()
