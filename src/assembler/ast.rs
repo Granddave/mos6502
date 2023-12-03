@@ -116,7 +116,7 @@ impl fmt::Display for ASTMnemonic {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ASTOperand {
+pub enum ASTAddressingMode {
     // Addressing modes
     Absolute(u16),        // a
     ZeroPage(u8),         // zp
@@ -132,25 +132,24 @@ pub enum ASTOperand {
     // Direct and immediate operands
     Immediate(u8), // #v
     Implied,
-    // Accumulator, // Implied operand. Needed or part of Implied?
 }
 
-impl fmt::Display for ASTOperand {
+impl fmt::Display for ASTAddressingMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ASTOperand::Absolute(address) => write!(f, "${:04X}", address),
-            ASTOperand::ZeroPage(address) => write!(f, "${:02X}", address),
-            ASTOperand::ZeroPageX(address) => write!(f, "${:02X},X", address),
-            ASTOperand::ZeroPageY(address) => write!(f, "${:02X},Y", address),
-            ASTOperand::AbsoluteX(address) => write!(f, "${:04X},X", address),
-            ASTOperand::AbsoluteY(address) => write!(f, "${:04X},Y", address),
-            ASTOperand::Relative(offset) => write!(f, "${:02X}", offset),
-            ASTOperand::Label(label) => write!(f, "{}", label),
-            ASTOperand::Indirect(address) => write!(f, "(${:04X})", address),
-            ASTOperand::IndirectIndexedX(address) => write!(f, "(${:02X},X)", address),
-            ASTOperand::IndirectIndexedY(address) => write!(f, "(${:02X}),Y", address),
-            ASTOperand::Immediate(value) => write!(f, "#${:02X}", value),
-            ASTOperand::Implied => Ok(()),
+            ASTAddressingMode::Absolute(address) => write!(f, "${:04X}", address),
+            ASTAddressingMode::ZeroPage(address) => write!(f, "${:02X}", address),
+            ASTAddressingMode::ZeroPageX(address) => write!(f, "${:02X},X", address),
+            ASTAddressingMode::ZeroPageY(address) => write!(f, "${:02X},Y", address),
+            ASTAddressingMode::AbsoluteX(address) => write!(f, "${:04X},X", address),
+            ASTAddressingMode::AbsoluteY(address) => write!(f, "${:04X},Y", address),
+            ASTAddressingMode::Relative(offset) => write!(f, "${:02X}", offset),
+            ASTAddressingMode::Label(label) => write!(f, "{}", label),
+            ASTAddressingMode::Indirect(address) => write!(f, "(${:04X})", address),
+            ASTAddressingMode::IndirectIndexedX(address) => write!(f, "(${:02X},X)", address),
+            ASTAddressingMode::IndirectIndexedY(address) => write!(f, "(${:02X}),Y", address),
+            ASTAddressingMode::Immediate(value) => write!(f, "#${:02X}", value),
+            ASTAddressingMode::Implied => Ok(()),
         }
     }
 }
@@ -160,7 +159,7 @@ pub struct ASTInstructionNode {
     /// Mnemonic of the instruction
     pub mnemonic: ASTMnemonic,
     /// Combined addressing mode and operand
-    pub operand: ASTOperand,
+    pub operand: ASTAddressingMode,
 }
 
 impl fmt::Display for ASTInstructionNode {
