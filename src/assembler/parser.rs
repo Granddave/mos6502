@@ -205,13 +205,9 @@ impl<'a> Parser<'a> {
     fn parse_instruction(&mut self) -> ASTInstructionNode {
         if self.current_token_is(TokenType::Identifier) {
             let mnemonic = self.parse_mnemonic();
-            let (addressing_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
+            let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
 
-            ASTInstructionNode {
-                mnemonic,
-                addr_mode: addressing_mode,
-                operand,
-            }
+            ASTInstructionNode::new(mnemonic, addr_mode, operand)
         } else {
             panic!("Expected identifier, got {:?}", self.current_token.token);
         }
@@ -288,99 +284,99 @@ mod tests {
         let tests = vec![
             (
                 "ADC $BEEF",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::ADC,
-                    addr_mode: ASTAddressingMode::Absolute,
-                    operand: ASTOperand::Absolute(0xBEEF),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::ADC,
+                    ASTAddressingMode::Absolute,
+                    ASTOperand::Absolute(0xBEEF),
+                ),
             ),
             (
                 "ADC $C8",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::ADC,
-                    addr_mode: ASTAddressingMode::ZeroPage,
-                    operand: ASTOperand::ZeroPage(0xC8),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::ADC,
+                    ASTAddressingMode::ZeroPage,
+                    ASTOperand::ZeroPage(0xC8),
+                ),
             ),
             (
                 "INC $C8,X",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::INC,
-                    addr_mode: ASTAddressingMode::ZeroPageX,
-                    operand: ASTOperand::ZeroPage(0xC8),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::INC,
+                    ASTAddressingMode::ZeroPageX,
+                    ASTOperand::ZeroPage(0xC8),
+                ),
             ),
             (
                 "LDX $C8,Y",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::LDX,
-                    addr_mode: ASTAddressingMode::ZeroPageY,
-                    operand: ASTOperand::ZeroPage(0xC8),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDX,
+                    ASTAddressingMode::ZeroPageY,
+                    ASTOperand::ZeroPage(0xC8),
+                ),
             ),
             (
                 "CMP $BEEF,X",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::CMP,
-                    addr_mode: ASTAddressingMode::AbsoluteX,
-                    operand: ASTOperand::Absolute(0xBEEF),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::CMP,
+                    ASTAddressingMode::AbsoluteX,
+                    ASTOperand::Absolute(0xBEEF),
+                ),
             ),
             (
                 "EOR $BEEF,Y",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::EOR,
-                    addr_mode: ASTAddressingMode::AbsoluteY,
-                    operand: ASTOperand::Absolute(0xBEEF),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::EOR,
+                    ASTAddressingMode::AbsoluteY,
+                    ASTOperand::Absolute(0xBEEF),
+                ),
             ),
             (
                 "BEQ $03",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::BEQ,
-                    addr_mode: ASTAddressingMode::Relative,
-                    operand: ASTOperand::Relative(0x03),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::BEQ,
+                    ASTAddressingMode::Relative,
+                    ASTOperand::Relative(0x03),
+                ),
             ),
             (
                 "JMP ($BEEF)",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::JMP,
-                    addr_mode: ASTAddressingMode::Indirect,
-                    operand: ASTOperand::Absolute(0xBEEF),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::JMP,
+                    ASTAddressingMode::Indirect,
+                    ASTOperand::Absolute(0xBEEF),
+                ),
             ),
             (
                 "EOR ($C8,X)",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::EOR,
-                    addr_mode: ASTAddressingMode::IndirectIndexedX,
-                    operand: ASTOperand::ZeroPage(0xC8),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::EOR,
+                    ASTAddressingMode::IndirectIndexedX,
+                    ASTOperand::ZeroPage(0xC8),
+                ),
             ),
             (
                 "LDA ($C8),Y",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::LDA,
-                    addr_mode: ASTAddressingMode::IndirectIndexedY,
-                    operand: ASTOperand::ZeroPage(0xC8),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::IndirectIndexedY,
+                    ASTOperand::ZeroPage(0xC8),
+                ),
             ),
             (
                 "LDA #$C8",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::LDA,
-                    addr_mode: ASTAddressingMode::Immediate,
-                    operand: ASTOperand::Immediate(0xC8),
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::Immediate,
+                    ASTOperand::Immediate(0xC8),
+                ),
             ),
             (
                 "BRK",
-                ASTInstructionNode {
-                    mnemonic: ASTMnemonic::BRK,
-                    addr_mode: ASTAddressingMode::Implied,
-                    operand: ASTOperand::Implied,
-                },
+                ASTInstructionNode::new(
+                    ASTMnemonic::BRK,
+                    ASTAddressingMode::Implied,
+                    ASTOperand::Implied,
+                ),
             ),
         ];
         for (input, expected) in tests {
@@ -409,78 +405,78 @@ secondloop:
   CPY #$20
   BNE secondloop";
         let expected = vec![
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::LDX,
-                addr_mode: ASTAddressingMode::Immediate,
-                operand: ASTOperand::Immediate(0x00),
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::LDY,
-                addr_mode: ASTAddressingMode::Immediate,
-                operand: ASTOperand::Immediate(0x00),
-            }),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDX,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Immediate(0x00),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDY,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Immediate(0x00),
+            )),
             ASTNode::Label("firstloop".to_string()),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::TXA,
-                addr_mode: ASTAddressingMode::Implied,
-                operand: ASTOperand::Implied,
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::STA,
-                addr_mode: ASTAddressingMode::AbsoluteY,
-                operand: ASTOperand::Absolute(0x0200),
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::PHA,
-                addr_mode: ASTAddressingMode::Implied,
-                operand: ASTOperand::Implied,
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::INX,
-                addr_mode: ASTAddressingMode::Implied,
-                operand: ASTOperand::Implied,
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::INY,
-                addr_mode: ASTAddressingMode::Implied,
-                operand: ASTOperand::Implied,
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::CPY,
-                addr_mode: ASTAddressingMode::Immediate,
-                operand: ASTOperand::Immediate(0x10),
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::BNE,
-                addr_mode: ASTAddressingMode::Relative,
-                operand: ASTOperand::Label("firstloop".to_string()),
-            }),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::TXA,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::STA,
+                ASTAddressingMode::AbsoluteY,
+                ASTOperand::Absolute(0x0200),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::PHA,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::INX,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::INY,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::CPY,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Immediate(0x10),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::BNE,
+                ASTAddressingMode::Relative,
+                ASTOperand::Label("firstloop".to_string()),
+            )),
             ASTNode::Label("secondloop".to_string()),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::PLA,
-                addr_mode: ASTAddressingMode::Implied,
-                operand: ASTOperand::Implied,
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::STA,
-                addr_mode: ASTAddressingMode::AbsoluteY,
-                operand: ASTOperand::Absolute(0x0200),
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::INY,
-                addr_mode: ASTAddressingMode::Implied,
-                operand: ASTOperand::Implied,
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::CPY,
-                addr_mode: ASTAddressingMode::Immediate,
-                operand: ASTOperand::Immediate(0x20),
-            }),
-            ASTNode::Instruction(ASTInstructionNode {
-                mnemonic: ASTMnemonic::BNE,
-                addr_mode: ASTAddressingMode::Relative,
-                operand: ASTOperand::Label("secondloop".to_string()),
-            }),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::PLA,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::STA,
+                ASTAddressingMode::AbsoluteY,
+                ASTOperand::Absolute(0x0200),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::INY,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::CPY,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Immediate(0x20),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::BNE,
+                ASTAddressingMode::Relative,
+                ASTOperand::Label("secondloop".to_string()),
+            )),
         ];
         let mut lexer = Lexer::new(input);
         let mut parser = Parser::new(&mut lexer);

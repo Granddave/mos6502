@@ -144,63 +144,89 @@ pub enum ASTOperand {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ASTInstructionNode {
+pub struct ASTInstruction {
     /// Mnemonic of the instruction
     pub mnemonic: ASTMnemonic,
     /// Combined addressing mode and operand
     pub addr_mode: ASTAddressingMode,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ASTInstructionNode {
+    /// The first part of the instruction
+    pub ins: ASTInstruction,
     /// Operand of the instruction
     pub operand: ASTOperand,
+}
+
+impl ASTInstructionNode {
+    pub fn new(
+        mnemonic: ASTMnemonic,
+        addr_mode: ASTAddressingMode,
+        operand: ASTOperand,
+    ) -> ASTInstructionNode {
+        ASTInstructionNode {
+            ins: ASTInstruction {
+                mnemonic,
+                addr_mode,
+            },
+            operand,
+        }
+    }
 }
 
 impl fmt::Display for ASTInstructionNode {
     // NOTE: This might not be correct for all addressing modes
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.addr_mode == ASTAddressingMode::Implied {
-            write!(f, "{}", self.mnemonic)
+        if self.ins.addr_mode == ASTAddressingMode::Implied {
+            write!(f, "{}", self.ins.mnemonic)
         } else {
             match &self.operand {
-                ASTOperand::Immediate(value) => match self.addr_mode {
-                    ASTAddressingMode::Immediate => write!(f, "{} #${:02X}", self.mnemonic, value),
-                    ASTAddressingMode::ZeroPage => write!(f, "{} ${:02X}", self.mnemonic, value),
-                    _ => write!(f, "{} #${:02X}", self.mnemonic, value),
+                ASTOperand::Immediate(value) => match self.ins.addr_mode {
+                    ASTAddressingMode::Immediate => {
+                        write!(f, "{} #${:02X}", self.ins.mnemonic, value)
+                    }
+                    ASTAddressingMode::ZeroPage => {
+                        write!(f, "{} ${:02X}", self.ins.mnemonic, value)
+                    }
+                    _ => write!(f, "{} #${:02X}", self.ins.mnemonic, value),
                 },
-                ASTOperand::Absolute(address) => match self.addr_mode {
+                ASTOperand::Absolute(address) => match self.ins.addr_mode {
                     ASTAddressingMode::Absolute => {
-                        write!(f, "{} ${:04X}", self.mnemonic, address)
+                        write!(f, "{} ${:04X}", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::AbsoluteX => {
-                        write!(f, "{} ${:04X},X", self.mnemonic, address)
+                        write!(f, "{} ${:04X},X", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::AbsoluteY => {
-                        write!(f, "{} ${:04X},Y", self.mnemonic, address)
+                        write!(f, "{} ${:04X},Y", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::Indirect => {
-                        write!(f, "{} (${:04X})", self.mnemonic, address)
+                        write!(f, "{} (${:04X})", self.ins.mnemonic, address)
                     }
-                    _ => write!(f, "{} ${:04X}", self.mnemonic, address),
+                    _ => write!(f, "{} ${:04X}", self.ins.mnemonic, address),
                 },
-                ASTOperand::ZeroPage(address) => match self.addr_mode {
+                ASTOperand::ZeroPage(address) => match self.ins.addr_mode {
                     ASTAddressingMode::ZeroPage => {
-                        write!(f, "{} ${:02X}", self.mnemonic, address)
+                        write!(f, "{} ${:02X}", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::ZeroPageX => {
-                        write!(f, "{} ${:02X},X", self.mnemonic, address)
+                        write!(f, "{} ${:02X},X", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::ZeroPageY => {
-                        write!(f, "{} ${:02X},Y", self.mnemonic, address)
+                        write!(f, "{} ${:02X},Y", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::IndirectIndexedX => {
-                        write!(f, "{} (${:02X},X)", self.mnemonic, address)
+                        write!(f, "{} (${:02X},X)", self.ins.mnemonic, address)
                     }
                     ASTAddressingMode::IndirectIndexedY => {
-                        write!(f, "{} (${:02X}),Y", self.mnemonic, address)
+                        write!(f, "{} (${:02X}),Y", self.ins.mnemonic, address)
                     }
-                    _ => write!(f, "{} ${:02X}", self.mnemonic, address),
+                    _ => write!(f, "{} ${:02X}", self.ins.mnemonic, address),
                 },
-                ASTOperand::Relative(offset) => write!(f, "{} ${:02X}", self.mnemonic, offset),
-                ASTOperand::Label(label) => write!(f, "{} {}", self.mnemonic, label),
-                ASTOperand::Implied => write!(f, "{}", self.mnemonic),
+                ASTOperand::Relative(offset) => write!(f, "{} ${:02X}", self.ins.mnemonic, offset),
+                ASTOperand::Label(label) => write!(f, "{} {}", self.ins.mnemonic, label),
+                ASTOperand::Implied => write!(f, "{}", self.ins.mnemonic),
             }
         }
     }
