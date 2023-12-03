@@ -106,34 +106,6 @@ impl ASTMnemonic {
                 | ASTMnemonic::TXS
                 | ASTMnemonic::TYA
         )
-        // match self {
-        //     ASTMnemonic::BRK
-        //     | ASTMnemonic::CLC
-        //     | ASTMnemonic::CLD
-        //     | ASTMnemonic::CLI
-        //     | ASTMnemonic::CLV
-        //     | ASTMnemonic::DEX
-        //     | ASTMnemonic::DEY
-        //     | ASTMnemonic::INX
-        //     | ASTMnemonic::INY
-        //     | ASTMnemonic::NOP
-        //     | ASTMnemonic::PHA
-        //     | ASTMnemonic::PHP
-        //     | ASTMnemonic::PLA
-        //     | ASTMnemonic::PLP
-        //     | ASTMnemonic::RTI
-        //     | ASTMnemonic::RTS
-        //     | ASTMnemonic::SEC
-        //     | ASTMnemonic::SED
-        //     | ASTMnemonic::SEI
-        //     | ASTMnemonic::TAX
-        //     | ASTMnemonic::TAY
-        //     | ASTMnemonic::TSX
-        //     | ASTMnemonic::TXA
-        //     | ASTMnemonic::TXS
-        //     | ASTMnemonic::TYA => true,
-        //     _ => false,
-        // }
     }
 }
 
