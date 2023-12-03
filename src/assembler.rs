@@ -8,4 +8,4 @@ pub mod ast;
 pub mod parser;
 
 /// Generates machine code from an AST
-mod codegen;
+mod compiler;
