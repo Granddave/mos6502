@@ -5,7 +5,7 @@ use crate::assembler::{
     lexer::{Lexer, Token, TokenType},
 };
 
-use super::ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic};
+use super::ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTOperand};
 
 pub struct Parser<'a> {
     lexer: &'a mut Lexer<'a>,
@@ -81,9 +81,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_operand(&mut self, mnemonic: &ASTMnemonic) -> ASTAddressingMode {
+    fn parse_addressing_mode_and_operand(
+        &mut self,
+        mnemonic: &ASTMnemonic,
+    ) -> (ASTAddressingMode, ASTOperand) {
         if mnemonic.is_implied() {
-            return ASTAddressingMode::Implied;
+            return (ASTAddressingMode::Implied, ASTOperand::Implied);
         }
 
         self.next_token();
@@ -93,8 +96,8 @@ impl<'a> Parser<'a> {
                 self.next_token();
                 match self.current_token.token {
                     TokenType::Hex => {
-                        if let Some(operand) = self.try_parse_hex_byte() {
-                            ASTAddressingMode::Immediate(operand)
+                        if let Some(byte) = self.try_parse_hex_byte() {
+                            (ASTAddressingMode::Immediate, ASTOperand::Immediate(byte))
                         } else {
                             panic!("Invalid hex byte");
                         }
@@ -111,14 +114,17 @@ impl<'a> Parser<'a> {
                         }
                         self.next_token();
                         match self.current_token.literal.as_str() {
-                            "X" => ASTAddressingMode::ZeroPageX(byte),
-                            "Y" => ASTAddressingMode::ZeroPageY(byte),
+                            "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte)),
+                            "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte)),
                             _ => panic!("Invalid ZeroPageX/Y operand"),
                         }
                     } else if mnemonic.is_branch() {
-                        ASTAddressingMode::Relative(byte as i8)
+                        (
+                            ASTAddressingMode::Relative,
+                            ASTOperand::Relative(byte as i8),
+                        )
                     } else {
-                        ASTAddressingMode::ZeroPage(byte)
+                        (ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(byte))
                     }
                 } else if let Some(word) = self.try_parse_hex_word() {
                     if self.peek_token_is(TokenType::Comma) {
@@ -128,12 +134,12 @@ impl<'a> Parser<'a> {
                         }
                         self.next_token();
                         match self.current_token.literal.as_str() {
-                            "X" => ASTAddressingMode::AbsoluteX(word),
-                            "Y" => ASTAddressingMode::AbsoluteY(word),
+                            "X" => (ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word)),
+                            "Y" => (ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word)),
                             _ => panic!("Invalid AbsoluteX/Y operand"),
                         }
                     } else {
-                        ASTAddressingMode::Absolute(word)
+                        (ASTAddressingMode::Absolute, ASTOperand::Absolute(word))
                     }
                 } else {
                     panic!("Invalid hex operand");
@@ -152,7 +158,10 @@ impl<'a> Parser<'a> {
                         }
                         self.next_token(); // Consume the identifier
                         let operand = match self.current_token.literal.as_str() {
-                            "X" => ASTAddressingMode::IndirectIndexedX(byte),
+                            "X" => (
+                                ASTAddressingMode::IndirectIndexedX,
+                                ASTOperand::ZeroPage(byte),
+                            ),
                             _ => panic!("Invalid indirect indexed X operand"),
                         };
                         self.next_token(); // Consume the closing parenthesis
@@ -166,7 +175,10 @@ impl<'a> Parser<'a> {
                         self.next_token(); // Consume the comma
                         self.next_token(); // Consume the identifier
                         match self.current_token.literal.as_str() {
-                            "Y" => ASTAddressingMode::IndirectIndexedY(byte),
+                            "Y" => (
+                                ASTAddressingMode::IndirectIndexedY,
+                                ASTOperand::ZeroPage(byte),
+                            ),
                             _ => panic!("Invalid indirect indexed Y operand"),
                         }
                     } else {
@@ -174,14 +186,17 @@ impl<'a> Parser<'a> {
                     }
                 } else if let Some(word) = self.try_parse_hex_word() {
                     self.next_token();
-                    ASTAddressingMode::Indirect(word)
+                    (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
                 } else {
                     panic!("Invalid indirect operand")
                 }
             }
             TokenType::Identifier => {
                 // Label
-                ASTAddressingMode::Label(self.current_token.literal.clone())
+                (
+                    ASTAddressingMode::Relative,
+                    ASTOperand::Label(self.current_token.literal.clone()),
+                )
             }
             _ => panic!("Invalid operand"),
         }
@@ -190,9 +205,13 @@ impl<'a> Parser<'a> {
     fn parse_instruction(&mut self) -> ASTInstructionNode {
         if self.current_token_is(TokenType::Identifier) {
             let mnemonic = self.parse_mnemonic();
-            let operand = self.parse_operand(&mnemonic);
+            let (addressing_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
 
-            ASTInstructionNode { mnemonic, operand }
+            ASTInstructionNode {
+                mnemonic,
+                addr_mode: addressing_mode,
+                operand,
+            }
         } else {
             panic!("Expected identifier, got {:?}", self.current_token.token);
         }
@@ -271,84 +290,96 @@ mod tests {
                 "ADC $BEEF",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::ADC,
-                    operand: ASTAddressingMode::Absolute(0xBEEF),
+                    addr_mode: ASTAddressingMode::Absolute,
+                    operand: ASTOperand::Absolute(0xBEEF),
                 },
             ),
             (
                 "ADC $C8",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::ADC,
-                    operand: ASTAddressingMode::ZeroPage(0xC8),
+                    addr_mode: ASTAddressingMode::ZeroPage,
+                    operand: ASTOperand::ZeroPage(0xC8),
                 },
             ),
             (
                 "INC $C8,X",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::INC,
-                    operand: ASTAddressingMode::ZeroPageX(0xC8),
+                    addr_mode: ASTAddressingMode::ZeroPageX,
+                    operand: ASTOperand::ZeroPage(0xC8),
                 },
             ),
             (
                 "LDX $C8,Y",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::LDX,
-                    operand: ASTAddressingMode::ZeroPageY(0xC8),
+                    addr_mode: ASTAddressingMode::ZeroPageY,
+                    operand: ASTOperand::ZeroPage(0xC8),
                 },
             ),
             (
                 "CMP $BEEF,X",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::CMP,
-                    operand: ASTAddressingMode::AbsoluteX(0xBEEF),
+                    addr_mode: ASTAddressingMode::AbsoluteX,
+                    operand: ASTOperand::Absolute(0xBEEF),
                 },
             ),
             (
                 "EOR $BEEF,Y",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::EOR,
-                    operand: ASTAddressingMode::AbsoluteY(0xBEEF),
+                    addr_mode: ASTAddressingMode::AbsoluteY,
+                    operand: ASTOperand::Absolute(0xBEEF),
                 },
             ),
             (
                 "BEQ $03",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::BEQ,
-                    operand: ASTAddressingMode::Relative(0x03),
+                    addr_mode: ASTAddressingMode::Relative,
+                    operand: ASTOperand::Relative(0x03),
                 },
             ),
             (
                 "JMP ($BEEF)",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::JMP,
-                    operand: ASTAddressingMode::Indirect(0xBEEF),
+                    addr_mode: ASTAddressingMode::Indirect,
+                    operand: ASTOperand::Absolute(0xBEEF),
                 },
             ),
             (
                 "EOR ($C8,X)",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::EOR,
-                    operand: ASTAddressingMode::IndirectIndexedX(0xC8),
+                    addr_mode: ASTAddressingMode::IndirectIndexedX,
+                    operand: ASTOperand::ZeroPage(0xC8),
                 },
             ),
             (
                 "LDA ($C8),Y",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::LDA,
-                    operand: ASTAddressingMode::IndirectIndexedY(0xC8),
+                    addr_mode: ASTAddressingMode::IndirectIndexedY,
+                    operand: ASTOperand::ZeroPage(0xC8),
                 },
             ),
             (
                 "LDA #$C8",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::LDA,
-                    operand: ASTAddressingMode::Immediate(0xC8),
+                    addr_mode: ASTAddressingMode::Immediate,
+                    operand: ASTOperand::Immediate(0xC8),
                 },
             ),
             (
                 "BRK",
                 ASTInstructionNode {
                     mnemonic: ASTMnemonic::BRK,
-                    operand: ASTAddressingMode::Implied,
+                    addr_mode: ASTAddressingMode::Implied,
+                    operand: ASTOperand::Implied,
                 },
             ),
         ];
@@ -380,61 +411,75 @@ secondloop:
         let expected = vec![
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::LDX,
-                operand: ASTAddressingMode::Immediate(0x00),
+                addr_mode: ASTAddressingMode::Immediate,
+                operand: ASTOperand::Immediate(0x00),
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::LDY,
-                operand: ASTAddressingMode::Immediate(0x00),
+                addr_mode: ASTAddressingMode::Immediate,
+                operand: ASTOperand::Immediate(0x00),
             }),
             ASTNode::Label("firstloop".to_string()),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::TXA,
-                operand: ASTAddressingMode::Implied,
+                addr_mode: ASTAddressingMode::Implied,
+                operand: ASTOperand::Implied,
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::STA,
-                operand: ASTAddressingMode::AbsoluteY(0x0200),
+                addr_mode: ASTAddressingMode::AbsoluteY,
+                operand: ASTOperand::Absolute(0x0200),
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::PHA,
-                operand: ASTAddressingMode::Implied,
+                addr_mode: ASTAddressingMode::Implied,
+                operand: ASTOperand::Implied,
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::INX,
-                operand: ASTAddressingMode::Implied,
+                addr_mode: ASTAddressingMode::Implied,
+                operand: ASTOperand::Implied,
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::INY,
-                operand: ASTAddressingMode::Implied,
+                addr_mode: ASTAddressingMode::Implied,
+                operand: ASTOperand::Implied,
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::CPY,
-                operand: ASTAddressingMode::Immediate(0x10),
+                addr_mode: ASTAddressingMode::Immediate,
+                operand: ASTOperand::Immediate(0x10),
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::BNE,
-                operand: ASTAddressingMode::Label("firstloop".to_string()),
+                addr_mode: ASTAddressingMode::Relative,
+                operand: ASTOperand::Label("firstloop".to_string()),
             }),
             ASTNode::Label("secondloop".to_string()),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::PLA,
-                operand: ASTAddressingMode::Implied,
+                addr_mode: ASTAddressingMode::Implied,
+                operand: ASTOperand::Implied,
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::STA,
-                operand: ASTAddressingMode::AbsoluteY(0x0200),
+                addr_mode: ASTAddressingMode::AbsoluteY,
+                operand: ASTOperand::Absolute(0x0200),
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::INY,
-                operand: ASTAddressingMode::Implied,
+                addr_mode: ASTAddressingMode::Implied,
+                operand: ASTOperand::Implied,
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::CPY,
-                operand: ASTAddressingMode::Immediate(0x20),
+                addr_mode: ASTAddressingMode::Immediate,
+                operand: ASTOperand::Immediate(0x20),
             }),
             ASTNode::Instruction(ASTInstructionNode {
                 mnemonic: ASTMnemonic::BNE,
-                operand: ASTAddressingMode::Label("secondloop".to_string()),
+                addr_mode: ASTAddressingMode::Relative,
+                operand: ASTOperand::Label("secondloop".to_string()),
             }),
         ];
         let mut lexer = Lexer::new(input);
