@@ -2,7 +2,9 @@ use std::fmt;
 
 use strum_macros::EnumString;
 
-#[derive(Debug, PartialEq, EnumString)]
+pub mod instruction;
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, EnumString)]
 pub enum ASTMnemonic {
     ADC,
     AND,
@@ -115,7 +117,7 @@ impl fmt::Display for ASTMnemonic {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum ASTAddressingMode {
     // Addressing modes
     Absolute,         // a
@@ -130,10 +132,11 @@ pub enum ASTAddressingMode {
     IndirectIndexedY, // (zp),y
     // Direct and immediate operands
     Immediate, // #v
+    Accumulator,
     Implied,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ASTOperand {
     Immediate(u8),
     Absolute(u16),
@@ -143,12 +146,22 @@ pub enum ASTOperand {
     Implied,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub struct ASTInstruction {
     /// Mnemonic of the instruction
     pub mnemonic: ASTMnemonic,
     /// Combined addressing mode and operand
     pub addr_mode: ASTAddressingMode,
+}
+
+impl ASTInstruction {
+    pub fn to_opcode(&self) -> u8 {
+        instruction::OPCODE_MAPPING.find_opcode(*self).unwrap()
+    }
+
+    pub fn from_opcode(opcode: u8) -> Option<Self> {
+        instruction::OPCODE_MAPPING.find_instruction(opcode)
+    }
 }
 
 #[derive(Debug, PartialEq)]
