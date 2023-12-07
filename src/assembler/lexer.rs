@@ -1,13 +1,21 @@
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
-    LiteralNumber, // '#' Literal number prefix
-    Hex,           // '$' Hex prefix
-    Colon,         // ':' Label suffix
-    Comma,         // ','
-    ParenLeft,     // '('
-    ParenRight,    // ')'
-    Identifier,    // Instruction mnemonic or label
-    Eof,           // End of file
+    /// `#` Literal number prefix
+    LiteralNumber,
+    /// `$` Hex prefix
+    Hex,
+    /// `:` Label suffix
+    Colon,
+    /// `,`
+    Comma,
+    /// `(`
+    ParenLeft,
+    /// `)`
+    ParenRight,
+    /// Instruction mnemonic or label
+    Identifier,
+    /// Marks the end of file
+    Eof,
 }
 
 impl Default for TokenType {
@@ -16,11 +24,15 @@ impl Default for TokenType {
     }
 }
 
+/// Token is a lexical unit of source code.
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Token {
+    /// Type of Token
     pub token: TokenType,
+    /// Literal string of token, e.g. `"LDA"`, `"00"`, `":"` etc.
     pub literal: String,
-    pub line_number: usize, // Line number in file where token is found
+    /// Line number in file where token is found
+    pub line_number: usize,
 }
 
 impl Token {
@@ -49,11 +61,16 @@ impl ToString for Token {
 }
 
 pub struct Lexer<'a> {
-    input: &'a str,       // Input string
-    position: usize,      // Current position in input (points to current char)
-    read_position: usize, // Current reading position in input (after current char)
-    ch: Option<char>,     // Current char under examination
-    line_number: usize,   // Current line number in input
+    /// Source code to lex
+    input: &'a str,
+    /// Index of current position in input (points to current char)
+    position: usize,
+    /// Index of current reading position in input (after current char)
+    read_position: usize,
+    /// Current char under examination
+    ch: Option<char>,
+    /// Current line number in source code
+    line_number: usize,
 }
 
 impl<'a> Lexer<'a> {
