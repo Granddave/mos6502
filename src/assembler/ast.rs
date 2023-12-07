@@ -186,6 +186,23 @@ impl ASTInstructionNode {
             operand,
         }
     }
+
+    pub fn size(&self) -> usize {
+        match self.ins.addr_mode {
+            ASTAddressingMode::Absolute
+            | ASTAddressingMode::AbsoluteX
+            | ASTAddressingMode::AbsoluteY
+            | ASTAddressingMode::Indirect
+            | ASTAddressingMode::IndirectIndexedX
+            | ASTAddressingMode::IndirectIndexedY => 3,
+            ASTAddressingMode::ZeroPage
+            | ASTAddressingMode::ZeroPageX
+            | ASTAddressingMode::ZeroPageY
+            | ASTAddressingMode::Immediate
+            | ASTAddressingMode::Relative => 2,
+            ASTAddressingMode::Implied | ASTAddressingMode::Accumulator => 1,
+        }
+    }
 }
 
 impl fmt::Display for ASTInstructionNode {
