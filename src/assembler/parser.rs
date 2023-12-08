@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn try_parse_hex_byte(&mut self) -> Option<u8> {
+    fn try_parse_hex_u8(&mut self) -> Option<u8> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
         match u8::from_str_radix(operand, 16) {
@@ -72,12 +72,132 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn try_parse_hex_word(&mut self) -> Option<u16> {
+    fn try_parse_hex_u16(&mut self) -> Option<u16> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
         match u16::from_str_radix(operand, 16) {
             Ok(word) => Some(word),
             Err(_) => None,
+        }
+    }
+
+    fn parse_literal_number(&mut self) -> (ASTAddressingMode, ASTOperand) {
+        self.next_token();
+        match self.current_token.token {
+            TokenType::Hex => {
+                if let Some(byte) = self.try_parse_hex_u8() {
+                    (ASTAddressingMode::Immediate, ASTOperand::Immediate(byte))
+                } else {
+                    panic!("Invalid hex byte");
+                }
+            }
+            _ => panic!("Invalid literal number"),
+        }
+    }
+
+    fn parse_hex_byte(
+        &mut self,
+        byte: u8,
+        mnemonic: &ASTMnemonic,
+    ) -> (ASTAddressingMode, ASTOperand) {
+        if self.peek_token_is(TokenType::Comma) {
+            // ZeroPageX/Y
+            self.next_token();
+            if !self.peek_token_is(TokenType::Identifier) {
+                panic!("Invalid ZeroPageX/Y operand")
+            }
+            self.next_token();
+            match self.current_token.literal.as_str() {
+                "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte)),
+                "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte)),
+                _ => panic!("Invalid ZeroPageX/Y operand"),
+            }
+        } else if mnemonic.is_branch() {
+            (
+                ASTAddressingMode::Relative,
+                ASTOperand::Relative(byte as i8),
+            )
+        } else {
+            (ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(byte))
+        }
+    }
+
+    fn parse_hex_word(&mut self, word: u16) -> (ASTAddressingMode, ASTOperand) {
+        if self.peek_token_is(TokenType::Comma) {
+            self.next_token();
+            if !self.peek_token_is(TokenType::Identifier) {
+                panic!("Invalid hex operand");
+            }
+            self.next_token();
+            match self.current_token.literal.as_str() {
+                "X" => (ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word)),
+                "Y" => (ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word)),
+                _ => panic!("Invalid AbsoluteX/Y operand"),
+            }
+        } else {
+            (ASTAddressingMode::Absolute, ASTOperand::Absolute(word))
+        }
+    }
+
+    fn parse_hex(&mut self, mnemonic: &ASTMnemonic) -> (ASTAddressingMode, ASTOperand) {
+        if let Some(byte) = self.try_parse_hex_u8() {
+            self.parse_hex_byte(byte, mnemonic)
+        } else if let Some(word) = self.try_parse_hex_u16() {
+            self.parse_hex_word(word)
+        } else {
+            panic!("Invalid hex operand");
+        }
+    }
+
+    fn parse_indirect_indexed_x(&mut self, byte: u8) -> (ASTAddressingMode, ASTOperand) {
+        self.next_token(); // Consume the comma
+        if !self.peek_token_is(TokenType::Identifier) {
+            panic!("Invalid indirect indexed X operand");
+        }
+        self.next_token(); // Consume the identifier
+        let operand = match self.current_token.literal.as_str() {
+            "X" => (
+                ASTAddressingMode::IndirectIndexedX,
+                ASTOperand::ZeroPage(byte),
+            ),
+            _ => panic!("Invalid indirect indexed X operand"),
+        };
+        self.next_token(); // Consume the closing parenthesis
+        operand
+    }
+
+    fn parse_indirect_indexed_y(&mut self, byte: u8) -> (ASTAddressingMode, ASTOperand) {
+        self.next_token(); // Consume the closing parenthesis
+        if !self.peek_token_is(TokenType::Comma) {
+            panic!("Invalid indirect indexed Y operand");
+        }
+        self.next_token(); // Consume the comma
+        self.next_token(); // Consume the identifier
+        match self.current_token.literal.as_str() {
+            "Y" => (
+                ASTAddressingMode::IndirectIndexedY,
+                ASTOperand::ZeroPage(byte),
+            ),
+            _ => panic!("Invalid indirect indexed Y operand"),
+        }
+    }
+
+    fn parse_indirect(&mut self) -> (ASTAddressingMode, ASTOperand) {
+        self.next_token();
+
+        if let Some(byte) = self.try_parse_hex_u8() {
+            if self.peek_token_is(TokenType::Comma) {
+                self.parse_indirect_indexed_x(byte)
+            } else if self.peek_token_is(TokenType::ParenRight) {
+                self.parse_indirect_indexed_y(byte)
+            } else {
+                panic!("Invalid indirect indexed X/Y operand");
+            }
+        } else if let Some(word) = self.try_parse_hex_u16() {
+            self.next_token();
+            (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
+        } else {
+            panic!("Invalid indirect operand")
         }
     }
 
@@ -92,112 +212,13 @@ impl<'a> Parser<'a> {
         self.next_token();
 
         match self.current_token.token {
-            TokenType::LiteralNumber => {
-                self.next_token();
-                match self.current_token.token {
-                    TokenType::Hex => {
-                        if let Some(byte) = self.try_parse_hex_byte() {
-                            (ASTAddressingMode::Immediate, ASTOperand::Immediate(byte))
-                        } else {
-                            panic!("Invalid hex byte");
-                        }
-                    }
-                    _ => panic!("Invalid literal number"),
-                }
-            }
-            TokenType::Hex => {
-                if let Some(byte) = self.try_parse_hex_byte() {
-                    if self.peek_token_is(TokenType::Comma) {
-                        self.next_token();
-                        if !self.peek_token_is(TokenType::Identifier) {
-                            panic!("Invalid ZeroPageX/Y operand")
-                        }
-                        self.next_token();
-                        match self.current_token.literal.as_str() {
-                            "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte)),
-                            "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte)),
-                            _ => panic!("Invalid ZeroPageX/Y operand"),
-                        }
-                    } else if mnemonic.is_branch() {
-                        (
-                            ASTAddressingMode::Relative,
-                            ASTOperand::Relative(byte as i8),
-                        )
-                    } else {
-                        (ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(byte))
-                    }
-                } else if let Some(word) = self.try_parse_hex_word() {
-                    if self.peek_token_is(TokenType::Comma) {
-                        self.next_token();
-                        if !self.peek_token_is(TokenType::Identifier) {
-                            panic!("Invalid hex operand");
-                        }
-                        self.next_token();
-                        match self.current_token.literal.as_str() {
-                            "X" => (ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word)),
-                            "Y" => (ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word)),
-                            _ => panic!("Invalid AbsoluteX/Y operand"),
-                        }
-                    } else {
-                        (ASTAddressingMode::Absolute, ASTOperand::Absolute(word))
-                    }
-                } else {
-                    panic!("Invalid hex operand");
-                }
-            }
-            TokenType::ParenLeft => {
-                // Indirect addressing
-                self.next_token();
-
-                if let Some(byte) = self.try_parse_hex_byte() {
-                    if self.peek_token_is(TokenType::Comma) {
-                        // Indirect indexed X
-                        self.next_token(); // Consume the comma
-                        if !self.peek_token_is(TokenType::Identifier) {
-                            panic!("Invalid indirect indexed X operand");
-                        }
-                        self.next_token(); // Consume the identifier
-                        let operand = match self.current_token.literal.as_str() {
-                            "X" => (
-                                ASTAddressingMode::IndirectIndexedX,
-                                ASTOperand::ZeroPage(byte),
-                            ),
-                            _ => panic!("Invalid indirect indexed X operand"),
-                        };
-                        self.next_token(); // Consume the closing parenthesis
-                        operand
-                    } else if self.peek_token_is(TokenType::ParenRight) {
-                        // Indirect indexed Y
-                        self.next_token(); // Consume the closing parenthesis
-                        if !self.peek_token_is(TokenType::Comma) {
-                            panic!("Invalid indirect indexed Y operand");
-                        }
-                        self.next_token(); // Consume the comma
-                        self.next_token(); // Consume the identifier
-                        match self.current_token.literal.as_str() {
-                            "Y" => (
-                                ASTAddressingMode::IndirectIndexedY,
-                                ASTOperand::ZeroPage(byte),
-                            ),
-                            _ => panic!("Invalid indirect indexed Y operand"),
-                        }
-                    } else {
-                        panic!("Invalid indirect indexed X/Y operand");
-                    }
-                } else if let Some(word) = self.try_parse_hex_word() {
-                    self.next_token();
-                    (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
-                } else {
-                    panic!("Invalid indirect operand")
-                }
-            }
-            TokenType::Identifier => {
-                // Label
-                (
-                    ASTAddressingMode::Relative,
-                    ASTOperand::Label(self.current_token.literal.clone()),
-                )
-            }
+            TokenType::LiteralNumber => self.parse_literal_number(),
+            TokenType::Hex => self.parse_hex(mnemonic),
+            TokenType::ParenLeft => self.parse_indirect(),
+            TokenType::Identifier => (
+                ASTAddressingMode::Relative,
+                ASTOperand::Label(self.current_token.literal.clone()),
+            ),
             _ => panic!("Invalid operand"),
         }
     }
