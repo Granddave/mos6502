@@ -268,6 +268,16 @@ pub enum ASTNode {
     Label(String),
 }
 
+impl ASTNode {
+    pub fn new_instruction(
+        mnemonic: ASTMnemonic,
+        addr_mode: ASTAddressingMode,
+        operand: ASTOperand,
+    ) -> ASTNode {
+        ASTNode::Instruction(ASTInstructionNode::new(mnemonic, addr_mode, operand))
+    }
+}
+
 impl fmt::Display for ASTNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
