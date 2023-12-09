@@ -2,6 +2,8 @@ use std::fmt;
 
 use strum_macros::EnumString;
 
+use self::instruction::OPCODE_MAPPING;
+
 pub mod instruction;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, EnumString)]
@@ -157,11 +159,11 @@ pub struct ASTInstruction {
 
 impl ASTInstruction {
     pub fn to_opcode(&self) -> u8 {
-        instruction::OPCODE_MAPPING.find_opcode(*self).unwrap()
+        OPCODE_MAPPING.find_opcode(*self).unwrap()
     }
 
     pub fn from_opcode(opcode: u8) -> Option<Self> {
-        instruction::OPCODE_MAPPING.find_instruction(opcode)
+        OPCODE_MAPPING.find_instruction(opcode)
     }
 }
 
@@ -191,20 +193,42 @@ impl ASTInstructionNode {
 
     /// Size of instruction and operand in bytes
     pub fn size(&self) -> usize {
-        match self.ins.addr_mode {
-            ASTAddressingMode::Absolute
-            | ASTAddressingMode::AbsoluteX
-            | ASTAddressingMode::AbsoluteY
-            | ASTAddressingMode::Indirect
-            | ASTAddressingMode::IndirectIndexedX
-            | ASTAddressingMode::IndirectIndexedY => 3,
-            ASTAddressingMode::ZeroPage
-            | ASTAddressingMode::ZeroPageX
-            | ASTAddressingMode::ZeroPageY
-            | ASTAddressingMode::Immediate
-            | ASTAddressingMode::Relative => 2,
-            ASTAddressingMode::Implied | ASTAddressingMode::Accumulator => 1,
+        match self.operand {
+            ASTOperand::Immediate(_) => 2,
+            ASTOperand::Absolute(_) => 3,
+            ASTOperand::ZeroPage(_) => 2,
+            ASTOperand::Relative(_) => 2,
+            ASTOperand::Label(_) => 2, // Labels are resolved to relative offsets
+            ASTOperand::Implied => 1,
         }
+    }
+
+    pub fn opcode(&self) -> u8 {
+        OPCODE_MAPPING
+            .find_opcode(self.ins)
+            .expect("Invalid instruction")
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut bytes: Vec<u8> = Vec::new();
+
+        bytes.push(self.opcode());
+
+        // TODO: Get program offset from settings
+        let program_offset = 0x0000;
+        bytes.extend(match self.operand {
+            ASTOperand::Immediate(value) => vec![value],
+            ASTOperand::Absolute(address) => {
+                let address = address + program_offset;
+                vec![address as u8, (address >> 8) as u8]
+            }
+            ASTOperand::ZeroPage(address) => vec![address],
+            ASTOperand::Relative(offset) => vec![offset as u8],
+            ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
+            ASTOperand::Implied => vec![],
+        });
+
+        bytes
     }
 }
 
