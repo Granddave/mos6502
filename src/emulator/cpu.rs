@@ -1,6 +1,6 @@
-use crate::emulator::{
-    instruction::{try_decode, AddressingMode, Instruction},
-    memory::Bus,
+use crate::{
+    assembler::ast::{self},
+    emulator::memory::Bus,
 };
 
 #[derive(Debug)]
@@ -35,11 +35,19 @@ impl Cpu {
         Self::default()
     }
 
-    fn fetch_and_decode(&mut self, memory: &mut dyn Bus) -> Option<(Instruction, AddressingMode)> {
-        let opcode = memory.read(self.pc);
-        self.pc += 1;
+    fn fetch_and_decode(&mut self, _memory: &mut dyn Bus) -> Option<ast::ASTInstructionNode> {
+        // let opcode = memory.read(self.pc);
+        // self.pc += 1;
+        //
+        // if let Some(ins) = OPCODE_MAPPING.find_instruction(opcode) {
+        //     return Some(ast::ASTInstructionNode::new(
+        //         ins.mnemonic,
+        //         ins.addr_mode,
+        //         ast::ASTOperand::Immediate(0),
+        //     ));
+        // }
 
-        try_decode(opcode)
+        None
     }
 
     pub fn run(&mut self, _memory: &mut dyn Bus, _cycles: usize) {
