@@ -1,4 +1,4 @@
-use mos6502::assembler::{lexer::Lexer, parser::Parser};
+use mos6502::assembler::compiler::Compiler;
 
 fn main() {
     let input = "
@@ -19,10 +19,13 @@ secondloop:
   CPY #$20      ;loop until Y is $20
   BNE secondloop";
 
-    let mut lexer = Lexer::new(input);
-    let mut parser = Parser::new(&mut lexer);
-    let ast = parser.parse_program();
-    for instruction in ast {
-        println!("{}", instruction);
-    }
+    // let mut lexer = Lexer::new(input);
+    // let mut parser = Parser::new(&mut lexer);
+    // let ast = parser.parse_program();
+    // for instruction in ast {
+    //     println!("{}", instruction);
+    // }
+    let mut compiler = Compiler::new();
+    let bytes = compiler.compile(input);
+    eprintln!("{:?}", bytes);
 }
