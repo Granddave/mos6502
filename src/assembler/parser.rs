@@ -250,6 +250,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse the entire program into an AST
     pub fn parse_program(&mut self) -> Vec<ASTNode> {
         let mut ast_nodes = Vec::new();
         'l: loop {

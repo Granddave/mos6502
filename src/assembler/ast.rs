@@ -146,6 +146,7 @@ pub enum ASTOperand {
     Implied,
 }
 
+/// An instruction without an operand
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub struct ASTInstruction {
     /// Mnemonic of the instruction
@@ -164,6 +165,7 @@ impl ASTInstruction {
     }
 }
 
+/// An instruction with an operand.
 #[derive(Debug, PartialEq)]
 pub struct ASTInstructionNode {
     /// The first part of the instruction
@@ -187,6 +189,7 @@ impl ASTInstructionNode {
         }
     }
 
+    /// Size of instruction and operand in bytes
     pub fn size(&self) -> usize {
         match self.ins.addr_mode {
             ASTAddressingMode::Absolute
@@ -262,10 +265,12 @@ impl fmt::Display for ASTInstructionNode {
     }
 }
 
+/// AST Node is either an instruction (including operand) or a label.
 #[derive(Debug, PartialEq)]
 pub enum ASTNode {
     Instruction(ASTInstructionNode),
     Label(String),
+    // TODO: Add define directive
 }
 
 impl ASTNode {
