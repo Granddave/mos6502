@@ -198,17 +198,26 @@ impl ASTInstructionNode {
             ASTOperand::Absolute(_) => 3,
             ASTOperand::ZeroPage(_) => 2,
             ASTOperand::Relative(_) => 2,
-            ASTOperand::Label(_) => 2, // Labels are resolved to relative offsets
+            ASTOperand::Label(_) => {
+                // Labels are later resolved to relative and absolute offsets
+                match self.ins.addr_mode {
+                    ASTAddressingMode::Absolute => 3,
+                    ASTAddressingMode::Relative => 2,
+                    _ => panic!("Invalid addressing mode for label"),
+                }
+            }
             ASTOperand::Implied => 1,
         }
     }
 
+    // TODO: Move to compiler module
     pub fn opcode(&self) -> u8 {
         OPCODE_MAPPING
             .find_opcode(self.ins)
             .expect("Invalid instruction")
     }
 
+    // TODO: Move to compiler module
     pub fn bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
 

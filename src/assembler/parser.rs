@@ -201,6 +201,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn addressing_mode_for_label(&self, mnemonic: &ASTMnemonic) -> ASTAddressingMode {
+        // TODO: Is this correct?
+        if mnemonic.is_branch() {
+            ASTAddressingMode::Relative
+        } else {
+            ASTAddressingMode::Absolute
+        }
+    }
+
     fn parse_addressing_mode_and_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
@@ -216,7 +225,7 @@ impl<'a> Parser<'a> {
             TokenType::Hex => self.parse_hex(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
             TokenType::Identifier => (
-                ASTAddressingMode::Relative,
+                self.addressing_mode_for_label(mnemonic),
                 ASTOperand::Label(self.current_token.literal.clone()),
             ),
             _ => panic!("Invalid operand"),

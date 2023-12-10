@@ -1,11 +1,18 @@
-use crate::assembler::ast::ASTNode;
+use crate::assembler::ast::{ASTNode, ASTOperand};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+pub enum SymbolType {
+    /// Label with an offset into the program
+    Label(usize),
+    // TODO: Constant,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Symbol {
-    /// Name of the symbol.
+    /// Name of the symbol
     pub name: String,
-    /// Byte offset from the start of the program.
-    pub byte_offset: usize,
+    /// Symbol type with data
+    pub symbol: SymbolType,
 }
 
 /// Symbol table for labels.
@@ -29,22 +36,51 @@ impl SymbolTable {
     }
 }
 
-pub fn resolve_label(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
-    let mut byte_offset = 0;
+pub fn resolve_labels(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
+    let mut current_addr = 0;
+
+    // Find label definitions and populate symbol table
     for node in nodes {
         match node {
             ASTNode::Instruction(ins_node) => {
-                byte_offset += ins_node.size();
+                current_addr += ins_node.size();
             }
             ASTNode::Label(label) => symbol_table.symbols.push(Symbol {
                 name: label.clone(),
-                byte_offset,
+                symbol: SymbolType::Label(current_addr),
             }),
         }
     }
 
-    // TODO: Handle label in operand. Make sure that the label is resolved.
-    //       We don't want to have any unresolved labels at this point.
+    // Verify that no label is defined multiple times
+    symbol_table.symbols.iter().for_each(|symbol| {
+        let mut count = 0;
+        symbol_table.symbols.iter().for_each(|s| {
+            if s.name == symbol.name {
+                count += 1;
+            }
+            if count > 1 {
+                panic!("Label defined multiple times: '{}'", symbol.name);
+            }
+        });
+    });
+
+    // Verify that no instruction uses a label as operand that has not been resolved
+    for node in nodes {
+        match node {
+            ASTNode::Instruction(ins_node) => match &ins_node.operand {
+                ASTOperand::Label(label_str) => {
+                    symbol_table
+                        .symbols
+                        .iter()
+                        .find(|symbol| symbol.name == *label_str)
+                        .expect("Label not found");
+                }
+                _ => (),
+            },
+            _ => (),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -134,11 +170,36 @@ mod tests {
         let mut symbol_table = SymbolTable::new();
         let nodes = example_ast();
 
-        resolve_label(&nodes, &mut symbol_table);
+        resolve_labels(&nodes, &mut symbol_table);
         assert_eq!(symbol_table.symbols.len(), 2);
         assert_eq!(symbol_table.symbols[0].name, "firstloop");
-        assert_eq!(symbol_table.symbols[0].byte_offset, 0x0004);
+        assert_eq!(symbol_table.symbols[0].symbol, SymbolType::Label(0x04));
         assert_eq!(symbol_table.symbols[1].name, "secondloop");
-        assert_eq!(symbol_table.symbols[1].byte_offset, 0x000F);
+        assert_eq!(symbol_table.symbols[1].symbol, SymbolType::Label(0x0f));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_undefined_label() {
+        let mut symbol_table = SymbolTable::new();
+        let nodes = vec![ASTNode::new_instruction(
+            ASTMnemonic::BNE,
+            ASTAddressingMode::Relative,
+            ASTOperand::Label("undefined".to_string()),
+        )];
+
+        resolve_labels(&nodes, &mut symbol_table);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_double_label_declaration() {
+        let mut symbol_table = SymbolTable::new();
+        let nodes = vec![
+            ASTNode::Label("label".to_string()),
+            ASTNode::Label("label".to_string()),
+        ];
+        resolve_labels(&nodes, &mut symbol_table);
+        assert_eq!(symbol_table.symbols.len(), 1);
     }
 }
