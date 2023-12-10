@@ -13,3 +13,6 @@ pub mod assembler;
 
 /// 6502 CPU emulator
 pub mod emulator;
+
+/// Hexdump utility
+pub mod hexdump;
