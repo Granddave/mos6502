@@ -2,8 +2,6 @@ use std::fmt;
 
 use strum_macros::EnumString;
 
-use self::instruction::OPCODE_MAPPING;
-
 pub mod instruction;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, EnumString)]
@@ -157,16 +155,6 @@ pub struct ASTInstruction {
     pub addr_mode: ASTAddressingMode,
 }
 
-impl ASTInstruction {
-    pub fn to_opcode(&self) -> u8 {
-        OPCODE_MAPPING.find_opcode(*self).unwrap()
-    }
-
-    pub fn from_opcode(opcode: u8) -> Option<Self> {
-        OPCODE_MAPPING.find_instruction(opcode)
-    }
-}
-
 /// An instruction with an operand.
 #[derive(Debug, PartialEq)]
 pub struct ASTInstructionNode {
@@ -199,7 +187,7 @@ impl ASTInstructionNode {
             ASTOperand::ZeroPage(_) => 2,
             ASTOperand::Relative(_) => 2,
             ASTOperand::Label(_) => {
-                // Labels are later resolved to relative and absolute offsets
+                // Labels are during compilation resolved to relative and absolute addresses
                 match self.ins.addr_mode {
                     ASTAddressingMode::Absolute => 3,
                     ASTAddressingMode::Relative => 2,

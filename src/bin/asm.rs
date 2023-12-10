@@ -23,6 +23,6 @@ secondloop:
     let mut compiler = Compiler::new(0x0600);
     let bytes = compiler.compile(input);
 
-    hexdump::hexdump(&bytes, 7, 16);
+    println!("{}", hexdump::hexdump(&bytes, 7, 16));
     std::fs::write("a.bin", &bytes).unwrap();
 }
