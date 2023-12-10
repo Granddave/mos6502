@@ -115,7 +115,7 @@ impl<'a> Compiler {
 
         let mut bytes = Vec::new();
         ast.iter()
-            .for_each(|node| self.compile_node(&node, &mut bytes));
+            .for_each(|node| self.compile_node(node, &mut bytes));
 
         bytes
     }

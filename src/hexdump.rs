@@ -1,6 +1,6 @@
 fn addr(str: &mut String, offset: usize, addr_width: usize) {
     if offset != 0 {
-        str.push_str("\n");
+        str.push('\n');
     }
     str.push_str(format!("{:0width$X}", offset, width = addr_width).as_str());
 }
@@ -16,7 +16,7 @@ pub fn hexdump(program: &[u8], addr_width: usize, stride: usize) -> String {
             line += 1;
         }
         if ix % 2 == 0 {
-            str.push_str(" ");
+            str.push(' ');
         }
 
         str.push_str(

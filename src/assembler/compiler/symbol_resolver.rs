@@ -67,18 +67,14 @@ pub fn resolve_labels(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
 
     // Verify that no instruction uses a label as operand that has not been resolved
     for node in nodes {
-        match node {
-            ASTNode::Instruction(ins_node) => match &ins_node.operand {
-                ASTOperand::Label(label_str) => {
-                    symbol_table
-                        .symbols
-                        .iter()
-                        .find(|symbol| symbol.name == *label_str)
-                        .expect("Label not found");
-                }
-                _ => (),
-            },
-            _ => (),
+        if let ASTNode::Instruction(ins_node) = node {
+            if let ASTOperand::Label(label_str) = &ins_node.operand {
+                symbol_table
+                    .symbols
+                    .iter()
+                    .find(|symbol| symbol.name == *label_str)
+                    .expect("Label not found");
+            }
         }
     }
 }
