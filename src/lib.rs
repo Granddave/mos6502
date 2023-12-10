@@ -1,6 +1,20 @@
 // Allow during initial development
 #![allow(dead_code)]
 
+/// AST (Abstract Syntax Tree) node types.
+///
+/// The AST is a tree representation of the source code.
+///
+/// For example, `LDA #$C8` is represented as:
+///
+/// ```text
+/// ASTInstructionNode::new(
+///     ASTMnemonic::LDA,
+///     ASTAddressingMode::Immediate,
+///     ASTOperand::Immediate(0xC8),
+/// ),
+pub mod ast;
+
 /// Transforms 6502 assembly code to machine code.
 ///
 /// The steps are:

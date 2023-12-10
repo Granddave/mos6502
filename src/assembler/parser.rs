@@ -1,11 +1,9 @@
 use std::str::FromStr;
 
-use crate::assembler::{
-    ast::ASTNode,
-    lexer::{Lexer, Token, TokenType},
+use crate::{
+    assembler::lexer::{Lexer, Token, TokenType},
+    ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand},
 };
-
-use super::ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTOperand};
 
 pub struct Parser<'a> {
     lexer: &'a mut Lexer<'a>,

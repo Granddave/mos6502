@@ -1,4 +1,4 @@
-use crate::assembler::ast::{ASTNode, ASTOperand};
+use crate::ast::{ASTNode, ASTOperand};
 
 #[derive(Debug, PartialEq)]
 pub enum SymbolType {
@@ -85,7 +85,7 @@ pub fn resolve_labels(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
 
 #[cfg(test)]
 mod tests {
-    use crate::assembler::ast::{ASTAddressingMode, ASTMnemonic, ASTNode, ASTOperand};
+    use crate::ast::{ASTAddressingMode, ASTMnemonic, ASTNode, ASTOperand};
 
     fn example_ast() -> Vec<ASTNode> {
         vec![

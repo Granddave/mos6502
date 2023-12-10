@@ -1,10 +1,7 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
-use super::{
-    ast::{
-        instruction::OPCODE_MAPPING, ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand,
-    },
-    lexer::Lexer,
-    parser::Parser,
+use super::{lexer::Lexer, parser::Parser};
+use crate::ast::{
+    instruction::OPCODE_MAPPING, ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand,
 };
 
 mod symbol_resolver;
