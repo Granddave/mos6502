@@ -20,7 +20,7 @@ secondloop:
   BNE secondloop
 ";
 
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::new(0x0600);
     let bytes = compiler.compile(input);
 
     hexdump::hexdump(&bytes, 7, 16);

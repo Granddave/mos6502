@@ -1,6 +1,8 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use super::{
-    ast::{ASTAddressingMode, ASTNode, ASTOperand},
+    ast::{
+        instruction::OPCODE_MAPPING, ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand,
+    },
     lexer::Lexer,
     parser::Parser,
 };
@@ -10,14 +12,21 @@ mod symbol_resolver;
 pub struct Compiler {
     symbol_table: SymbolTable,
     current_address: u16,
-    // TODO: Add program_offset, typically 0x0600
+    program_offset: u16,
+}
+
+impl Default for Compiler {
+    fn default() -> Compiler {
+        Compiler::new(0x0000)
+    }
 }
 
 impl<'a> Compiler {
-    pub fn new() -> Compiler {
+    pub fn new(program_offset: u16) -> Compiler {
         Compiler {
             symbol_table: SymbolTable::new(),
             current_address: 0,
+            program_offset,
         }
     }
 
@@ -43,8 +52,10 @@ impl<'a> Compiler {
                         let SymbolType::Label(absolute_offset_in_program) = symbol.symbol;
                         match ins.ins.addr_mode {
                             ASTAddressingMode::Absolute => {
-                                ins.operand =
-                                    ASTOperand::Absolute(absolute_offset_in_program as u16);
+                                let address = (absolute_offset_in_program as u16)
+                                    .checked_add(self.program_offset)
+                                    .expect("Overflow error");
+                                ins.operand = ASTOperand::Absolute(address);
                             }
                             ASTAddressingMode::Relative => {
                                 let offset_addr = (absolute_offset_in_program as u16)
@@ -61,10 +72,33 @@ impl<'a> Compiler {
         }
     }
 
+    fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
+        let mut bytes: Vec<u8> = Vec::new();
+
+        bytes.push(
+            OPCODE_MAPPING
+                .find_opcode(ins.ins)
+                .expect("Invalid instruction"),
+        );
+
+        bytes.extend(match ins.operand {
+            ASTOperand::Immediate(value) => vec![value],
+            ASTOperand::Absolute(address) => {
+                vec![address as u8, (address >> 8) as u8]
+            }
+            ASTOperand::ZeroPage(address) => vec![address],
+            ASTOperand::Relative(offset) => vec![offset as u8],
+            ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
+            ASTOperand::Implied => vec![],
+        });
+
+        bytes
+    }
+
     fn compile_node(&mut self, node: &ASTNode, bytes: &mut Vec<u8>) {
         match node {
             ASTNode::Instruction(ins) => {
-                bytes.extend(ins.bytes());
+                bytes.extend(self.compile_instruction(ins));
                 self.current_address += ins.size() as u16;
             }
             // We don't need to generate any bytes for labels. They are just used for symbol
@@ -105,7 +139,7 @@ mod tests {
         ];
 
         for (source, expected) in tests {
-            let mut compiler = Compiler::new();
+            let mut compiler = Compiler::default();
             let bytes = compiler.compile(source);
             assert_eq!(bytes, expected);
         }
@@ -137,7 +171,7 @@ decrement:
         ];
 
         for (source, expected) in tests {
-            let mut compiler = Compiler::new();
+            let mut compiler = Compiler::default();
             let bytes = compiler.compile(source);
             assert_eq!(bytes, expected);
         }
@@ -191,7 +225,52 @@ end:
         ];
 
         for (source, expected) in tests {
-            let mut compiler = Compiler::new();
+            let mut compiler = Compiler::default();
+            let bytes = compiler.compile(source);
+            assert_eq!(bytes, expected);
+        }
+    }
+
+    #[test]
+    fn test_program_offset() {
+        let source = "  LDX #$08
+loop:
+  LDA #$01
+  JMP end
+  STA $0200
+  BNE loop
+end:
+  BRK";
+
+        let tests = vec![
+            (
+                0x0000,
+                vec![
+                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
+                    0x0C, 0x00, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
+                    /* BRK */ 0x00,
+                ],
+            ),
+            (
+                0x0600,
+                vec![
+                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
+                    0x0C, 0x06, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
+                    /* BRK */ 0x00,
+                ],
+            ),
+            (
+                0x8000,
+                vec![
+                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
+                    0x0C, 0x80, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
+                    /* BRK */ 0x00,
+                ],
+            ),
+        ];
+
+        for (program_offset, expected) in tests {
+            let mut compiler = Compiler::new(program_offset);
             let bytes = compiler.compile(source);
             assert_eq!(bytes, expected);
         }

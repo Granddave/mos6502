@@ -209,36 +209,6 @@ impl ASTInstructionNode {
             ASTOperand::Implied => 1,
         }
     }
-
-    // TODO: Move to compiler module
-    pub fn opcode(&self) -> u8 {
-        OPCODE_MAPPING
-            .find_opcode(self.ins)
-            .expect("Invalid instruction")
-    }
-
-    // TODO: Move to compiler module
-    pub fn bytes(&self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = Vec::new();
-
-        bytes.push(self.opcode());
-
-        // TODO: Get program offset from settings
-        let program_offset = 0x0000;
-        bytes.extend(match self.operand {
-            ASTOperand::Immediate(value) => vec![value],
-            ASTOperand::Absolute(address) => {
-                let address = address + program_offset;
-                vec![address as u8, (address >> 8) as u8]
-            }
-            ASTOperand::ZeroPage(address) => vec![address],
-            ASTOperand::Relative(offset) => vec![offset as u8],
-            ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
-            ASTOperand::Implied => vec![],
-        });
-
-        bytes
-    }
 }
 
 impl fmt::Display for ASTInstructionNode {
