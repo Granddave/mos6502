@@ -65,8 +65,13 @@ impl<'a> Compiler {
                     }
                 }
                 ASTNode::Label(_) => (),
+                ASTNode::Constant(_) => (),
             }
         }
+    }
+
+    fn resolve_constants_to_values(&mut self, _ast: &mut [ASTNode]) {
+        todo!()
     }
 
     fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
@@ -86,6 +91,9 @@ impl<'a> Compiler {
             ASTOperand::ZeroPage(address) => vec![address],
             ASTOperand::Relative(offset) => vec![offset as u8],
             ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
+            ASTOperand::Constant(_) => {
+                panic!("Constant should have been resolved to its value")
+            }
             ASTOperand::Implied => vec![],
         });
 
@@ -98,9 +106,9 @@ impl<'a> Compiler {
                 bytes.extend(self.compile_instruction(ins));
                 self.current_address += ins.size() as u16;
             }
-            // We don't need to generate any bytes for labels. They are just used for symbol
-            // resolution.
-            ASTNode::Label(_) => (),
+            // We don't need to generate any bytes for labels and constants. They are just used for
+            // symbol resolution.
+            ASTNode::Label(_) | ASTNode::Constant(_) => (),
         }
     }
 
@@ -110,8 +118,10 @@ impl<'a> Compiler {
         let mut ast = parser.parse_program();
 
         symbol_resolver::resolve_labels(&ast, &mut self.symbol_table);
+        symbol_resolver::resolve_constants(&ast, &mut self.symbol_table);
 
         self.resolve_labels_to_addr(&mut ast);
+        self.resolve_constants_to_values(&mut ast);
 
         let mut bytes = Vec::new();
         ast.iter()

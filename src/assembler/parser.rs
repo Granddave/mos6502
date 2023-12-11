@@ -2,7 +2,9 @@ use std::str::FromStr;
 
 use crate::{
     assembler::lexer::{Lexer, Token, TokenType},
-    ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand},
+    ast::{
+        ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand,
+    },
 };
 
 pub struct Parser<'a> {
@@ -241,6 +243,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_constant(&mut self) -> ASTConstantNode {
+        todo!()
+    }
+
     fn parse_node(&mut self) -> ASTNode {
         match &self.current_token.token {
             TokenType::Identifier => {
@@ -250,6 +256,7 @@ impl<'a> Parser<'a> {
                     ASTNode::Instruction(self.parse_instruction())
                 }
             }
+            TokenType::Define => ASTNode::Constant(self.parse_constant()),
             _ => panic!(
                 "parse_node: Unexpected token type: {:?}",
                 self.current_token.token
@@ -413,6 +420,51 @@ mod tests {
             let mut parser = Parser::new(&mut lexer);
             assert_eq!(parser.parse_instruction(), expected);
         }
+    }
+
+    #[test]
+    fn test_parse_constant() {
+        let input = "
+  define  sysRandom  $d010
+  LDY sysRandom
+
+  define  zpage      $02
+  LDA zpage
+  STA (zpage,X)
+
+  define  a_dozen    $0c
+  LDX #a_dozen";
+
+        let expected = vec![
+            ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDY,
+                ASTAddressingMode::Absolute,
+                ASTOperand::Constant("sysRandom".to_string()),
+            )),
+            ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x02)),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDA,
+                ASTAddressingMode::ZeroPage,
+                ASTOperand::Constant("zpage".to_string()),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::STA,
+                ASTAddressingMode::IndirectIndexedX,
+                ASTOperand::Constant("zpage".to_string()),
+            )),
+            ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDX,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Constant("a_dozen".to_string()),
+            )),
+        ];
+
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+        let program = parser.parse_program();
+        assert_eq!(program, expected);
     }
 
     #[test]

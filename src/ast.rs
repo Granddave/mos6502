@@ -143,6 +143,7 @@ pub enum ASTOperand {
     ZeroPage(u8),
     Relative(i8),
     Label(String),
+    Constant(String),
     Implied,
 }
 
@@ -186,7 +187,7 @@ impl ASTInstructionNode {
             ASTOperand::Absolute(_) => 3,
             ASTOperand::ZeroPage(_) => 2,
             ASTOperand::Relative(_) => 2,
-            ASTOperand::Label(_) => {
+            ASTOperand::Label(_) | ASTOperand::Constant(_) => {
                 // Labels are during compilation resolved to relative and absolute addresses
                 match self.ins.addr_mode {
                     ASTAddressingMode::Absolute => 3,
@@ -228,7 +229,7 @@ impl fmt::Display for ASTInstructionNode {
                     ASTAddressingMode::Indirect => {
                         write!(f, "{} (${:04X})", self.ins.mnemonic, address)
                     }
-                    _ => write!(f, "{} ${:04X}", self.ins.mnemonic, address),
+                    _ => panic!("Invalid addressing mode for absolute address"),
                 },
                 ASTOperand::ZeroPage(address) => match self.ins.addr_mode {
                     ASTAddressingMode::ZeroPage => {
@@ -246,13 +247,86 @@ impl fmt::Display for ASTInstructionNode {
                     ASTAddressingMode::IndirectIndexedY => {
                         write!(f, "{} (${:02X}),Y", self.ins.mnemonic, address)
                     }
-                    _ => write!(f, "{} ${:02X}", self.ins.mnemonic, address),
+                    _ => panic!("Invalid addressing mode for zero page address"),
                 },
                 ASTOperand::Relative(offset) => write!(f, "{} ${:02X}", self.ins.mnemonic, offset),
                 ASTOperand::Label(label) => write!(f, "{} {}", self.ins.mnemonic, label),
                 ASTOperand::Implied => write!(f, "{}", self.ins.mnemonic),
+                ASTOperand::Constant(constant) => match self.ins.addr_mode {
+                    ASTAddressingMode::Absolute => write!(f, "{} {}", self.ins.mnemonic, constant),
+                    ASTAddressingMode::ZeroPage => write!(f, "{} {}", self.ins.mnemonic, constant),
+                    ASTAddressingMode::ZeroPageX => {
+                        write!(f, "{} {},X", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::ZeroPageY => {
+                        write!(f, "{} {},Y", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::AbsoluteX => {
+                        write!(f, "{} {},X", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::AbsoluteY => {
+                        write!(f, "{} {},Y", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::Indirect => {
+                        write!(f, "{} ({})", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::IndirectIndexedX => {
+                        write!(f, "{} ({},X)", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::IndirectIndexedY => {
+                        write!(f, "{} ({}),Y", self.ins.mnemonic, constant)
+                    }
+                    ASTAddressingMode::Immediate => {
+                        write!(f, "{} #{}", self.ins.mnemonic, constant)
+                    }
+                    _ => panic!("Invalid addressing mode for constant"),
+                },
             }
         }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ASTConstantValue {
+    Byte(u8),
+    Word(u16),
+}
+
+impl fmt::Display for ASTConstantValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ASTConstantValue::Byte(value) => write!(f, "{:02x}", value),
+            ASTConstantValue::Word(value) => write!(f, "{:04x}", value),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ASTConstantNode {
+    identifier: String,
+    value: ASTConstantValue,
+}
+
+impl ASTConstantNode {
+    pub fn new_byte(identifier: String, byte: u8) -> ASTConstantNode {
+        ASTConstantNode {
+            identifier,
+            value: ASTConstantValue::Byte(byte),
+        }
+    }
+
+    pub fn new_word(identifier: String, word: u16) -> ASTConstantNode {
+        ASTConstantNode {
+            identifier,
+            value: ASTConstantValue::Word(word),
+        }
+    }
+}
+
+impl fmt::Display for ASTConstantNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: Make sure it's padded
+        write!(f, "define {} {}", self.identifier, self.value)
     }
 }
 
@@ -261,7 +335,7 @@ impl fmt::Display for ASTInstructionNode {
 pub enum ASTNode {
     Instruction(ASTInstructionNode),
     Label(String),
-    // TODO: Add define directive
+    Constant(ASTConstantNode),
 }
 
 impl ASTNode {
@@ -279,6 +353,7 @@ impl fmt::Display for ASTNode {
         match self {
             ASTNode::Instruction(instruction) => write!(f, "{}", instruction),
             ASTNode::Label(label) => write!(f, "{}:", label),
+            ASTNode::Constant(constant) => write!(f, "  {}", constant),
         }
     }
 }

@@ -6,6 +6,8 @@ pub enum TokenType {
     Hex,
     /// `:` Label suffix
     Colon,
+    /// Constant definition
+    Define,
     /// `,`
     Comma,
     /// `(`
@@ -51,6 +53,7 @@ impl ToString for Token {
             TokenType::LiteralNumber => self.literal.to_owned(),
             TokenType::Hex => "$".to_string() + &self.literal,
             TokenType::Colon => ":".to_owned(),
+            TokenType::Define => "define".to_owned(),
             TokenType::Comma => ",".to_owned(),
             TokenType::ParenLeft => "(".to_owned(),
             TokenType::ParenRight => ")".to_owned(),
@@ -119,8 +122,8 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Instruction mnemonic or label
-    fn read_identifier(&mut self) -> String {
+    /// Instruction mnemonic, label or constant definition
+    fn read_string(&mut self) -> String {
         let position = self.position;
         // Allow alphanumeric and underscore
         while self.ch.is_some() && (self.ch.unwrap().is_alphanumeric() || self.ch.unwrap() == '_') {
@@ -179,8 +182,12 @@ impl<'a> Lexer<'a> {
                     Some(self.create_token(TokenType::ParenRight, ")"))
                 }
                 'A'..='Z' | 'a'..='z' | '_' => {
-                    let identifier = self.read_identifier();
-                    Some(self.create_token(TokenType::Identifier, &identifier))
+                    let identifier = self.read_string();
+                    if identifier == "define" {
+                        Some(self.create_token(TokenType::Define, &identifier))
+                    } else {
+                        Some(self.create_token(TokenType::Identifier, &identifier))
+                    }
                 }
                 _ => {
                     panic!("Lexer: Unexpected character: '{}'", ch)
@@ -281,6 +288,43 @@ mod tests {
             Token {
                 token: TokenType::Colon,
                 literal: ":".to_string(),
+                line_number: 1,
+            },
+            Token {
+                token: TokenType::Eof,
+                literal: "".to_string(),
+                line_number: 1,
+            },
+        ];
+        let mut lexer = Lexer::new(input);
+        let mut tokens = Vec::new();
+        loop {
+            let token = lexer.next_token().unwrap();
+            tokens.push(token.clone());
+            if token.token == TokenType::Eof {
+                break;
+            }
+        }
+        assert_eq!(tokens, result);
+    }
+
+    #[test]
+    fn test_define() {
+        let input = "define my_constant $FE";
+        let result = vec![
+            Token {
+                token: TokenType::Define,
+                literal: "define".to_string(),
+                line_number: 1,
+            },
+            Token {
+                token: TokenType::Identifier,
+                literal: "my_constant".to_string(),
+                line_number: 1,
+            },
+            Token {
+                token: TokenType::Hex,
+                literal: "FE".to_string(),
                 line_number: 1,
             },
             Token {

@@ -36,7 +36,7 @@ impl SymbolTable {
     }
 }
 
-pub fn resolve_labels(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
+pub fn resolve_labels(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
     let mut current_addr = 0;
 
     // Find label definitions and populate symbol table
@@ -49,6 +49,7 @@ pub fn resolve_labels(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
                 name: label.clone(),
                 symbol: SymbolType::Label(current_addr),
             }),
+            ASTNode::Constant(_) => todo!(),
         }
     }
 
@@ -77,6 +78,10 @@ pub fn resolve_labels(nodes: &Vec<ASTNode>, symbol_table: &mut SymbolTable) {
             }
         }
     }
+}
+
+pub fn resolve_constants(_nodes: &[ASTNode], _symbol_table: &mut SymbolTable) {
+    todo!()
 }
 
 #[cfg(test)]
