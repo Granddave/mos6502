@@ -426,23 +426,39 @@ mod tests {
     fn test_parse_constant() {
         let input = "
   define  sysRandom  $d010
-  LDY sysRandom
-
-  define  zpage      $02
-  LDA zpage
-  STA (zpage,X)
-
   define  a_dozen    $0c
+  define  zpage      $02
+
+  LDY sysRandom
+  LDY sysRandom,X
+  LDY (sysRandom)
+  LDA zpage
+  LDA zpage,X
+  STA (zpage,X)
+  STA (zpage),Y
   LDX #a_dozen";
 
         let expected = vec![
+            // Constants
             ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+            ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
+            ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+            // Instructions
             ASTNode::Instruction(ASTInstructionNode::new(
                 ASTMnemonic::LDY,
                 ASTAddressingMode::Absolute,
                 ASTOperand::Constant("sysRandom".to_string()),
             )),
-            ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x02)),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDY,
+                ASTAddressingMode::AbsoluteX,
+                ASTOperand::Constant("sysRandom".to_string()),
+            )),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::LDY,
+                ASTAddressingMode::Indirect,
+                ASTOperand::Constant("sysRandom".to_string()),
+            )),
             ASTNode::Instruction(ASTInstructionNode::new(
                 ASTMnemonic::LDA,
                 ASTAddressingMode::ZeroPage,
@@ -453,7 +469,11 @@ mod tests {
                 ASTAddressingMode::IndirectIndexedX,
                 ASTOperand::Constant("zpage".to_string()),
             )),
-            ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
+            ASTNode::Instruction(ASTInstructionNode::new(
+                ASTMnemonic::STA,
+                ASTAddressingMode::IndirectIndexedY,
+                ASTOperand::Constant("zpage".to_string()),
+            )),
             ASTNode::Instruction(ASTInstructionNode::new(
                 ASTMnemonic::LDX,
                 ASTAddressingMode::Immediate,
@@ -469,7 +489,10 @@ mod tests {
 
     #[test]
     fn test_parse_program() {
-        let input = "  LDX #$00
+        let input = "
+define zero $00
+
+  LDX #zero
   LDY #$00
 firstloop:
   TXA
@@ -486,10 +509,11 @@ secondloop:
   CPY #$20
   BNE secondloop";
         let expected = vec![
+            ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),
             ASTNode::Instruction(ASTInstructionNode::new(
                 ASTMnemonic::LDX,
                 ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x00),
+                ASTOperand::Constant("zero".to_string()),
             )),
             ASTNode::Instruction(ASTInstructionNode::new(
                 ASTMnemonic::LDY,
