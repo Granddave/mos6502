@@ -424,67 +424,130 @@ mod tests {
 
     #[test]
     fn test_parse_constant() {
-        let input = "
-  define  sysRandom  $d010
-  define  a_dozen    $0c
-  define  zpage      $02
-
-  LDY sysRandom
-  LDY sysRandom,X
-  LDY (sysRandom)
-  LDA zpage
-  LDA zpage,X
-  STA (zpage,X)
-  STA (zpage),Y
-  LDX #a_dozen";
-
-        let expected = vec![
-            // Constants
-            ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-            ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
-            ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-            // Instructions
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::LDY,
-                ASTAddressingMode::Absolute,
-                ASTOperand::Constant("sysRandom".to_string()),
-            )),
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::LDY,
-                ASTAddressingMode::AbsoluteX,
-                ASTOperand::Constant("sysRandom".to_string()),
-            )),
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::LDY,
-                ASTAddressingMode::Indirect,
-                ASTOperand::Constant("sysRandom".to_string()),
-            )),
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::LDA,
-                ASTAddressingMode::ZeroPage,
-                ASTOperand::Constant("zpage".to_string()),
-            )),
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::STA,
-                ASTAddressingMode::IndirectIndexedX,
-                ASTOperand::Constant("zpage".to_string()),
-            )),
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::STA,
-                ASTAddressingMode::IndirectIndexedY,
-                ASTOperand::Constant("zpage".to_string()),
-            )),
-            ASTNode::Instruction(ASTInstructionNode::new(
-                ASTMnemonic::LDX,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Constant("a_dozen".to_string()),
-            )),
+        let tests = vec![
+            (
+                "define zero $00",
+                vec![ASTNode::Constant(ASTConstantNode::new_byte(
+                    "zero".to_string(),
+                    0x00,
+                ))],
+            ),
+            (
+                "define sysRandom $d010",
+                vec![ASTNode::Constant(ASTConstantNode::new_word(
+                    "sysRandom".to_string(),
+                    0xd010,
+                ))],
+            ),
+            (
+                "define sysRandom $d010\nLDY sysRandom",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDY,
+                        ASTAddressingMode::Absolute,
+                        ASTOperand::Constant("sysRandom".to_string()),
+                    )),
+                ],
+            ),
+            (
+                //
+                "define sysRandom $d010\nLDY (sysRandom)",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDY,
+                        ASTAddressingMode::Indirect,
+                        ASTOperand::Constant("sysRandom".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define sysRandom $d010\nLDY (sysRandom,X)",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDY,
+                        ASTAddressingMode::IndirectIndexedX,
+                        ASTOperand::Constant("sysRandom".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define sysRandom $d010\nLDY (sysRandom),Y",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDY,
+                        ASTAddressingMode::IndirectIndexedY,
+                        ASTOperand::Constant("sysRandom".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define a_dozen $0c\nLDX #a_dozen",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDX,
+                        ASTAddressingMode::Immediate,
+                        ASTOperand::Constant("a_dozen".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define zpage $02\nLDA zpage",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::ZeroPage,
+                        ASTOperand::Constant("zpage".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define zpage $02\nLDA zpage,X",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::ZeroPageX,
+                        ASTOperand::Constant("zpage".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define zpage $02\nSTA (zpage,X)",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::STA,
+                        ASTAddressingMode::IndirectIndexedX,
+                        ASTOperand::Constant("zpage".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define zpage $02\nSTA (zpage),Y",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::STA,
+                        ASTAddressingMode::IndirectIndexedY,
+                        ASTOperand::Constant("zpage".to_string()),
+                    )),
+                ],
+            ),
         ];
 
-        let mut lexer = Lexer::new(input);
-        let mut parser = Parser::new(&mut lexer);
-        let program = parser.parse_program();
-        assert_eq!(program, expected);
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let mut parser = Parser::new(&mut lexer);
+            eprintln!("-----");
+            eprintln!("input: \n\n{}\n", input);
+            assert_eq!(parser.parse_program(), expected);
+        }
     }
 
     #[test]
