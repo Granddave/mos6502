@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
     fn parse_mnemonic(&mut self) -> ASTMnemonic {
         match ASTMnemonic::from_str(self.current_token.literal.as_str()) {
             Ok(mnemonic) => mnemonic,
-            Err(err) => panic!("Invalid mnemonic: {}", err),
+            Err(err) => panic!("Invalid mnemonic: {}: {}", err, self.current_token.literal),
         }
     }
 
@@ -98,6 +98,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn try_parse_identifier(&mut self) -> Option<String> {
+        if self.current_token_is(TokenType::Identifier) {
+            Some(self.current_token.literal.clone())
+        } else {
+            None
+        }
+    }
+
     fn parse_literal_number(&mut self) -> (ASTAddressingMode, ASTOperand) {
         self.next_token();
         match self.current_token.token {
@@ -108,7 +116,17 @@ impl<'a> Parser<'a> {
                     panic!("Invalid hex byte");
                 }
             }
-            _ => panic!("Invalid literal number"),
+            TokenType::Identifier => {
+                if let Some(identifier) = self.try_parse_identifier() {
+                    (
+                        ASTAddressingMode::Immediate,
+                        ASTOperand::Constant(identifier),
+                    )
+                } else {
+                    panic!("Invalid identifier");
+                }
+            }
+            _ => panic!("Invalid literal number, got {:?}", self.current_token.token),
         }
     }
 
@@ -166,16 +184,29 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_indirect_indexed_x(&mut self, byte: u8) -> (ASTAddressingMode, ASTOperand) {
+    // (u8,X) - where u8 is a byte or a constant
+    fn parse_indirect_indexed_x(
+        &mut self,
+        byte: Option<u8>,
+        identifier: Option<String>,
+    ) -> (ASTAddressingMode, ASTOperand) {
+        eprintln!("parse_indirect_indexed_x");
+
         self.next_token(); // Consume the comma
         if !self.peek_token_is(0, TokenType::Identifier) {
             panic!("Invalid indirect indexed X operand");
         }
-        self.next_token(); // Consume the identifier
+        self.next_token(); // Consume the 'X'
         let operand = match self.current_token.literal.as_str() {
             "X" => (
                 ASTAddressingMode::IndirectIndexedX,
-                ASTOperand::ZeroPage(byte),
+                if let Some(byte) = byte {
+                    ASTOperand::ZeroPage(byte)
+                } else if let Some(identifier) = identifier {
+                    ASTOperand::Constant(identifier)
+                } else {
+                    panic!("Invalid indirect indexed X operand")
+                },
             ),
             _ => panic!("Invalid indirect indexed X operand"),
         };
@@ -183,38 +214,87 @@ impl<'a> Parser<'a> {
         operand
     }
 
-    fn parse_indirect_indexed_y(&mut self, byte: u8) -> (ASTAddressingMode, ASTOperand) {
+    // (u8),Y - where u8 is a byte or a constant
+    fn parse_indirect_indexed_y(
+        &mut self,
+        byte: Option<u8>,
+        identifier: Option<String>,
+    ) -> (ASTAddressingMode, ASTOperand) {
+        eprintln!("parse_indirect_indexed_y");
+
         self.next_token(); // Consume the closing parenthesis
         if !self.peek_token_is(0, TokenType::Comma) {
-            panic!("Invalid indirect indexed Y operand");
+            panic!("Invalid indirect indexed Y operand. Expected ','")
         }
         self.next_token(); // Consume the comma
-        self.next_token(); // Consume the identifier
+        self.next_token(); // Consume the 'Y' identifier
         match self.current_token.literal.as_str() {
             "Y" => (
                 ASTAddressingMode::IndirectIndexedY,
-                ASTOperand::ZeroPage(byte),
+                if let Some(byte) = byte {
+                    ASTOperand::ZeroPage(byte)
+                } else if let Some(identifier) = identifier {
+                    ASTOperand::Constant(identifier)
+                } else {
+                    panic!("Invalid indirect indexed Y operand")
+                },
             ),
-            _ => panic!("Invalid indirect indexed Y operand"),
+            _ => panic!("Invalid indirect indexed Y operand, Expected 'Y'"),
         }
     }
 
-    fn parse_indirect(&mut self) -> (ASTAddressingMode, ASTOperand) {
-        self.next_token();
+    // (u8,X) or (u8),Y - where u8 is a byte or a constant
+    fn try_parse_indirect_indexed(&mut self) -> Option<(ASTAddressingMode, ASTOperand)> {
+        eprintln!("try_parse_indirect_indexed");
 
-        if let Some(byte) = self.try_parse_hex_u8() {
-            if self.peek_token_is(0, TokenType::Comma) {
-                self.parse_indirect_indexed_x(byte)
-            } else if self.peek_token_is(0, TokenType::ParenRight) {
-                self.parse_indirect_indexed_y(byte)
+        let byte = self.try_parse_hex_u8();
+        let identifier = self.try_parse_identifier();
+        eprintln!("byte: {:?}, identifier: {:?}", byte, identifier);
+
+        // Can we manage without consuming the opening parenthesis here?
+        // self.next_token(); // Consume the opening parenthesis
+
+        if byte.is_some() || identifier.is_some() {
+            if self.peek_token_is(0, TokenType::Comma)
+                && self.peek_token_is(1, TokenType::Identifier)
+            {
+                Some(self.parse_indirect_indexed_x(byte, identifier))
+            } else if self.peek_token_is(0, TokenType::ParenRight)
+                && self.peek_token_is(1, TokenType::Comma)
+            {
+                Some(self.parse_indirect_indexed_y(byte, identifier))
             } else {
-                panic!("Invalid indirect indexed X/Y operand");
+                None
             }
-        } else if let Some(word) = self.try_parse_hex_u16() {
-            self.next_token();
-            (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
         } else {
-            panic!("Invalid indirect operand")
+            None
+        }
+    }
+
+    // (u8,X) or (u8),Y - where u8 is a byte or a constant
+    // or
+    // (u16) or - where u16 is a word or a constant
+    fn parse_indirect(&mut self) -> (ASTAddressingMode, ASTOperand) {
+        eprintln!("parse_indirect");
+        self.next_token(); // Consume the opening parenthesis
+
+        if let Some(indirect_indexed) = self.try_parse_indirect_indexed() {
+            indirect_indexed
+        } else {
+            // Absolute indirect
+            if let Some(word) = self.try_parse_hex_u16() {
+                self.next_token(); // Consume the closing parenthesis
+                (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
+            } else if self.current_token_is(TokenType::Identifier) {
+                let identifier = self.current_token.literal.clone();
+                self.next_token(); // Consume the identifier
+                (
+                    ASTAddressingMode::Indirect,
+                    ASTOperand::Constant(identifier),
+                )
+            } else {
+                panic!("Invalid indirect operand")
+            }
         }
     }
 
@@ -224,6 +304,36 @@ impl<'a> Parser<'a> {
             ASTAddressingMode::Relative
         } else {
             ASTAddressingMode::Absolute
+        }
+    }
+
+    fn parse_operand_with_identifier(
+        &mut self,
+        mnemonic: &ASTMnemonic,
+    ) -> (ASTAddressingMode, ASTOperand) {
+        if mnemonic.is_branch() || mnemonic.is_jump() {
+            (
+                self.addressing_mode_for_label(mnemonic),
+                ASTOperand::Label(self.current_token.literal.clone()),
+            )
+        } else if self.peek_token_is(0, TokenType::Comma) {
+            // ZeroPageX
+            let constant = self.current_token.literal.clone();
+            self.next_token(); // Consume the comma
+            self.next_token(); // Consume the 'X' or 'Y'
+            match self.current_token.literal.as_str() {
+                "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant)),
+                "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant)),
+                _ => panic!(
+                    "Invalid ZeroPageX/Y identifier, got {:?}",
+                    self.current_token.literal
+                ),
+            }
+        } else {
+            (
+                ASTAddressingMode::Constant,
+                ASTOperand::Constant(self.current_token.literal.clone()),
+            )
         }
     }
 
@@ -241,11 +351,8 @@ impl<'a> Parser<'a> {
             TokenType::LiteralNumber => self.parse_literal_number(),
             TokenType::Hex => self.parse_hex(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
-            TokenType::Identifier => (
-                self.addressing_mode_for_label(mnemonic),
-                ASTOperand::Label(self.current_token.literal.clone()),
-            ),
-            _ => panic!("Invalid operand"),
+            TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
+            _ => panic!("Invalid operand, got {:?}", self.current_token.token),
         }
     }
 
@@ -254,6 +361,11 @@ impl<'a> Parser<'a> {
             let mnemonic = self.parse_mnemonic();
             let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
 
+            eprintln!(
+                "mnemonic: {:?}, addr_mode: {:?}, operand: {:?}",
+                mnemonic, addr_mode, operand
+            );
+
             ASTInstructionNode::new(mnemonic, addr_mode, operand)
         } else {
             panic!("Expected identifier, got {:?}", self.current_token.token);
@@ -261,7 +373,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_constant(&mut self) -> ASTConstantNode {
-        todo!()
+        if !self.peek_token_is(0, TokenType::Identifier) {
+            panic!("Expected identifier");
+        }
+
+        self.next_token(); // Consume the define keyword
+
+        let identifier = self.current_token.literal.clone();
+        self.next_token(); // Consume the identifier
+
+        if self.current_token_is(TokenType::Hex) {
+            if let Some(byte) = self.try_parse_hex_u8() {
+                ASTConstantNode::new_byte(identifier, byte)
+            } else if let Some(word) = self.try_parse_hex_u16() {
+                ASTConstantNode::new_word(identifier, word)
+            } else {
+                panic!("Invalid hex constant");
+            }
+        } else {
+            panic!("Expected hex constant");
+        }
     }
 
     fn parse_node(&mut self) -> ASTNode {
@@ -500,13 +631,12 @@ mod tests {
                     ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
                     ASTNode::Instruction(ASTInstructionNode::new(
                         ASTMnemonic::LDY,
-                        ASTAddressingMode::Absolute,
+                        ASTAddressingMode::Constant,
                         ASTOperand::Constant("sysRandom".to_string()),
                     )),
                 ],
             ),
             (
-                //
                 "define sysRandom $d010\nLDY (sysRandom)",
                 vec![
                     ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
@@ -556,7 +686,7 @@ mod tests {
                     ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
                     ASTNode::Instruction(ASTInstructionNode::new(
                         ASTMnemonic::LDA,
-                        ASTAddressingMode::ZeroPage,
+                        ASTAddressingMode::Constant,
                         ASTOperand::Constant("zpage".to_string()),
                     )),
                 ],
@@ -568,6 +698,17 @@ mod tests {
                     ASTNode::Instruction(ASTInstructionNode::new(
                         ASTMnemonic::LDA,
                         ASTAddressingMode::ZeroPageX,
+                        ASTOperand::Constant("zpage".to_string()),
+                    )),
+                ],
+            ),
+            (
+                "define zpage $02\nLDA zpage,Y",
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::ZeroPageY,
                         ASTOperand::Constant("zpage".to_string()),
                     )),
                 ],
@@ -607,9 +748,7 @@ mod tests {
 
     #[test]
     fn test_parse_program() {
-        let input = "
-define zero $00
-
+        let input = "  define zero $00
   LDX #zero
   LDY #$00
 firstloop:

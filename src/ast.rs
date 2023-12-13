@@ -65,6 +65,10 @@ pub enum ASTMnemonic {
 }
 
 impl ASTMnemonic {
+    pub fn is_jump(&self) -> bool {
+        matches!(self, ASTMnemonic::JMP | ASTMnemonic::JSR)
+    }
+
     pub fn is_branch(&self) -> bool {
         matches!(
             self,
@@ -134,6 +138,8 @@ pub enum ASTAddressingMode {
     Immediate, // #v
     Accumulator,
     Implied,
+    // Special used for parsing
+    Constant,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -295,8 +301,8 @@ pub enum ASTConstantValue {
 impl fmt::Display for ASTConstantValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ASTConstantValue::Byte(value) => write!(f, "{:02x}", value),
-            ASTConstantValue::Word(value) => write!(f, "{:04x}", value),
+            ASTConstantValue::Byte(value) => write!(f, "${:02x}", value),
+            ASTConstantValue::Word(value) => write!(f, "${:04x}", value),
         }
     }
 }
