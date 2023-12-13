@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::VecDeque, str::FromStr};
 
 use crate::{
     assembler::lexer::{Lexer, Token, TokenType},
@@ -7,51 +7,68 @@ use crate::{
     },
 };
 
+// Allow the parser to peek `PEEK_BUFFER_SIZE` tokens in advance
+const PEEK_BUFFER_SIZE: usize = 2;
+
 pub struct Parser<'a> {
     lexer: &'a mut Lexer<'a>,
     current_token: Token,
-    peek_token: Token,
-    // Errors?
+    peek_tokens: VecDeque<Token>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(lexer: &'a mut Lexer<'a>) -> Self {
         // Feed the lexer so its tokens are ready to be consumed
 
-        let mut s = Self {
+        let mut parser = Self {
             lexer,
             current_token: Token::new(),
-            peek_token: Token::new(),
+            peek_tokens: VecDeque::with_capacity(PEEK_BUFFER_SIZE),
         };
 
-        s.next_token();
-        s.next_token();
+        for _ in 0..PEEK_BUFFER_SIZE {
+            parser.load_next_token();
+        }
 
-        s
+        parser.next_token(); // Load the first token
+
+        parser
+    }
+
+    fn load_next_token(&mut self) {
+        self.peek_tokens
+            .push_back(self.lexer.next_token().expect("Failed to load next token"));
     }
 
     fn next_token(&mut self) {
-        self.current_token = self.peek_token.clone(); // TODO: Can we avoid clone here?
-        self.peek_token = self.lexer.next_token().expect("Next token");
+        self.load_next_token();
+        self.current_token = self.peek_tokens.pop_front().unwrap();
+    }
+
+    fn peek_token(&mut self, peek_ahead: usize) -> Token {
+        self.peek_tokens
+            .get(peek_ahead)
+            .expect("Peeking past lookahead buffer")
+            .to_owned()
     }
 
     fn current_token_is(&self, token_type: TokenType) -> bool {
         self.current_token.token == token_type
     }
 
-    fn peek_token_is(&self, token_type: TokenType) -> bool {
-        self.peek_token.token == token_type
+    fn peek_token_is(&self, lookahead: usize, token_type: TokenType) -> bool {
+        self.peek_tokens.get(lookahead).expect("peek").token == token_type
     }
 
     fn parse_label(&mut self) -> String {
-        if self.current_token_is(TokenType::Identifier) && self.peek_token_is(TokenType::Colon) {
+        if self.current_token_is(TokenType::Identifier) && self.peek_token_is(0, TokenType::Colon) {
             let label = self.current_token.literal.clone();
             self.next_token(); // Consume the colon
             label
         } else {
             panic!(
-                "Expected identifier followed by colon, got {:?}, {:?}",
-                self.current_token.token, self.peek_token.token
+                "Expected identifier followed by colon, got {:?}",
+                self.current_token.token
             );
         }
     }
@@ -100,10 +117,10 @@ impl<'a> Parser<'a> {
         byte: u8,
         mnemonic: &ASTMnemonic,
     ) -> (ASTAddressingMode, ASTOperand) {
-        if self.peek_token_is(TokenType::Comma) {
+        if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y
             self.next_token();
-            if !self.peek_token_is(TokenType::Identifier) {
+            if !self.peek_token_is(0, TokenType::Identifier) {
                 panic!("Invalid ZeroPageX/Y operand")
             }
             self.next_token();
@@ -123,9 +140,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_hex_word(&mut self, word: u16) -> (ASTAddressingMode, ASTOperand) {
-        if self.peek_token_is(TokenType::Comma) {
+        if self.peek_token_is(0, TokenType::Comma) {
             self.next_token();
-            if !self.peek_token_is(TokenType::Identifier) {
+            if !self.peek_token_is(0, TokenType::Identifier) {
                 panic!("Invalid hex operand");
             }
             self.next_token();
@@ -151,7 +168,7 @@ impl<'a> Parser<'a> {
 
     fn parse_indirect_indexed_x(&mut self, byte: u8) -> (ASTAddressingMode, ASTOperand) {
         self.next_token(); // Consume the comma
-        if !self.peek_token_is(TokenType::Identifier) {
+        if !self.peek_token_is(0, TokenType::Identifier) {
             panic!("Invalid indirect indexed X operand");
         }
         self.next_token(); // Consume the identifier
@@ -168,7 +185,7 @@ impl<'a> Parser<'a> {
 
     fn parse_indirect_indexed_y(&mut self, byte: u8) -> (ASTAddressingMode, ASTOperand) {
         self.next_token(); // Consume the closing parenthesis
-        if !self.peek_token_is(TokenType::Comma) {
+        if !self.peek_token_is(0, TokenType::Comma) {
             panic!("Invalid indirect indexed Y operand");
         }
         self.next_token(); // Consume the comma
@@ -186,9 +203,9 @@ impl<'a> Parser<'a> {
         self.next_token();
 
         if let Some(byte) = self.try_parse_hex_u8() {
-            if self.peek_token_is(TokenType::Comma) {
+            if self.peek_token_is(0, TokenType::Comma) {
                 self.parse_indirect_indexed_x(byte)
-            } else if self.peek_token_is(TokenType::ParenRight) {
+            } else if self.peek_token_is(0, TokenType::ParenRight) {
                 self.parse_indirect_indexed_y(byte)
             } else {
                 panic!("Invalid indirect indexed X/Y operand");
@@ -250,7 +267,7 @@ impl<'a> Parser<'a> {
     fn parse_node(&mut self) -> ASTNode {
         match &self.current_token.token {
             TokenType::Identifier => {
-                if self.peek_token.token == TokenType::Colon {
+                if self.peek_token_is(0, TokenType::Colon) {
                     ASTNode::Label(self.parse_label())
                 } else {
                     ASTNode::Instruction(self.parse_instruction())
@@ -285,6 +302,44 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
     use crate::assembler::lexer::Lexer;
+
+    #[test]
+    fn test_parser() {
+        let input = "LDA #$C8\nSTA $0200";
+        let mut lexer = Lexer::new(input);
+        let mut parser = Parser::new(&mut lexer);
+
+        // Check that current token and lookahead tokens are loaded correctly
+        assert_eq!(parser.current_token.token, TokenType::Identifier);
+        assert_eq!(parser.peek_token(0).token, TokenType::LiteralNumber);
+        assert!(parser.peek_token_is(0, TokenType::LiteralNumber));
+        assert_eq!(parser.peek_token(1).token, TokenType::Hex);
+        assert!(parser.peek_token_is(1, TokenType::Hex));
+
+        parser.next_token(); // Consume the LDA token
+        assert_eq!(parser.current_token.token, TokenType::LiteralNumber);
+        assert_eq!(parser.peek_token(0).token, TokenType::Hex);
+        assert_eq!(parser.peek_token(1).token, TokenType::Identifier);
+
+        parser.next_token(); // Consume the literal number token
+        parser.next_token(); // Consume the hex token
+        assert_eq!(parser.current_token.token, TokenType::Identifier);
+        assert_eq!(parser.peek_token(0).token, TokenType::Hex);
+        assert_eq!(parser.peek_token(1).token, TokenType::Eof);
+
+        parser.next_token(); // Consume the STA token
+        assert_eq!(parser.current_token.token, TokenType::Hex);
+        assert_eq!(parser.peek_token(0).token, TokenType::Eof);
+        assert_eq!(parser.peek_token(1).token, TokenType::Eof);
+
+        parser.next_token(); // Consume the Hex token
+        parser.next_token(); // Consume the Eof token
+        parser.next_token(); // Will only get eof tokens from now on
+        assert_eq!(parser.current_token.token, TokenType::Eof);
+        assert_eq!(parser.peek_token(0).token, TokenType::Eof);
+        assert_eq!(parser.peek_token(1).token, TokenType::Eof);
+    }
+
     #[test]
     fn test_parse_label() {
         let tests = vec![("label:", "label".to_string())];
