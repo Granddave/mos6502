@@ -1,7 +1,7 @@
 use mos6502::{assembler::compiler::Compiler, hexdump};
 
-fn main() {
-    let input = "
+fn default() -> &'static str {
+    "
   LDX #$00
   LDY #$00
 firstloop:
@@ -18,10 +18,18 @@ secondloop:
   INY
   CPY #$20      ;loop until Y is $20
   BNE secondloop
-";
+"
+}
+
+fn main() {
+    let input = if let Some(filename) = std::env::args().nth(1) {
+        std::fs::read_to_string(filename).unwrap()
+    } else {
+        default().to_string()
+    };
 
     let mut compiler = Compiler::new(0x0600);
-    let bytes = compiler.compile(input);
+    let bytes = compiler.compile(&input);
 
     println!("{}", hexdump::hexdump(&bytes, 7, 16));
     std::fs::write("a.bin", &bytes).unwrap();
