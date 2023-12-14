@@ -4,6 +4,8 @@ pub enum TokenType {
     LiteralNumber,
     /// `$` Hex prefix
     Hex,
+    /// Decimal number
+    // TODO: Decimal,
     /// `:` Label suffix
     Colon,
     /// Constant definition

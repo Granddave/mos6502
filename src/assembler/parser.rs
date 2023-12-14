@@ -345,6 +345,15 @@ impl<'a> Parser<'a> {
             return (ASTAddressingMode::Implied, ASTOperand::Implied);
         }
 
+        // TODO: Handle accumulator addressing mode. This is a special case where the operand is
+        // either the accumulator register A or a memory location.
+        //
+        // Instructions that use the accumulator addressing mode:
+        // - ASL
+        // - LSR
+        // - ROL
+        // - ROR
+
         self.next_token();
 
         match self.current_token.token {
