@@ -93,35 +93,32 @@ impl<'a> Compiler {
         bytes.push(
             OPCODE_MAPPING
                 .find_opcode(ins.ins)
-                .expect("Invalid instruction"),
+                .expect(format!("Invalid instruction for opcode: {:?}", ins).as_str()),
         );
 
         bytes.extend(match ins.operand {
             ASTOperand::Immediate(value) => vec![value],
-            ASTOperand::Absolute(address) => {
-                vec![address as u8, (address >> 8) as u8]
-            }
+            ASTOperand::Absolute(address) => vec![address as u8, (address >> 8) as u8],
             ASTOperand::ZeroPage(address) => vec![address],
             ASTOperand::Relative(offset) => vec![offset as u8],
             ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
-            ASTOperand::Constant(_) => {
-                panic!("Constant should have been resolved to its value")
-            }
+            ASTOperand::Constant(_) => panic!("Constant should have been resolved to its value"),
             ASTOperand::Implied => vec![],
         });
 
         bytes
     }
 
-    fn compile_node(&mut self, node: &ASTNode, bytes: &mut Vec<u8>) {
+    fn compile_node(&mut self, node: &ASTNode) -> Vec<u8> {
         match node {
             ASTNode::Instruction(ins) => {
-                bytes.extend(self.compile_instruction(ins));
+                let bytes = self.compile_instruction(ins);
                 self.current_address += ins.size() as u16;
+                bytes
             }
             // We don't need to generate any bytes for labels and constants. They are just used for
             // symbol resolution.
-            _ => (),
+            _ => Vec::new(),
         }
     }
 
@@ -140,9 +137,11 @@ impl<'a> Compiler {
         self.resolve_constants_to_values(&mut ast);
 
         // Generate machine code
-        let mut bytes = Vec::new();
-        ast.iter()
-            .for_each(|node| self.compile_node(node, &mut bytes));
+        let bytes = ast
+            .iter()
+            .map(|node| self.compile_node(node))
+            .flatten()
+            .collect();
 
         bytes
     }

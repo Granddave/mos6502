@@ -362,7 +362,7 @@ impl<'a> Parser<'a> {
             let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
 
             eprintln!(
-                "mnemonic: {:?}, addr_mode: {:?}, operand: {:?}",
+                "parsed mnemonic: {:?}, addr_mode: {:?}, operand: {:?}",
                 mnemonic, addr_mode, operand
             );
 
@@ -415,13 +415,12 @@ impl<'a> Parser<'a> {
     /// Parse the entire program into an AST
     pub fn parse_program(&mut self) -> Vec<ASTNode> {
         let mut ast_nodes = Vec::new();
-        'l: loop {
+        loop {
             if self.current_token_is(TokenType::Eof) {
-                break 'l;
+                break;
             }
 
-            let ast_node = self.parse_node();
-            ast_nodes.push(ast_node);
+            ast_nodes.push(self.parse_node());
             self.next_token();
         }
 
