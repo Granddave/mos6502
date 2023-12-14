@@ -74,7 +74,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mnemonic(&mut self) -> ASTMnemonic {
-        match ASTMnemonic::from_str(self.current_token.literal.as_str()) {
+        match ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str()) {
             Ok(mnemonic) => mnemonic,
             Err(err) => panic!("Invalid mnemonic: {}: {}", err, self.current_token.literal),
         }
@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
                 panic!("Invalid ZeroPageX/Y operand")
             }
             self.next_token();
-            match self.current_token.literal.as_str() {
+            match self.current_token.literal.to_uppercase().as_str() {
                 "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte)),
                 "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte)),
                 _ => panic!("Invalid ZeroPageX/Y operand"),
