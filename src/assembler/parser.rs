@@ -434,6 +434,7 @@ mod tests {
     use super::*;
     use crate::assembler::lexer::Lexer;
 
+    // ** Happy path tests **
     #[test]
     fn test_parser() {
         let input = "LDA #$C8\nSTA $0200";

@@ -31,22 +31,20 @@ impl<'a> Compiler {
     /// the symbol table and replacing the label with the address of the label.
     fn resolve_labels_to_addr(&mut self, ast: &mut Vec<ASTNode>) {
         let mut current_addr = 0;
-        for node in ast {
-            match node {
-                ASTNode::Instruction(ins) => {
-                    // The current address is pointing to the address of the next instruction.
-                    // The relative offset is calculated from the address of the following
-                    // instruction due to the fact that the CPU has already incremented the
-                    // program counter past the current instruction.
-                    current_addr += ins.size();
-                    if let ASTOperand::Label(label) = &ins.operand {
-                        let symbol = self
-                            .symbol_table
-                            .symbols
-                            .iter()
-                            .find(|symbol| symbol.name == *label)
-                            .expect("Label not found");
-                        let SymbolType::Label(absolute_offset_in_program) = symbol.symbol;
+
+        ast.iter_mut().for_each(|node| match node {
+            ASTNode::Instruction(ins) => {
+                // The current address is pointing to the address of the next instruction.
+                // The relative offset is calculated from the address of the following
+                // instruction due to the fact that the CPU has already incremented the
+                // program counter past the current instruction.
+                current_addr += ins.size();
+                if let ASTOperand::Label(label) = &ins.operand {
+                    let symbol = self
+                        .symbol_table
+                        .find_symbol(label)
+                        .expect("Label not found");
+                    if let SymbolType::Label(absolute_offset_in_program) = symbol.symbol {
                         match ins.ins.addr_mode {
                             ASTAddressingMode::Absolute => {
                                 let address = (absolute_offset_in_program as u16)
@@ -64,14 +62,29 @@ impl<'a> Compiler {
                         }
                     }
                 }
-                ASTNode::Label(_) => (),
-                ASTNode::Constant(_) => (),
             }
-        }
+            _ => (),
+        })
     }
 
-    fn resolve_constants_to_values(&mut self, _ast: &mut [ASTNode]) {
-        todo!()
+    fn resolve_constants_to_values(&mut self, ast: &mut [ASTNode]) {
+        ast.iter_mut().for_each(|node| match node {
+            ASTNode::Instruction(ins) => {
+                if let ASTOperand::Constant(constant) = &ins.operand {
+                    match self
+                        .symbol_table
+                        .find_symbol(&constant)
+                        .expect("Constant not found")
+                        .symbol
+                    {
+                        SymbolType::ConstantByte(_) => todo!(),
+                        SymbolType::ConstantWord(_) => todo!(),
+                        _ => panic!("Invalid symbol type for constant operand: {:?}", ins),
+                    }
+                }
+            }
+            _ => (),
+        })
     }
 
     fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
@@ -108,7 +121,7 @@ impl<'a> Compiler {
             }
             // We don't need to generate any bytes for labels and constants. They are just used for
             // symbol resolution.
-            ASTNode::Label(_) | ASTNode::Constant(_) => (),
+            _ => (),
         }
     }
 
@@ -117,12 +130,16 @@ impl<'a> Compiler {
         let mut parser = Parser::new(&mut lexer);
         let mut ast = parser.parse_program();
 
+        // Resolve symbols
         symbol_resolver::resolve_labels(&ast, &mut self.symbol_table);
         symbol_resolver::resolve_constants(&ast, &mut self.symbol_table);
+        symbol_resolver::verify_symbols(&ast, &mut self.symbol_table);
 
+        // Modify the AST to replace labels with addresses and constants with values
         self.resolve_labels_to_addr(&mut ast);
         self.resolve_constants_to_values(&mut ast);
 
+        // Generate machine code
         let mut bytes = Vec::new();
         ast.iter()
             .for_each(|node| self.compile_node(node, &mut bytes));

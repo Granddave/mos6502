@@ -195,10 +195,12 @@ impl ASTInstructionNode {
             ASTOperand::Relative(_) => 2,
             ASTOperand::Label(_) | ASTOperand::Constant(_) => {
                 // Labels are during compilation resolved to relative and absolute addresses
+                // Constants are during compilation resolved to values which are either bytes or words
                 match self.ins.addr_mode {
                     ASTAddressingMode::Absolute => 3,
                     ASTAddressingMode::Relative => 2,
-                    _ => panic!("Invalid addressing mode for label"),
+                    ASTAddressingMode::Immediate => 2,
+                    _ => panic!("Invalid addressing mode for label or constant: {:?}", self),
                 }
             }
             ASTOperand::Implied => 1,
@@ -309,8 +311,8 @@ impl fmt::Display for ASTConstantValue {
 
 #[derive(Debug, PartialEq)]
 pub struct ASTConstantNode {
-    identifier: String,
-    value: ASTConstantValue,
+    pub identifier: String,
+    pub value: ASTConstantValue,
 }
 
 impl ASTConstantNode {
