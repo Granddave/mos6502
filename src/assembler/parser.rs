@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
         self.current_token = self.peek_tokens.pop_front().unwrap();
     }
 
-    fn peek_token(&mut self, peek_ahead: usize) -> Token {
+    fn peek_token(&self, peek_ahead: usize) -> Token {
         self.peek_tokens
             .get(peek_ahead)
             .expect("Peeking past lookahead buffer")
@@ -332,6 +332,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn peek_token_is_mnemonic(&self, peek_ahead: usize) -> bool {
+        ASTMnemonic::from_str(self.peek_token(peek_ahead).literal.to_uppercase().as_str()).is_ok()
+    }
+
     fn parse_addressing_mode_and_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
@@ -340,14 +344,9 @@ impl<'a> Parser<'a> {
             return (ASTAddressingMode::Implied, ASTOperand::Implied);
         }
 
-        // TODO: Handle accumulator addressing mode. This is a special case where the operand is
-        // either the accumulator register A or a memory location.
-        //
-        // Instructions that use the accumulator addressing mode:
-        // - ASL
-        // - LSR
-        // - ROL
-        // - ROR
+        if mnemonic.is_accumulator() && self.peek_token_is_mnemonic(0) {
+            return (ASTAddressingMode::Accumulator, ASTOperand::Implied);
+        }
 
         self.next_token();
 

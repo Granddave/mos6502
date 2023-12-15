@@ -113,6 +113,13 @@ impl ASTMnemonic {
                 | ASTMnemonic::TYA
         )
     }
+
+    pub fn is_accumulator(&self) -> bool {
+        matches!(
+            self,
+            ASTMnemonic::ASL | ASTMnemonic::LSR | ASTMnemonic::ROL | ASTMnemonic::ROR
+        )
+    }
 }
 
 impl fmt::Display for ASTMnemonic {
