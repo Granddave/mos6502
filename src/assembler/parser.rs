@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
                 panic!("Invalid hex operand");
             }
             self.next_token();
-            match self.current_token.literal.as_str() {
+            match self.current_token.literal.to_uppercase().as_str() {
                 "X" => (ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word)),
                 "Y" => (ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word)),
                 _ => panic!("Invalid AbsoluteX/Y operand"),
@@ -190,14 +190,12 @@ impl<'a> Parser<'a> {
         byte: Option<u8>,
         identifier: Option<String>,
     ) -> (ASTAddressingMode, ASTOperand) {
-        eprintln!("parse_indirect_indexed_x");
-
         self.next_token(); // Consume the comma
         if !self.peek_token_is(0, TokenType::Identifier) {
             panic!("Invalid indirect indexed X operand");
         }
         self.next_token(); // Consume the 'X'
-        let operand = match self.current_token.literal.as_str() {
+        let operand = match self.current_token.literal.to_uppercase().as_str() {
             "X" => (
                 ASTAddressingMode::IndirectIndexedX,
                 if let Some(byte) = byte {
@@ -228,7 +226,7 @@ impl<'a> Parser<'a> {
         }
         self.next_token(); // Consume the comma
         self.next_token(); // Consume the 'Y' identifier
-        match self.current_token.literal.as_str() {
+        match self.current_token.literal.to_uppercase().as_str() {
             "Y" => (
                 ASTAddressingMode::IndirectIndexedY,
                 if let Some(byte) = byte {
@@ -321,7 +319,7 @@ impl<'a> Parser<'a> {
             let constant = self.current_token.literal.clone();
             self.next_token(); // Consume the comma
             self.next_token(); // Consume the 'X' or 'Y'
-            match self.current_token.literal.as_str() {
+            match self.current_token.literal.to_uppercase().as_str() {
                 "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant)),
                 "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant)),
                 _ => panic!(
