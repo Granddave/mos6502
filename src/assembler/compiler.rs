@@ -29,11 +29,11 @@ impl<'a> Compiler {
 
     /// Resolve labels to absolute and relative addresses. This is done by looking up the label in
     /// the symbol table and replacing the label with the address of the label.
-    fn resolve_labels_to_addr(&mut self, ast: &mut Vec<ASTNode>) {
+    fn resolve_labels_to_addr(&mut self, ast: &mut [ASTNode]) {
         let mut current_addr = 0;
 
-        ast.iter_mut().for_each(|node| match node {
-            ASTNode::Instruction(ins) => {
+        ast.iter_mut().for_each(|node| {
+            if let ASTNode::Instruction(ins) = node {
                 // The current address is pointing to the address of the next instruction.
                 // The relative offset is calculated from the address of the following
                 // instruction due to the fact that the CPU has already incremented the
@@ -63,17 +63,16 @@ impl<'a> Compiler {
                     }
                 }
             }
-            _ => (),
         })
     }
 
     fn resolve_constants_to_values(&mut self, ast: &mut [ASTNode]) {
-        ast.iter_mut().for_each(|node| match node {
-            ASTNode::Instruction(ins) => {
+        ast.iter_mut().for_each(|node| {
+            if let ASTNode::Instruction(ins) = node {
                 if let ASTOperand::Constant(constant) = &ins.operand {
                     match self
                         .symbol_table
-                        .find_symbol(&constant)
+                        .find_symbol(constant)
                         .expect("Constant not found")
                         .symbol
                     {
@@ -83,7 +82,6 @@ impl<'a> Compiler {
                     }
                 }
             }
-            _ => (),
         })
     }
 
@@ -93,7 +91,7 @@ impl<'a> Compiler {
         bytes.push(
             OPCODE_MAPPING
                 .find_opcode(ins.ins)
-                .expect(format!("Invalid instruction for opcode: {:?}", ins).as_str()),
+                .unwrap_or_else(|| panic!("Invalid instruction for opcode: {:?}", ins)),
         );
 
         bytes.extend(match ins.operand {
@@ -139,8 +137,7 @@ impl<'a> Compiler {
         // Generate machine code
         let bytes = ast
             .iter()
-            .map(|node| self.compile_node(node))
-            .flatten()
+            .flat_map(|node| self.compile_node(node))
             .collect();
 
         bytes

@@ -37,35 +37,30 @@ impl SymbolTable {
 pub fn resolve_labels(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
     let mut current_addr = 0;
 
-    for node in nodes {
-        match node {
-            ASTNode::Instruction(ins_node) => {
-                current_addr += ins_node.size();
-            }
-            ASTNode::Label(label) => symbol_table.symbols.push(Symbol {
-                name: label.clone(),
-                symbol: SymbolType::Label(current_addr),
-            }),
-            _ => (),
+    nodes.iter().for_each(|node| match node {
+        ASTNode::Instruction(ins_node) => {
+            current_addr += ins_node.size();
         }
-    }
+        ASTNode::Label(label) => symbol_table.symbols.push(Symbol {
+            name: label.clone(),
+            symbol: SymbolType::Label(current_addr),
+        }),
+        _ => (),
+    })
 }
 
 pub fn resolve_constants(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
-    for node in nodes {
-        match node {
-            ASTNode::Constant(constant) => {
-                symbol_table.symbols.push(Symbol {
-                    name: constant.identifier.clone(),
-                    symbol: match constant.value {
-                        ASTConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
-                        ASTConstantValue::Word(word) => SymbolType::ConstantWord(word),
-                    },
-                });
-            }
-            _ => (),
+    nodes.iter().for_each(|node| {
+        if let ASTNode::Constant(constant) = node {
+            symbol_table.symbols.push(Symbol {
+                name: constant.identifier.clone(),
+                symbol: match constant.value {
+                    ASTConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
+                    ASTConstantValue::Word(word) => SymbolType::ConstantWord(word),
+                },
+            });
         }
-    }
+    })
 }
 
 pub fn verify_symbols(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
@@ -83,7 +78,7 @@ pub fn verify_symbols(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
     });
 
     // Verify that no instruction uses a label or constant as operand that has not been resolved
-    for node in nodes {
+    nodes.iter().for_each(|node| {
         if let ASTNode::Instruction(ins_node) = node {
             match &ins_node.operand {
                 ASTOperand::Label(label_str) => {
@@ -99,7 +94,7 @@ pub fn verify_symbols(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
                 _ => (),
             }
         }
-    }
+    })
 }
 
 #[cfg(test)]
