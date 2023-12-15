@@ -206,7 +206,10 @@ impl<'a> Parser<'a> {
                     panic!("Invalid indirect indexed X operand")
                 },
             ),
-            _ => panic!("Invalid indirect indexed X operand"),
+            _ => panic!(
+                "Invalid indirect indexed X operand, got {:?}",
+                self.current_token.literal
+            ),
         };
         self.next_token(); // Consume the closing parenthesis
         operand
@@ -218,8 +221,6 @@ impl<'a> Parser<'a> {
         byte: Option<u8>,
         identifier: Option<String>,
     ) -> (ASTAddressingMode, ASTOperand) {
-        eprintln!("parse_indirect_indexed_y");
-
         self.next_token(); // Consume the closing parenthesis
         if !self.peek_token_is(0, TokenType::Comma) {
             panic!("Invalid indirect indexed Y operand. Expected ','")
@@ -237,20 +238,17 @@ impl<'a> Parser<'a> {
                     panic!("Invalid indirect indexed Y operand")
                 },
             ),
-            _ => panic!("Invalid indirect indexed Y operand, Expected 'Y'"),
+            _ => panic!(
+                "Invalid indirect indexed Y operand, Expected 'Y', got {:?}",
+                self.current_token.literal
+            ),
         }
     }
 
     // (u8,X) or (u8),Y - where u8 is a byte or a constant
     fn try_parse_indirect_indexed(&mut self) -> Option<(ASTAddressingMode, ASTOperand)> {
-        eprintln!("try_parse_indirect_indexed");
-
         let byte = self.try_parse_hex_u8();
         let identifier = self.try_parse_identifier();
-        eprintln!("byte: {:?}, identifier: {:?}", byte, identifier);
-
-        // Can we manage without consuming the opening parenthesis here?
-        // self.next_token(); // Consume the opening parenthesis
 
         if byte.is_some() || identifier.is_some() {
             if self.peek_token_is(0, TokenType::Comma)
@@ -273,7 +271,6 @@ impl<'a> Parser<'a> {
     // or
     // (u16) or - where u16 is a word or a constant
     fn parse_indirect(&mut self) -> (ASTAddressingMode, ASTOperand) {
-        eprintln!("parse_indirect");
         self.next_token(); // Consume the opening parenthesis
 
         if let Some(indirect_indexed) = self.try_parse_indirect_indexed() {
