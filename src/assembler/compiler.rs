@@ -20,7 +20,7 @@ impl Default for Compiler {
     }
 }
 
-impl<'a> Compiler {
+impl Compiler {
     pub fn new(program_offset: u16) -> Compiler {
         Compiler {
             symbol_table: SymbolTable::new(),
@@ -107,11 +107,11 @@ impl<'a> Compiler {
     /// Pass 1 of the compiler.
     ///
     /// This pass resolves labels and constants and verifies that all symbols are valid.
-    fn pass_1(&mut self, ast: &mut Vec<ASTNode>) {
+    fn pass_1(&mut self, ast: &mut [ASTNode]) {
         // Resolve symbols
-        symbol_resolver::resolve_labels(&ast, &mut self.symbol_table);
-        symbol_resolver::resolve_constants(&ast, &mut self.symbol_table);
-        symbol_resolver::verify_symbols(&ast, &mut self.symbol_table);
+        symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
+        symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
+        symbol_resolver::verify_symbols(ast, &mut self.symbol_table);
 
         // Modify the AST to replace labels with addresses and constants with values
         self.resolve_labels_to_addr(ast);
