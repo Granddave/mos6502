@@ -76,8 +76,25 @@ impl<'a> Compiler {
                         .expect("Constant not found")
                         .symbol
                     {
-                        SymbolType::ConstantByte(_) => todo!(),
-                        SymbolType::ConstantWord(_) => todo!(),
+                        SymbolType::ConstantByte(byte) => match ins.ins.addr_mode {
+                            ASTAddressingMode::Immediate => {
+                                ins.operand = ASTOperand::Immediate(byte);
+                            }
+                            ASTAddressingMode::ZeroPage
+                            | ASTAddressingMode::ZeroPageX
+                            | ASTAddressingMode::ZeroPageY
+                            | ASTAddressingMode::IndirectIndexedX
+                            | ASTAddressingMode::IndirectIndexedY => {
+                                ins.operand = ASTOperand::ZeroPage(byte);
+                            }
+                            _ => panic!("Invalid addressing mode for constant byte: {:?}", ins),
+                        },
+                        SymbolType::ConstantWord(word) => match ins.ins.addr_mode {
+                            ASTAddressingMode::Absolute => {
+                                ins.operand = ASTOperand::Absolute(word);
+                            }
+                            _ => panic!("Invalid addressing mode for constant word: {:?}", ins),
+                        },
                         _ => panic!("Invalid symbol type for constant operand: {:?}", ins),
                     }
                 }
