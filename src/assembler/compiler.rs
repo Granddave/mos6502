@@ -102,6 +102,21 @@ impl<'a> Compiler {
         })
     }
 
+    /// Pass 1 of the compiler.
+    ///
+    /// This pass resolves labels and constants and verifies that all symbols are valid.
+    fn pass_1(&mut self, ast: &mut Vec<ASTNode>) {
+        // Resolve symbols
+        symbol_resolver::resolve_labels(&ast, &mut self.symbol_table);
+        symbol_resolver::resolve_constants(&ast, &mut self.symbol_table);
+        symbol_resolver::verify_symbols(&ast, &mut self.symbol_table);
+
+        // Modify the AST to replace labels with addresses and constants with values
+        self.resolve_labels_to_addr(ast);
+        self.resolve_constants_to_values(ast);
+    }
+
+    /// Compile a single instruction node from the AST to machine code.
     fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
 
@@ -121,20 +136,24 @@ impl<'a> Compiler {
             ASTOperand::Implied => vec![],
         });
 
+        self.current_address += ins.size() as u16;
+
         bytes
     }
 
-    fn compile_node(&mut self, node: &ASTNode) -> Vec<u8> {
-        match node {
-            ASTNode::Instruction(ins) => {
-                let bytes = self.compile_instruction(ins);
-                self.current_address += ins.size() as u16;
-                bytes
-            }
-            // We don't need to generate any bytes for labels and constants. They are just used for
-            // symbol resolution.
-            _ => Vec::new(),
-        }
+    /// Pass 2 of the compiler.
+    ///
+    /// This pass generates machine code from the AST. The AST is assumed to have been resolved
+    /// and all labels and constants have been replaced with their respective addresses and
+    /// values.
+    fn pass_2(&mut self, ast: &mut [ASTNode]) -> Vec<u8> {
+        ast.iter()
+            .filter_map(|node| match node {
+                ASTNode::Instruction(ins) => Some(ins),
+                _ => None,
+            })
+            .flat_map(|ins| self.compile_instruction(ins))
+            .collect()
     }
 
     pub fn compile(&mut self, source: &'a str) -> Vec<u8> {
@@ -142,22 +161,9 @@ impl<'a> Compiler {
         let mut parser = Parser::new(&mut lexer);
         let mut ast = parser.parse_program();
 
-        // Resolve symbols
-        symbol_resolver::resolve_labels(&ast, &mut self.symbol_table);
-        symbol_resolver::resolve_constants(&ast, &mut self.symbol_table);
-        symbol_resolver::verify_symbols(&ast, &mut self.symbol_table);
+        self.pass_1(&mut ast);
 
-        // Modify the AST to replace labels with addresses and constants with values
-        self.resolve_labels_to_addr(&mut ast);
-        self.resolve_constants_to_values(&mut ast);
-
-        // Generate machine code
-        let bytes = ast
-            .iter()
-            .flat_map(|node| self.compile_node(node))
-            .collect();
-
-        bytes
+        self.pass_2(&mut ast)
     }
 }
 
