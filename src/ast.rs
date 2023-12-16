@@ -368,3 +368,5 @@ impl fmt::Display for ASTNode {
         }
     }
 }
+
+pub type AST = Vec<ASTNode>;

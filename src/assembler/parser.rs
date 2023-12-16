@@ -3,7 +3,7 @@ use std::{collections::VecDeque, str::FromStr};
 use crate::{
     assembler::lexer::{Lexer, Token, TokenType},
     ast::{
-        ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand,
+        ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand, AST,
     },
 };
 
@@ -416,7 +416,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the entire program into an AST
-    pub fn parse_program(&mut self) -> Vec<ASTNode> {
+    pub fn parse_program(&mut self) -> AST {
         let mut ast_nodes = Vec::new();
         loop {
             if self.current_token_is(TokenType::Eof) {

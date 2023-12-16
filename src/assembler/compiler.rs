@@ -1,6 +1,6 @@
 use self::opcode::OPCODE_MAPPING;
 use self::symbol_resolver::{SymbolTable, SymbolType};
-use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand};
+use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand, AST};
 
 /// Mapping from ASTInstruction to opcode.
 mod opcode;
@@ -31,7 +31,7 @@ impl Compiler {
 
     /// Resolve labels to absolute and relative addresses. This is done by looking up the label in
     /// the symbol table and replacing the label with the address of the label.
-    fn resolve_labels_to_addr(&mut self, ast: &mut [ASTNode]) {
+    fn resolve_labels_to_addr(&mut self, ast: &mut AST) {
         let mut current_addr = 0;
 
         ast.iter_mut().for_each(|node| {
@@ -68,7 +68,7 @@ impl Compiler {
         })
     }
 
-    fn resolve_constants_to_values(&mut self, ast: &mut [ASTNode]) {
+    fn resolve_constants_to_values(&mut self, ast: &mut AST) {
         ast.iter_mut().for_each(|node| {
             if let ASTNode::Instruction(ins) = node {
                 if let ASTOperand::Constant(constant) = &ins.operand {
@@ -107,7 +107,7 @@ impl Compiler {
     /// Pass 1 of the compiler.
     ///
     /// This pass resolves labels and constants and verifies that all symbols are valid.
-    fn pass_1(&mut self, ast: &mut [ASTNode]) {
+    fn pass_1(&mut self, ast: &mut AST) {
         // Resolve symbols
         symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
         symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
@@ -148,7 +148,7 @@ impl Compiler {
     /// This pass generates machine code from the AST. The AST is assumed to have been resolved
     /// and all labels and constants have been replaced with their respective addresses and
     /// values.
-    fn pass_2(&mut self, ast: &mut [ASTNode]) -> Vec<u8> {
+    fn pass_2(&mut self, ast: &mut AST) -> Vec<u8> {
         ast.iter()
             .filter_map(|node| match node {
                 ASTNode::Instruction(ins) => Some(ins),
@@ -158,7 +158,7 @@ impl Compiler {
             .collect()
     }
 
-    pub fn compile(&mut self, ast: Vec<ASTNode>) -> Vec<u8> {
+    pub fn compile(&mut self, ast: AST) -> Vec<u8> {
         let mut ast = ast;
         self.pass_1(&mut ast);
         self.pass_2(&mut ast)
@@ -172,7 +172,7 @@ mod tests {
 
     // Test that the compiler can compile single instructions
     #[test]
-    fn test_compile_nodes() {
+    fn test_compile_ast() {
         // TODO: Test more instructions
         let tests = vec![
             (

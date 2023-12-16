@@ -1,4 +1,4 @@
-use crate::ast::{ASTConstantValue, ASTNode, ASTOperand};
+use crate::ast::{ASTConstantValue, ASTNode, ASTOperand, AST};
 
 #[derive(Debug, PartialEq)]
 pub enum SymbolType {
@@ -34,10 +34,10 @@ impl SymbolTable {
     }
 }
 
-pub fn resolve_labels(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
+pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
     let mut current_addr = 0;
 
-    nodes.iter().for_each(|node| match node {
+    ast.iter().for_each(|node| match node {
         ASTNode::Instruction(ins_node) => {
             current_addr += ins_node.size();
         }
@@ -49,8 +49,8 @@ pub fn resolve_labels(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
     })
 }
 
-pub fn resolve_constants(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
-    nodes.iter().for_each(|node| {
+pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
+    ast.iter().for_each(|node| {
         if let ASTNode::Constant(constant) = node {
             symbol_table.symbols.push(Symbol {
                 name: constant.identifier.clone(),
@@ -63,7 +63,7 @@ pub fn resolve_constants(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
     })
 }
 
-pub fn verify_symbols(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
+pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) {
     // Verify that no symbols are defined multiple times
     symbol_table.symbols.iter().for_each(|symbol| {
         let mut count = 0;
@@ -78,7 +78,7 @@ pub fn verify_symbols(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
     });
 
     // Verify that no instruction uses a label or constant as operand that has not been resolved
-    nodes.iter().for_each(|node| {
+    ast.iter().for_each(|node| {
         if let ASTNode::Instruction(ins_node) = node {
             match &ins_node.operand {
                 ASTOperand::Label(label_str) => {
@@ -100,9 +100,9 @@ pub fn verify_symbols(nodes: &[ASTNode], symbol_table: &mut SymbolTable) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand};
+    use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand, AST};
 
-    fn example_ast() -> Vec<ASTNode> {
+    fn example_ast() -> AST {
         vec![
             ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),
             ASTNode::Constant(ASTConstantNode::new_word("addr".to_string(), 0x1234)),
@@ -185,11 +185,11 @@ mod tests {
     #[test]
     fn test_resolve_symbols() {
         let mut symbol_table = SymbolTable::new();
-        let nodes = example_ast();
+        let ast = example_ast();
 
-        resolve_labels(&nodes, &mut symbol_table);
-        resolve_constants(&nodes, &mut symbol_table);
-        verify_symbols(&nodes, &mut symbol_table);
+        resolve_labels(&ast, &mut symbol_table);
+        resolve_constants(&ast, &mut symbol_table);
+        verify_symbols(&ast, &mut symbol_table);
         assert_eq!(symbol_table.symbols.len(), 4);
         assert_eq!(symbol_table.symbols[0].name, "firstloop");
         assert_eq!(symbol_table.symbols[0].symbol, SymbolType::Label(0x04));
@@ -213,28 +213,28 @@ mod tests {
     #[should_panic]
     fn test_undefined_label() {
         let mut symbol_table = SymbolTable::new();
-        let nodes = vec![ASTNode::new_instruction(
+        let ast = vec![ASTNode::new_instruction(
             ASTMnemonic::BNE,
             ASTAddressingMode::Relative,
             ASTOperand::Label("undefined".to_string()),
         )];
 
-        resolve_labels(&nodes, &mut symbol_table);
-        verify_symbols(&nodes, &mut symbol_table);
+        resolve_labels(&ast, &mut symbol_table);
+        verify_symbols(&ast, &mut symbol_table);
     }
 
     #[test]
     #[should_panic]
     fn test_undefined_constant() {
         let mut symbol_table = SymbolTable::new();
-        let nodes = vec![ASTNode::new_instruction(
+        let ast = vec![ASTNode::new_instruction(
             ASTMnemonic::LDX,
             ASTAddressingMode::Immediate,
             ASTOperand::Constant("zero".to_string()),
         )];
 
-        resolve_constants(&nodes, &mut symbol_table);
-        verify_symbols(&nodes, &mut symbol_table);
+        resolve_constants(&ast, &mut symbol_table);
+        verify_symbols(&ast, &mut symbol_table);
     }
 
     // Double definitions
@@ -242,23 +242,23 @@ mod tests {
     #[should_panic]
     fn test_double_label_definition() {
         let mut symbol_table = SymbolTable::new();
-        let nodes = vec![
+        let ast = vec![
             ASTNode::Label("label".to_string()),
             ASTNode::Label("label".to_string()),
         ];
-        resolve_labels(&nodes, &mut symbol_table);
-        verify_symbols(&nodes, &mut symbol_table);
+        resolve_labels(&ast, &mut symbol_table);
+        verify_symbols(&ast, &mut symbol_table);
     }
 
     #[test]
     #[should_panic]
     fn test_double_constant_definition() {
         let mut symbol_table = SymbolTable::new();
-        let nodes = vec![
+        let ast = vec![
             ASTNode::Constant(ASTConstantNode::new_byte("my_byte".to_string(), 0x12)),
             ASTNode::Constant(ASTConstantNode::new_byte("my_byte".to_string(), 0x12)),
         ];
-        resolve_constants(&nodes, &mut symbol_table);
-        verify_symbols(&nodes, &mut symbol_table);
+        resolve_constants(&ast, &mut symbol_table);
+        verify_symbols(&ast, &mut symbol_table);
     }
 }
