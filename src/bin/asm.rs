@@ -1,5 +1,3 @@
-use mos6502::{assembler::compiler::Compiler, hexdump};
-
 fn default() -> &'static str {
     "
   LDX #$00
@@ -28,12 +26,8 @@ fn main() {
         default().to_string()
     };
 
-    let mut lexer = mos6502::assembler::lexer::Lexer::new(&input);
-    let mut parser = mos6502::assembler::parser::Parser::new(&mut lexer);
-    let ast = parser.parse_program();
-    let mut compiler = Compiler::new(0x0600);
-    let bytes = compiler.compile(ast);
+    let bytes = mos6502::assembler::compile_code(&input);
 
-    println!("{}", hexdump::hexdump(&bytes, 7, 16));
+    println!("{}", mos6502::hexdump::hexdump(&bytes, 7, 16));
     std::fs::write("a.bin", &bytes).unwrap();
 }
