@@ -101,14 +101,6 @@ impl<'a> Lexer<'a> {
         self.read_position += 1;
     }
 
-    fn peek_char(&self) -> Option<char> {
-        if self.read_position >= self.input.len() {
-            None
-        } else {
-            Some(self.input.chars().nth(self.read_position).unwrap())
-        }
-    }
-
     fn skip_whitespace(&mut self) {
         while self.ch.is_some() && self.ch.unwrap().is_whitespace() {
             if self.ch.unwrap() == '\n' {
@@ -203,15 +195,6 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_peek_char() {
-        let input = "LDA";
-        let mut lexer = Lexer::new(input);
-        assert_eq!(lexer.peek_char(), Some('D'));
-        assert_eq!(lexer.peek_char(), Some('D'));
-        lexer.read_char();
-        assert_eq!(lexer.peek_char(), Some('A'));
-    }
 
     #[test]
     fn test_hex() {
