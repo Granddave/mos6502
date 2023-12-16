@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-use super::{ASTAddressingMode, ASTInstruction, ASTMnemonic};
+use crate::ast::{ASTAddressingMode, ASTInstruction, ASTMnemonic};
 
 pub struct OpcodeMapping {
     forward_map: HashMap<ASTInstruction, u8>,

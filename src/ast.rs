@@ -1,10 +1,6 @@
 use std::fmt;
 
-use strum_macros::EnumString;
-
-pub mod instruction;
-
-#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, EnumString)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, strum_macros::EnumString)]
 pub enum ASTMnemonic {
     ADC,
     AND,

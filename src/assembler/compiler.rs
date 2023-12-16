@@ -1,8 +1,11 @@
+use self::opcode::OPCODE_MAPPING;
 use self::symbol_resolver::{SymbolTable, SymbolType};
-use crate::ast::{
-    instruction::OPCODE_MAPPING, ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand,
-};
+use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand};
 
+/// Mapping from ASTInstruction to opcode.
+mod opcode;
+
+/// Resolves symbols in the AST.
 mod symbol_resolver;
 
 pub struct Compiler {
