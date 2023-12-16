@@ -170,7 +170,7 @@ pub struct ASTInstruction {
 }
 
 /// An instruction with an operand.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ASTInstructionNode {
     /// The first part of the instruction
     pub ins: ASTInstruction,
@@ -301,7 +301,7 @@ impl fmt::Display for ASTInstructionNode {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTConstantValue {
     Byte(u8),
     Word(u16),
@@ -316,7 +316,7 @@ impl fmt::Display for ASTConstantValue {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ASTConstantNode {
     pub identifier: String,
     pub value: ASTConstantValue,
@@ -346,7 +346,7 @@ impl fmt::Display for ASTConstantNode {
 }
 
 /// AST Node is either an instruction (including operand) or a label.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
     Instruction(ASTInstructionNode),
     Label(String),

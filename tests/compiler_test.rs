@@ -1,4 +1,4 @@
-use mos6502::assembler::compiler::Compiler;
+use mos6502::assembler::compile_code;
 
 #[test]
 fn test_basic() {
@@ -20,8 +20,7 @@ secondloop:
   CPY #$20      ;loop until Y is $20
   BNE secondloop
 ";
-    let mut compiler = Compiler::new(0x0600);
-    let bytes = compiler.compile(input);
+    let bytes = compile_code(input);
     let expected = [
         0xa2, 0x00, 0xa0, 0x00, 0x8a, 0x99, 0x00, 0x02, 0x48, 0xe8, 0xc8, 0xc0, 0x10, 0xd0, 0xf5,
         0x68, 0x99, 0x00, 0x02, 0xc8, 0xc0, 0x20, 0xd0, 0xf7,

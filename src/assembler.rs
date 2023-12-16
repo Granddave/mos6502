@@ -17,3 +17,15 @@ pub mod parser;
 
 /// Generates machine code from an AST.
 pub mod compiler;
+
+/// Utility functions for generating machine code.
+///
+/// TODO: Pass in a target address.
+pub fn compile_code(input: &str) -> Vec<u8> {
+    let mut lexer = lexer::Lexer::new(&input);
+    let mut parser = parser::Parser::new(&mut lexer);
+    let ast = parser.parse_program();
+    let mut compiler = compiler::Compiler::new(0x0600);
+
+    compiler.compile(ast)
+}

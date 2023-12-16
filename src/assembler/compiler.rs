@@ -1,5 +1,4 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
-use super::{lexer::Lexer, parser::Parser};
 use crate::ast::{
     instruction::OPCODE_MAPPING, ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand,
 };
@@ -156,34 +155,72 @@ impl<'a> Compiler {
             .collect()
     }
 
-    pub fn compile(&mut self, source: &'a str) -> Vec<u8> {
-        let mut lexer = Lexer::new(source);
-        let mut parser = Parser::new(&mut lexer);
-        let mut ast = parser.parse_program();
-
+    pub fn compile(&mut self, ast: Vec<ASTNode>) -> Vec<u8> {
+        let mut ast = ast;
         self.pass_1(&mut ast);
-
         self.pass_2(&mut ast)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Compiler;
+    use super::*;
+    use crate::ast::{ASTAddressingMode, ASTMnemonic, ASTNode, ASTOperand};
 
     // Test that the compiler can compile single instructions
     #[test]
     fn test_compile_nodes() {
+        // TODO: Test more instructions
         let tests = vec![
-            ("LDA #$01", vec![0xA9, 0x01]),
-            ("LDA $0200", vec![0xAD, 0x00, 0x02]),
-            ("LDA $0200,X", vec![0xBD, 0x00, 0x02]),
-            // TODO: Test more instructions
+            (
+                vec![ASTNode::new_instruction(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::Immediate,
+                    ASTOperand::Immediate(0x01),
+                )],
+                vec![0xA9, 0x01],
+            ),
+            (
+                vec![ASTNode::new_instruction(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::Absolute,
+                    ASTOperand::Absolute(0x0200),
+                )],
+                vec![0xAD, 0x00, 0x02],
+            ),
+            (
+                vec![ASTNode::new_instruction(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::AbsoluteX,
+                    ASTOperand::Absolute(0x0200),
+                )],
+                vec![0xBD, 0x00, 0x02],
+            ),
+            (
+                vec![
+                    ASTNode::new_instruction(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::Immediate,
+                        ASTOperand::Immediate(0x01),
+                    ),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::Absolute,
+                        ASTOperand::Absolute(0x0200),
+                    ),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::AbsoluteX,
+                        ASTOperand::Absolute(0x0200),
+                    ),
+                ],
+                vec![0xA9, 0x01, 0xAD, 0x00, 0x02, 0xBD, 0x00, 0x02],
+            ),
         ];
 
-        for (source, expected) in tests {
+        for (ast, expected) in tests {
             let mut compiler = Compiler::default();
-            let bytes = compiler.compile(source);
+            let bytes = compiler.compile(ast);
             assert_eq!(bytes, expected);
         }
     }
@@ -191,99 +228,95 @@ mod tests {
     #[test]
     fn test_compile_program() {
         let tests = vec![
-            ("LDA #$01\nLDA $0200", vec![0xA9, 0x01, 0xAD, 0x00, 0x02]),
+            // test for relative branch instructions that verifies that the compiler can correctly
+            // calculate the relative offset. Both forward and backward branches are tested.
             (
-                "LDA #$01\nLDA $0200\nLDA $0200,X",
-                vec![0xA9, 0x01, 0xAD, 0x00, 0x02, 0xBD, 0x00, 0x02],
-            ),
-            (
-                "  LDX #$08
-decrement:
-  DEX
-  STX $0200
-  CPX #$03
-  BNE decrement
-  STX $0201
-  BRK",
                 vec![
-                    /* LDX */ 0xA2, 0x08, /* DEX */ 0xCA, /* STX */ 0x8E, 0x00,
-                    0x02, /* CPX */ 0xE0, 0x03, /* BNE */ 0xD0, 0xF8,
-                    /* STX */ 0x8E, 0x01, 0x02, /* BRK */ 0x00,
+                    ASTNode::new_instruction(
+                        ASTMnemonic::LDX,
+                        ASTAddressingMode::Immediate,
+                        ASTOperand::Immediate(0x08),
+                    ),
+                    ASTNode::Label("loop".to_string()),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::Immediate,
+                        ASTOperand::Immediate(0x01),
+                    ),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::JMP,
+                        ASTAddressingMode::Absolute,
+                        ASTOperand::Label("end".to_string()),
+                    ),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::STA,
+                        ASTAddressingMode::Absolute,
+                        ASTOperand::Absolute(0x0200),
+                    ),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::BNE,
+                        ASTAddressingMode::Relative,
+                        ASTOperand::Label("loop".to_string()),
+                    ),
+                    ASTNode::Label("end".to_string()),
+                    ASTNode::new_instruction(
+                        ASTMnemonic::BRK,
+                        ASTAddressingMode::Implied,
+                        ASTOperand::Implied,
+                    ),
                 ],
-            ),
-        ];
-
-        for (source, expected) in tests {
-            let mut compiler = Compiler::default();
-            let bytes = compiler.compile(source);
-            assert_eq!(bytes, expected);
-        }
-    }
-
-    #[test]
-    fn test_relative_branch() {
-        // Some tests for relative branch instructions that tests that the compiler can
-        // correctly calculate the relative offset. Both forward and backward branches are
-        // tested.
-        let tests = vec![
-            (
-                "  LDX #$08
-loop:
-  LDA #$01
-  STA $0200
-  BNE loop",
-                vec![
-                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* STA */ 0x8D,
-                    0x00, 0x02, /* BNE */ 0xD0, 0xF9,
-                ],
-            ),
-            (
-                "  LDA #$03
-  JMP there
-  BRK
-  BRK
-  BRK
-there:
-  STA $0200",
-                vec![
-                    /*LDA*/ 0xA9, 0x03, /*JMP*/ 0x4C, 0x08, 0x00, /*BRKs*/ 0x00,
-                    0x00, 0x00, /*STA*/ 0x8D, 0x00, 0x02,
-                ],
-            ),
-            (
-                "  LDX #$08
-loop:
-  LDA #$01
-  JMP end
-  STA $0200
-  BNE loop
-end:
-  BRK",
                 vec![
                     /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
                     0x0C, 0x00, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
                     /* BRK */ 0x00,
                 ],
             ),
+            // TODO: Test constants
         ];
 
-        for (source, expected) in tests {
+        for (ast, expected) in tests {
             let mut compiler = Compiler::default();
-            let bytes = compiler.compile(source);
+            let bytes = compiler.compile(ast);
             assert_eq!(bytes, expected);
         }
     }
 
     #[test]
     fn test_program_offset() {
-        let source = "  LDX #$08
-loop:
-  LDA #$01
-  JMP end
-  STA $0200
-  BNE loop
-end:
-  BRK";
+        let ast = vec![
+            ASTNode::new_instruction(
+                ASTMnemonic::LDX,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Immediate(0x08),
+            ),
+            ASTNode::Label("loop".to_string()),
+            ASTNode::new_instruction(
+                ASTMnemonic::LDA,
+                ASTAddressingMode::Immediate,
+                ASTOperand::Immediate(0x01),
+            ),
+            ASTNode::new_instruction(
+                ASTMnemonic::JMP,
+                ASTAddressingMode::Absolute,
+                ASTOperand::Label("end".to_string()),
+            ),
+            ASTNode::new_instruction(
+                ASTMnemonic::STA,
+                ASTAddressingMode::Absolute,
+                ASTOperand::Absolute(0x0200),
+            ),
+            ASTNode::new_instruction(
+                ASTMnemonic::BNE,
+                ASTAddressingMode::Relative,
+                ASTOperand::Label("loop".to_string()),
+            ),
+            ASTNode::Label("end".to_string()),
+            ASTNode::new_instruction(
+                ASTMnemonic::BRK,
+                ASTAddressingMode::Implied,
+                ASTOperand::Implied,
+            ),
+        ];
 
         let tests = vec![
             (
@@ -314,7 +347,7 @@ end:
 
         for (program_offset, expected) in tests {
             let mut compiler = Compiler::new(program_offset);
-            let bytes = compiler.compile(source);
+            let bytes = compiler.compile(ast.clone());
             assert_eq!(bytes, expected);
         }
     }
