@@ -8,6 +8,7 @@ mod opcode;
 /// Resolves symbols in the AST.
 mod symbol_resolver;
 
+#[derive(Debug)]
 pub struct Compiler {
     symbol_table: SymbolTable,
     current_address: u16,
@@ -21,6 +22,7 @@ impl Default for Compiler {
 }
 
 impl Compiler {
+    #[tracing::instrument]
     pub fn new(program_offset: u16) -> Compiler {
         Compiler {
             symbol_table: SymbolTable::new(),
@@ -31,6 +33,7 @@ impl Compiler {
 
     /// Resolve labels to absolute and relative addresses. This is done by looking up the label in
     /// the symbol table and replacing the label with the address of the label.
+    #[tracing::instrument]
     fn resolve_labels_to_addr(&mut self, ast: &mut AST) {
         let mut current_addr = 0;
 
@@ -68,6 +71,7 @@ impl Compiler {
         })
     }
 
+    #[tracing::instrument]
     fn resolve_constants_to_values(&mut self, ast: &mut AST) {
         ast.iter_mut().for_each(|node| {
             if let ASTNode::Instruction(ins) = node {
@@ -107,6 +111,7 @@ impl Compiler {
     /// Pass 1 of the compiler.
     ///
     /// This pass resolves labels and constants and verifies that all symbols are valid.
+    #[tracing::instrument]
     fn pass_1(&mut self, ast: &mut AST) {
         // Resolve symbols
         symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
@@ -119,6 +124,7 @@ impl Compiler {
     }
 
     /// Compile a single instruction node from the AST to machine code.
+    #[tracing::instrument]
     fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
 
@@ -148,6 +154,7 @@ impl Compiler {
     /// This pass generates machine code from the AST. The AST is assumed to have been resolved
     /// and all labels and constants have been replaced with their respective addresses and
     /// values.
+    #[tracing::instrument]
     fn pass_2(&mut self, ast: &mut AST) -> Vec<u8> {
         ast.iter()
             .filter_map(|node| match node {
@@ -158,6 +165,7 @@ impl Compiler {
             .collect()
     }
 
+    #[tracing::instrument]
     pub fn compile(&mut self, ast: AST) -> Vec<u8> {
         let mut ast = ast;
         self.pass_1(&mut ast);

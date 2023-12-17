@@ -23,17 +23,20 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
+    #[tracing::instrument]
     pub fn new() -> SymbolTable {
         SymbolTable {
             symbols: Vec::new(),
         }
     }
 
+    #[tracing::instrument]
     pub fn find_symbol(&self, name: &str) -> Option<&Symbol> {
         self.symbols.iter().find(|symbol| symbol.name == name)
     }
 }
 
+#[tracing::instrument]
 pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
     let mut current_addr = 0;
 
@@ -49,6 +52,7 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
     })
 }
 
+#[tracing::instrument]
 pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
     ast.iter().for_each(|node| {
         if let ASTNode::Constant(constant) = node {
@@ -63,6 +67,7 @@ pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
     })
 }
 
+#[tracing::instrument]
 pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) {
     // Verify that no symbols are defined multiple times
     symbol_table.symbols.iter().for_each(|symbol| {

@@ -21,6 +21,7 @@ pub mod compiler;
 /// Utility functions for generating machine code.
 ///
 /// TODO: Pass in a target address.
+#[tracing::instrument]
 pub fn compile_code(input: &str) -> Vec<u8> {
     let mut lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(&mut lexer);

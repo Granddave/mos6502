@@ -3,13 +3,15 @@ use std::{collections::VecDeque, str::FromStr};
 use crate::{
     assembler::lexer::{Lexer, Token, TokenType},
     ast::{
-        ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand, AST,
+        ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand,
+        AST,
     },
 };
 
 // Allow the parser to peek `PEEK_BUFFER_SIZE` tokens in advance
 const PEEK_BUFFER_SIZE: usize = 2;
 
+#[derive(Debug)]
 pub struct Parser<'a> {
     lexer: &'a mut Lexer<'a>,
     current_token: Token,
@@ -17,6 +19,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    #[tracing::instrument]
     pub fn new(lexer: &'a mut Lexer<'a>) -> Self {
         // Feed the lexer so its tokens are ready to be consumed
 
@@ -35,16 +38,19 @@ impl<'a> Parser<'a> {
         parser
     }
 
+    #[tracing::instrument]
     fn load_next_token(&mut self) {
         self.peek_tokens
             .push_back(self.lexer.next_token().expect("Failed to load next token"));
     }
 
+    #[tracing::instrument]
     fn next_token(&mut self) {
         self.load_next_token();
         self.current_token = self.peek_tokens.pop_front().unwrap();
     }
 
+    #[tracing::instrument]
     fn peek_token(&self, peek_ahead: usize) -> Token {
         self.peek_tokens
             .get(peek_ahead)
@@ -52,14 +58,17 @@ impl<'a> Parser<'a> {
             .to_owned()
     }
 
+    #[tracing::instrument]
     fn current_token_is(&self, token_type: TokenType) -> bool {
         self.current_token.token == token_type
     }
 
+    #[tracing::instrument]
     fn peek_token_is(&self, lookahead: usize, token_type: TokenType) -> bool {
         self.peek_tokens.get(lookahead).expect("peek").token == token_type
     }
 
+    #[tracing::instrument]
     fn parse_label(&mut self) -> String {
         if self.current_token_is(TokenType::Identifier) && self.peek_token_is(0, TokenType::Colon) {
             let label = self.current_token.literal.clone();
@@ -73,6 +82,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_mnemonic(&mut self) -> ASTMnemonic {
         match ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str()) {
             Ok(mnemonic) => mnemonic,
@@ -80,6 +90,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn try_parse_hex_u8(&mut self) -> Option<u8> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
@@ -89,6 +100,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn try_parse_hex_u16(&mut self) -> Option<u16> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
@@ -98,6 +110,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn try_parse_identifier(&mut self) -> Option<String> {
         if self.current_token_is(TokenType::Identifier) {
             Some(self.current_token.literal.clone())
@@ -106,6 +119,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_literal_number(&mut self) -> (ASTAddressingMode, ASTOperand) {
         self.next_token();
         match self.current_token.token {
@@ -130,6 +144,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_hex_byte(
         &mut self,
         byte: u8,
@@ -157,6 +172,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_hex_word(&mut self, word: u16) -> (ASTAddressingMode, ASTOperand) {
         if self.peek_token_is(0, TokenType::Comma) {
             self.next_token();
@@ -174,6 +190,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_hex(&mut self, mnemonic: &ASTMnemonic) -> (ASTAddressingMode, ASTOperand) {
         if let Some(byte) = self.try_parse_hex_u8() {
             self.parse_hex_byte(byte, mnemonic)
@@ -185,6 +202,7 @@ impl<'a> Parser<'a> {
     }
 
     // (u8,X) - where u8 is a byte or a constant
+    #[tracing::instrument]
     fn parse_indirect_indexed_x(
         &mut self,
         byte: Option<u8>,
@@ -216,6 +234,7 @@ impl<'a> Parser<'a> {
     }
 
     // (u8),Y - where u8 is a byte or a constant
+    #[tracing::instrument]
     fn parse_indirect_indexed_y(
         &mut self,
         byte: Option<u8>,
@@ -246,6 +265,7 @@ impl<'a> Parser<'a> {
     }
 
     // (u8,X) or (u8),Y - where u8 is a byte or a constant
+    #[tracing::instrument]
     fn try_parse_indirect_indexed(&mut self) -> Option<(ASTAddressingMode, ASTOperand)> {
         let byte = self.try_parse_hex_u8();
         let identifier = self.try_parse_identifier();
@@ -270,6 +290,7 @@ impl<'a> Parser<'a> {
     // (u8,X) or (u8),Y - where u8 is a byte or a constant
     // or
     // (u16) or - where u16 is a word or a constant
+    #[tracing::instrument]
     fn parse_indirect(&mut self) -> (ASTAddressingMode, ASTOperand) {
         self.next_token(); // Consume the opening parenthesis
 
@@ -293,6 +314,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn addressing_mode_for_label(&self, mnemonic: &ASTMnemonic) -> ASTAddressingMode {
         // TODO: Is this correct?
         if mnemonic.is_branch() {
@@ -302,6 +324,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_operand_with_identifier(
         &mut self,
         mnemonic: &ASTMnemonic,
@@ -332,10 +355,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn peek_token_is_mnemonic(&self, peek_ahead: usize) -> bool {
         ASTMnemonic::from_str(self.peek_token(peek_ahead).literal.to_uppercase().as_str()).is_ok()
     }
 
+    #[tracing::instrument]
     fn parse_addressing_mode_and_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
@@ -359,6 +384,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_instruction(&mut self) -> ASTInstructionNode {
         if self.current_token_is(TokenType::Identifier) {
             let mnemonic = self.parse_mnemonic();
@@ -375,6 +401,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_constant(&mut self) -> ASTConstantNode {
         if !self.peek_token_is(0, TokenType::Identifier) {
             panic!("Expected identifier");
@@ -398,6 +425,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn parse_node(&mut self) -> ASTNode {
         match &self.current_token.token {
             TokenType::Identifier => {
@@ -416,6 +444,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the entire program into an AST
+    #[tracing::instrument]
     pub fn parse_program(&mut self) -> AST {
         let mut ast_nodes = Vec::new();
         loop {

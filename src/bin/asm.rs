@@ -1,3 +1,6 @@
+use tracing_chrome::ChromeLayerBuilder;
+use tracing_subscriber::prelude::*;
+
 fn default() -> &'static str {
     "
   LDX #$00
@@ -19,7 +22,11 @@ secondloop:
 "
 }
 
+#[tracing::instrument]
 fn main() {
+    let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
+    tracing_subscriber::registry().with(chrome_layer).init();
+
     let input = if let Some(filename) = std::env::args().nth(1) {
         std::fs::read_to_string(filename).unwrap()
     } else {

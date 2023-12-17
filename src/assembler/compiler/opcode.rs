@@ -3,20 +3,24 @@ use std::collections::HashMap;
 
 use crate::ast::{ASTAddressingMode, ASTInstruction, ASTMnemonic};
 
+#[derive(Debug)]
 pub struct OpcodeMapping {
     forward_map: HashMap<ASTInstruction, u8>,
     reverse_map: HashMap<u8, ASTInstruction>,
 }
 
 impl OpcodeMapping {
+    #[tracing::instrument]
     pub fn find_opcode(&self, instruction: ASTInstruction) -> Option<u8> {
         self.forward_map.get(&instruction).copied()
     }
 
+    #[tracing::instrument]
     pub fn find_instruction(&self, opcode: u8) -> Option<ASTInstruction> {
         self.reverse_map.get(&opcode).copied()
     }
 
+    #[tracing::instrument]
     fn new() -> Self {
         let mut forward_map = HashMap::new();
         let mut reverse_map = HashMap::new();

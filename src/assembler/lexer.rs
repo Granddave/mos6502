@@ -23,6 +23,7 @@ pub enum TokenType {
 }
 
 impl Default for TokenType {
+    #[tracing::instrument]
     fn default() -> Self {
         Self::Eof
     }
@@ -40,6 +41,7 @@ pub struct Token {
 }
 
 impl Token {
+    #[tracing::instrument]
     pub fn new() -> Self {
         Self {
             token: TokenType::Eof,
@@ -50,6 +52,7 @@ impl Token {
 }
 
 impl ToString for Token {
+    #[tracing::instrument]
     fn to_string(&self) -> String {
         match self.token {
             TokenType::LiteralNumber => self.literal.to_owned(),
@@ -65,6 +68,7 @@ impl ToString for Token {
     }
 }
 
+#[derive(Debug)]
 pub struct Lexer<'a> {
     /// Source code to lex
     input: &'a str,
@@ -79,6 +83,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+    #[tracing::instrument]
     pub fn new(input: &'a str) -> Self {
         let mut lexer = Self {
             input,
@@ -91,6 +96,7 @@ impl<'a> Lexer<'a> {
         lexer
     }
 
+    #[tracing::instrument]
     fn read_char(&mut self) {
         if self.read_position >= self.input.len() {
             self.ch = None;
@@ -101,6 +107,7 @@ impl<'a> Lexer<'a> {
         self.read_position += 1;
     }
 
+    #[tracing::instrument]
     fn skip_whitespace(&mut self) {
         while self.ch.is_some() && self.ch.unwrap().is_whitespace() {
             if self.ch.unwrap() == '\n' {
@@ -110,6 +117,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    #[tracing::instrument]
     fn skip_comment(&mut self) {
         while self.ch.is_some() && self.ch.unwrap() != '\n' {
             self.read_char();
@@ -117,6 +125,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Instruction mnemonic, label or constant definition
+    #[tracing::instrument]
     fn read_string(&mut self) -> String {
         let position = self.position;
         // Allow alphanumeric and underscore
@@ -126,6 +135,7 @@ impl<'a> Lexer<'a> {
         self.input[position..self.position].to_string()
     }
 
+    #[tracing::instrument]
     fn read_hex(&mut self) -> String {
         let position = self.position;
         while self.ch.is_some() && self.ch.unwrap().is_ascii_hexdigit() {
@@ -134,6 +144,7 @@ impl<'a> Lexer<'a> {
         self.input[position..self.position].to_string()
     }
 
+    #[tracing::instrument]
     fn create_token(&mut self, token: TokenType, literal: &str) -> Token {
         Token {
             token,
@@ -142,6 +153,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    #[tracing::instrument]
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
         match self.ch {
