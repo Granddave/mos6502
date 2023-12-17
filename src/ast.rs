@@ -1,5 +1,8 @@
 use std::fmt;
 
+/// Mnemonic of an instruction.
+///
+/// This represents the operation that is performed by the instruction.
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, strum_macros::EnumString)]
 pub enum ASTMnemonic {
     ADC,
@@ -110,7 +113,7 @@ impl ASTMnemonic {
         )
     }
 
-    pub fn is_accumulator(&self) -> bool {
+    pub fn has_accumulator_addressing_mode(&self) -> bool {
         matches!(
             self,
             ASTMnemonic::ASL | ASTMnemonic::LSR | ASTMnemonic::ROL | ASTMnemonic::ROR
@@ -124,6 +127,9 @@ impl fmt::Display for ASTMnemonic {
     }
 }
 
+/// Addressing mode of an instruction.
+///
+/// This represents the way the instruction uses the operand.
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum ASTAddressingMode {
     // Addressing modes
@@ -145,6 +151,9 @@ pub enum ASTAddressingMode {
     Constant,
 }
 
+/// An operand of an instruction.
+///
+/// This represents the actual data that is used by the instruction.
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ASTOperand {
     Immediate(u8),
@@ -156,7 +165,7 @@ pub enum ASTOperand {
     Implied, // Covers accumulator and implied addressing mode
 }
 
-/// An instruction without an operand
+/// An instruction without an operand.
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub struct ASTInstruction {
     /// Mnemonic of the instruction
@@ -297,6 +306,7 @@ impl fmt::Display for ASTInstructionNode {
     }
 }
 
+/// A constant value.
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTConstantValue {
     Byte(u8),
@@ -312,9 +322,12 @@ impl fmt::Display for ASTConstantValue {
     }
 }
 
+/// A constant definition.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ASTConstantNode {
+    /// The name of the constant (e.g. `max_items`)
     pub identifier: String,
+    /// The value of the constant (e.g. `$FF`)
     pub value: ASTConstantValue,
 }
 
@@ -341,11 +354,19 @@ impl fmt::Display for ASTConstantNode {
     }
 }
 
-/// AST Node is either an instruction (including operand) or a label.
+/// A single node in the AST, i.e. a single line in the source code.
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
+    /// A CPU instruction
     Instruction(ASTInstructionNode),
+    /// A label to mark a location in the code
+    ///
+    /// Labels are resolved to absolute addresses during compilation.
+    /// E.g. `init:`
     Label(String),
+    /// A constant definition
+    ///
+    /// E.g. `define max_items $FF`
     Constant(ASTConstantNode),
 }
 
@@ -369,4 +390,7 @@ impl fmt::Display for ASTNode {
     }
 }
 
+/// A AST (Abstract Syntax Tree) is a collection of AST nodes.
+///
+/// The AST is the result of parsing the source code.
 pub type AST = Vec<ASTNode>;

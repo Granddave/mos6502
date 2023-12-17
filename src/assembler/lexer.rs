@@ -1,14 +1,15 @@
+/// TokenType definies the types of tokens that are found in source code.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
-    /// `#` Literal number prefix
+    /// `#` Literal number prefix character
     LiteralNumber,
-    /// `$` Hex prefix
+    /// `$` Hex prefix including hex number
     Hex,
     /// Decimal number
     Decimal,
-    /// `:` Label suffix
+    /// `:` Label suffix character
     Colon,
-    /// Constant definition
+    /// Constant definition keyword
     Define,
     /// `,`
     Comma,
@@ -16,9 +17,11 @@ pub enum TokenType {
     ParenLeft,
     /// `)`
     ParenRight,
-    /// Instruction mnemonic or label
+    /// Instruction mnemonic, label or constant definition.
+    ///
+    /// Basically anything that starts with a letter or underscore.
     Identifier,
-    /// Marks the end of file
+    /// Eof marks the end of file
     Eof,
 }
 
@@ -69,13 +72,14 @@ impl ToString for Token {
     }
 }
 
+/// Lexer is used to tokenize source code.
 #[derive(Debug)]
 pub struct Lexer<'a> {
     /// Source code to lex
-    input: &'a str,
-    /// Index of current position in input (points to current char)
+    src: &'a str,
+    /// Index of current position in source code (points to current char)
     position: usize,
-    /// Index of current reading position in input (after current char)
+    /// Index of current reading position in source code (after current char)
     read_position: usize,
     /// Current char under examination
     ch: Option<char>,
@@ -85,9 +89,9 @@ pub struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     #[tracing::instrument]
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(src: &'a str) -> Self {
         let mut lexer = Self {
-            input,
+            src,
             position: 0,
             read_position: 0,
             ch: None,
@@ -100,10 +104,10 @@ impl<'a> Lexer<'a> {
     #[tracing::instrument]
     #[inline(always)]
     fn read_char(&mut self) {
-        if self.read_position >= self.input.len() {
+        if self.read_position >= self.src.len() {
             self.ch = None;
         } else {
-            self.ch = Some(self.input.chars().nth(self.read_position).unwrap());
+            self.ch = Some(self.src.chars().nth(self.read_position).unwrap());
         }
         self.position = self.read_position;
         self.read_position += 1;
@@ -136,7 +140,7 @@ impl<'a> Lexer<'a> {
         while self.ch.is_some() && (self.ch.unwrap().is_alphanumeric() || self.ch.unwrap() == '_') {
             self.read_char();
         }
-        self.input[position..self.position].to_string()
+        self.src[position..self.position].to_string()
     }
 
     #[tracing::instrument]
@@ -145,7 +149,7 @@ impl<'a> Lexer<'a> {
         while self.ch.is_some() && self.ch.unwrap().is_ascii_hexdigit() {
             self.read_char();
         }
-        self.input[position..self.position].to_string()
+        self.src[position..self.position].to_string()
     }
 
     #[tracing::instrument]

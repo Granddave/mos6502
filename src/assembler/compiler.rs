@@ -8,6 +8,9 @@ mod opcode;
 /// Resolves symbols in the AST.
 mod symbol_resolver;
 
+/// Compiler for the 6502 CPU.
+///
+/// The compiler compiles the [AST] into machine code.
 #[derive(Debug)]
 pub struct Compiler {
     symbol_table: SymbolTable,

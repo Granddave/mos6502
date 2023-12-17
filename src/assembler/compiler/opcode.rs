@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::ast::{ASTAddressingMode, ASTInstruction, ASTMnemonic};
 
+/// A mapper between ASTInstructions and opcodes.
 #[derive(Debug)]
 pub struct OpcodeMapping {
     forward_map: HashMap<ASTInstruction, u8>,
@@ -10,11 +11,13 @@ pub struct OpcodeMapping {
 }
 
 impl OpcodeMapping {
+    /// Find the opcode corresponding to the given instruction.
     #[tracing::instrument]
     pub fn find_opcode(&self, instruction: ASTInstruction) -> Option<u8> {
         self.forward_map.get(&instruction).copied()
     }
 
+    /// Find the instruction corresponding to the given opcode.
     #[tracing::instrument]
     pub fn find_instruction(&self, opcode: u8) -> Option<ASTInstruction> {
         self.reverse_map.get(&opcode).copied()
@@ -204,5 +207,6 @@ impl OpcodeMapping {
 }
 
 lazy_static! {
+    /// A mapping between ASTInstructions and opcodes.
     pub static ref OPCODE_MAPPING: OpcodeMapping = OpcodeMapping::new();
 }

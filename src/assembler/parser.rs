@@ -8,9 +8,14 @@ use crate::{
     },
 };
 
-// Allow the parser to peek `PEEK_BUFFER_SIZE` tokens in advance
+/// Allow the parser to peek `PEEK_BUFFER_SIZE` tokens in advance
 const PEEK_BUFFER_SIZE: usize = 2;
 
+/// A recursive descent parser for the 6502 assembly language.
+///
+/// It's using a [Lexer] to tokenize the input into a stream of tokens.
+/// The parser then uses the tokens to build an [AST] (abstract syntax tree) which later can be used
+/// to generate machine code.
 #[derive(Debug)]
 pub struct Parser<'a> {
     lexer: &'a mut Lexer<'a>,
@@ -417,7 +422,7 @@ impl<'a> Parser<'a> {
             return (ASTAddressingMode::Implied, ASTOperand::Implied);
         }
 
-        if mnemonic.is_accumulator()
+        if mnemonic.has_accumulator_addressing_mode()
             && (self.peek_token_is_mnemonic(0) || self.peek_token_is(0, TokenType::Eof))
         {
             return (ASTAddressingMode::Accumulator, ASTOperand::Implied);
