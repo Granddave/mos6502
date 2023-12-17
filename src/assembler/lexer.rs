@@ -97,6 +97,7 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
+    #[inline(always)]
     fn read_char(&mut self) {
         if self.read_position >= self.input.len() {
             self.ch = None;
@@ -108,6 +109,7 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
+    #[inline(always)]
     fn skip_whitespace(&mut self) {
         while self.ch.is_some() && self.ch.unwrap().is_whitespace() {
             if self.ch.unwrap() == '\n' {
@@ -118,6 +120,7 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
+    #[inline(always)]
     fn skip_comment(&mut self) {
         while self.ch.is_some() && self.ch.unwrap() != '\n' {
             self.read_char();
