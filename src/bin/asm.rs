@@ -35,6 +35,6 @@ fn main() {
 
     let bytes = mos6502::assembler::compile_code(&input);
 
-    println!("{}", mos6502::hexdump::hexdump(&bytes, 7, 16));
+    println!("{}", mos6502::hexdump::hexdump_2(&bytes, 0x0600, 4, 16));
     std::fs::write("a.bin", &bytes).unwrap();
 }
