@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
             label
         } else {
             panic!(
-                "Expected identifier followed by colon, got {:?}",
+                "Expected identifier followed by colon, got {:#?}",
                 self.current_token.token
             );
         }
@@ -140,7 +140,10 @@ impl<'a> Parser<'a> {
                     panic!("Invalid identifier");
                 }
             }
-            _ => panic!("Invalid literal number, got {:?}", self.current_token.token),
+            _ => panic!(
+                "Invalid literal number, got {:#?}",
+                self.current_token.token
+            ),
         }
     }
 
@@ -225,7 +228,7 @@ impl<'a> Parser<'a> {
                 },
             ),
             _ => panic!(
-                "Invalid indirect indexed X operand, got {:?}",
+                "Invalid indirect indexed X operand, got {:#?}",
                 self.current_token.literal
             ),
         };
@@ -258,7 +261,7 @@ impl<'a> Parser<'a> {
                 },
             ),
             _ => panic!(
-                "Invalid indirect indexed Y operand, Expected 'Y', got {:?}",
+                "Invalid indirect indexed Y operand, Expected 'Y', got {:#?}",
                 self.current_token.literal
             ),
         }
@@ -343,7 +346,7 @@ impl<'a> Parser<'a> {
                 "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant)),
                 "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant)),
                 _ => panic!(
-                    "Invalid ZeroPageX/Y identifier, got {:?}",
+                    "Invalid ZeroPageX/Y identifier, got {:#?}",
                     self.current_token.literal
                 ),
             }
@@ -384,7 +387,7 @@ impl<'a> Parser<'a> {
             TokenType::Hex => self.parse_hex(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
             TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
-            _ => panic!("Invalid operand, got {:?}", self.current_token.token),
+            _ => panic!("Invalid operand, got {:#?}", self.current_token.token),
         }
     }
 
@@ -395,13 +398,13 @@ impl<'a> Parser<'a> {
             let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
 
             eprintln!(
-                "parsed mnemonic: {:?}, addr_mode: {:?}, operand: {:?}",
+                "parsed mnemonic: {:#?}, addr_mode: {:#?}, operand: {:#?}",
                 mnemonic, addr_mode, operand
             );
 
             ASTInstructionNode::new(mnemonic, addr_mode, operand)
         } else {
-            panic!("Expected identifier, got {:?}", self.current_token.token);
+            panic!("Expected identifier, got {:#?}", self.current_token.token);
         }
     }
 
@@ -441,7 +444,7 @@ impl<'a> Parser<'a> {
             }
             TokenType::Define => ASTNode::Constant(self.parse_constant()),
             _ => panic!(
-                "parse_node: Unexpected token type: {:?}",
+                "parse_node: Unexpected token type: {:#?}",
                 self.current_token.token
             ),
         }

@@ -109,7 +109,7 @@ impl Compiler {
                             }
                             _ => panic!("Invalid addressing mode for constant word: {:#?}", ins),
                         },
-                        _ => panic!("Invalid symbol type for constant operand: {:?}", ins),
+                        _ => panic!("Invalid symbol type for constant operand: {:#?}", ins),
                     }
                 }
             }
@@ -142,7 +142,7 @@ impl Compiler {
         bytes.push(
             OPCODE_MAPPING
                 .find_opcode(ins.ins)
-                .unwrap_or_else(|| panic!("Invalid instruction for opcode: {:?}", ins)),
+                .unwrap_or_else(|| panic!("Invalid instruction for opcode: {:#?}", ins)),
         );
 
         bytes.extend(match ins.operand {

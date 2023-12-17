@@ -42,6 +42,7 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
 
     ast.iter().for_each(|node| match node {
         ASTNode::Instruction(ins_node) => {
+            eprintln!("Instruction: {:#?}", ins_node);
             current_addr += ins_node.size();
         }
         ASTNode::Label(label) => symbol_table.symbols.push(Symbol {
