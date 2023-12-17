@@ -5,7 +5,7 @@ pub enum TokenType {
     /// `$` Hex prefix
     Hex,
     /// Decimal number
-    // TODO: Decimal,
+    Decimal,
     /// `:` Label suffix
     Colon,
     /// Constant definition
@@ -57,6 +57,7 @@ impl ToString for Token {
         match self.token {
             TokenType::LiteralNumber => self.literal.to_owned(),
             TokenType::Hex => "$".to_string() + &self.literal,
+            TokenType::Decimal => self.literal.to_owned(),
             TokenType::Colon => ":".to_owned(),
             TokenType::Define => "define".to_owned(),
             TokenType::Comma => ",".to_owned(),
@@ -170,6 +171,10 @@ impl<'a> Lexer<'a> {
                     let hex = self.read_hex();
                     Some(self.create_token(TokenType::Hex, &hex))
                 }
+                '0'..='9' => {
+                    let decimal = self.read_string();
+                    Some(self.create_token(TokenType::Decimal, &decimal))
+                }
                 '#' => {
                     self.read_char();
                     Some(self.create_token(TokenType::LiteralNumber, "#"))
@@ -219,11 +224,29 @@ mod tests {
             ("$10", "10"),
             ("$ff", "ff"),
             ("$FF", "FF"),
+            ("$FFFF", "FFFF"),
         ];
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token().unwrap();
             assert_eq!(token.token, TokenType::Hex);
+            assert_eq!(token.literal, expected);
+        }
+    }
+
+    #[test]
+    fn test_decimal() {
+        let tests = vec![
+            ("0", "0"),
+            ("1", "1"),
+            ("10", "10"),
+            ("123", "123"),
+            ("65535", "65535"),
+        ];
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let token = lexer.next_token().unwrap();
+            assert_eq!(token.token, TokenType::Decimal);
             assert_eq!(token.literal, expected);
         }
     }
@@ -241,39 +264,70 @@ mod tests {
 
     #[test]
     fn test_instruction() {
-        let input = "LDA #$00";
-        let result = vec![
-            Token {
-                token: TokenType::Identifier,
-                literal: "LDA".to_string(),
-                line_number: 1,
-            },
-            Token {
-                token: TokenType::LiteralNumber,
-                literal: "#".to_string(),
-                line_number: 1,
-            },
-            Token {
-                token: TokenType::Hex,
-                literal: "00".to_string(),
-                line_number: 1,
-            },
-            Token {
-                token: TokenType::Eof,
-                literal: "".to_string(),
-                line_number: 1,
-            },
+        let tests = vec![
+            (
+                "LDA #$00",
+                vec![
+                    Token {
+                        token: TokenType::Identifier,
+                        literal: "LDA".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::LiteralNumber,
+                        literal: "#".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::Hex,
+                        literal: "00".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::Eof,
+                        literal: "".to_string(),
+                        line_number: 1,
+                    },
+                ],
+            ),
+            (
+                "LDA #255",
+                vec![
+                    Token {
+                        token: TokenType::Identifier,
+                        literal: "LDA".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::LiteralNumber,
+                        literal: "#".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::Decimal,
+                        literal: "255".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::Eof,
+                        literal: "".to_string(),
+                        line_number: 1,
+                    },
+                ],
+            ),
         ];
-        let mut lexer = Lexer::new(input);
-        let mut tokens = Vec::new();
-        loop {
-            let token = lexer.next_token().unwrap();
-            tokens.push(token.clone());
-            if token.token == TokenType::Eof {
-                break;
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let mut tokens = Vec::new();
+            loop {
+                let token = lexer.next_token().unwrap();
+                tokens.push(token.clone());
+                if token.token == TokenType::Eof {
+                    break;
+                }
             }
+            assert_eq!(tokens, expected);
         }
-        assert_eq!(tokens, result);
     }
 
     #[test]

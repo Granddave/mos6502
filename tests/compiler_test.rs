@@ -3,8 +3,8 @@ use mos6502::assembler::compile_code;
 #[test]
 fn test_basic() {
     let input = "
-  define zero $00
-  define hex_10 $10
+  define zero 0
+  define hex_10 16
   define hex_20 $20
 
   LDX #zero

@@ -153,7 +153,7 @@ pub enum ASTOperand {
     Relative(i8),
     Label(String),
     Constant(String),
-    Implied,
+    Implied, // Covers accumulator and implied addressing mode
 }
 
 /// An instruction without an operand
