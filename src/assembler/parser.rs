@@ -349,6 +349,10 @@ impl<'a> Parser<'a> {
             }
         } else {
             (
+                // We don't know the size of the constant as this point (i.e. byte or word), so we
+                // have to use the Constant addressing mode.
+                // The compiler will later determine the size of the constant and switch to the
+                // correct addressing mode, i.e. Absolute or ZeroPage.
                 ASTAddressingMode::Constant,
                 ASTOperand::Constant(self.current_token.literal.clone()),
             )

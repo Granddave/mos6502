@@ -3,21 +3,25 @@ use mos6502::assembler::compile_code;
 #[test]
 fn test_basic() {
     let input = "
-  LDX #$00
-  LDY #$00
+  define zero $00
+  define hex_10 $10
+  define hex_20 $20
+
+  LDX #zero
+  LDY #zero
 firstloop:
   TXA
   STA $0200,Y
   PHA
   INX
   INY
-  CPY #$10
+  CPY #hex_10
   BNE firstloop ;loop until Y is $10
 secondloop:
   PLA
   STA $0200,Y
   INY
-  CPY #$20      ;loop until Y is $20
+  CPY #hex_20   ;loop until Y is $20
   BNE secondloop
 ";
     let bytes = compile_code(input);

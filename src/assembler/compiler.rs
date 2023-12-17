@@ -86,20 +86,28 @@ impl Compiler {
                             ASTAddressingMode::Immediate => {
                                 ins.operand = ASTOperand::Immediate(byte);
                             }
-                            ASTAddressingMode::ZeroPage
-                            | ASTAddressingMode::ZeroPageX
+                            ASTAddressingMode::ZeroPageX
                             | ASTAddressingMode::ZeroPageY
                             | ASTAddressingMode::IndirectIndexedX
                             | ASTAddressingMode::IndirectIndexedY => {
                                 ins.operand = ASTOperand::ZeroPage(byte);
                             }
-                            _ => panic!("Invalid addressing mode for constant byte: {:?}", ins),
+                            ASTAddressingMode::Constant => {
+                                // Special case for the zeropage addressing mode since we at the
+                                // parsing stage don't know if the operand is a byte or word.
+                                ins.operand = ASTOperand::ZeroPage(byte);
+                                ins.ins.addr_mode = ASTAddressingMode::ZeroPage;
+                            }
+                            _ => panic!("Invalid addressing mode for constant byte: {:#?}", ins),
                         },
                         SymbolType::ConstantWord(word) => match ins.ins.addr_mode {
-                            ASTAddressingMode::Absolute => {
+                            ASTAddressingMode::Constant => {
+                                // Special case for the absolute addressing mode since we at the
+                                // parsing stage don't know if the operand is a byte or word.
                                 ins.operand = ASTOperand::Absolute(word);
+                                ins.ins.addr_mode = ASTAddressingMode::Absolute;
                             }
-                            _ => panic!("Invalid addressing mode for constant word: {:?}", ins),
+                            _ => panic!("Invalid addressing mode for constant word: {:#?}", ins),
                         },
                         _ => panic!("Invalid symbol type for constant operand: {:?}", ins),
                     }
@@ -113,14 +121,17 @@ impl Compiler {
     /// This pass resolves labels and constants and verifies that all symbols are valid.
     #[tracing::instrument]
     fn pass_1(&mut self, ast: &mut AST) {
-        // Resolve symbols
-        symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
+        // The constant resolver needs to be run before the label resolver since the label
+        // resolver depends on the constant resolver to have resolved all constants to their
+        // values.
         symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
-        symbol_resolver::verify_symbols(ast, &mut self.symbol_table);
-
-        // Modify the AST to replace labels with addresses and constants with values
-        self.resolve_labels_to_addr(ast);
         self.resolve_constants_to_values(ast);
+
+        symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
+        self.resolve_labels_to_addr(ast);
+
+        // Verify that all symbols are valid before proceeding to the next pass
+        symbol_resolver::verify_symbols(ast, &mut self.symbol_table);
     }
 
     /// Compile a single instruction node from the AST to machine code.
@@ -165,6 +176,11 @@ impl Compiler {
             .collect()
     }
 
+    /// Compile the AST to machine code.
+    ///
+    /// The AST is compiled in two passes:
+    /// 1. Resolve labels and constants
+    /// 2. Generate machine code
     #[tracing::instrument]
     pub fn compile(&mut self, ast: AST) -> Vec<u8> {
         let mut ast = ast;
@@ -176,7 +192,7 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ASTAddressingMode, ASTMnemonic, ASTNode, ASTOperand};
+    use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand};
 
     // Test that the compiler can compile single instructions
     #[test]
@@ -282,7 +298,32 @@ mod tests {
                     /* BRK */ 0x00,
                 ],
             ),
-            // TODO: Test constants
+            (
+                vec![
+                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDY,
+                        ASTAddressingMode::Constant,
+                        ASTOperand::Constant("sysRandom".to_string()),
+                    )),
+                    ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDX,
+                        ASTAddressingMode::Immediate,
+                        ASTOperand::Constant("a_dozen".to_string()),
+                    )),
+                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
+                    ASTNode::Instruction(ASTInstructionNode::new(
+                        ASTMnemonic::LDA,
+                        ASTAddressingMode::Constant,
+                        ASTOperand::Constant("zpage".to_string()),
+                    )),
+                ],
+                vec![
+                    /* LDY */ 0xAC, 0x10, 0xD0, /* LDX */ 0xA2, 0x0C,
+                    /* LDA */ 0xA5, 0x02,
+                ],
+            ),
         ];
 
         for (ast, expected) in tests {

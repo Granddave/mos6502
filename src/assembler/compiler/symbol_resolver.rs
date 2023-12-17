@@ -67,9 +67,12 @@ pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
     })
 }
 
+/// Verify that
+///   - no symbol is defined multiple times
+///   - all symbols used in the AST are defined
 #[tracing::instrument]
 pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) {
-    // Verify that no symbols are defined multiple times
+    // Verify that no symbol is defined multiple times
     symbol_table.symbols.iter().for_each(|symbol| {
         let mut count = 0;
         symbol_table.symbols.iter().for_each(|s| {
@@ -82,7 +85,7 @@ pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) {
         });
     });
 
-    // Verify that no instruction uses a label or constant as operand that has not been resolved
+    // Verify that all symbols used in the AST are defined
     ast.iter().for_each(|node| {
         if let ASTNode::Instruction(ins_node) = node {
             match &ins_node.operand {

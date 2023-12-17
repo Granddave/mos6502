@@ -189,7 +189,7 @@ impl ASTInstructionNode {
         }
     }
 
-    /// Size of instruction and operand in bytes
+    /// Size of instruction opcode + operand in bytes
     pub fn size(&self) -> usize {
         match self.operand {
             ASTOperand::Immediate(_) => 2,
@@ -203,7 +203,7 @@ impl ASTInstructionNode {
                     ASTAddressingMode::Absolute => 3,
                     ASTAddressingMode::Relative => 2,
                     ASTAddressingMode::Immediate => 2,
-                    _ => panic!("Invalid addressing mode for label or constant: {:?}", self),
+                    _ => panic!("Cannot calculata size for: {:#?}", self),
                 }
             }
             ASTOperand::Implied => 1,
