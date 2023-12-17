@@ -397,10 +397,10 @@ impl<'a> Parser<'a> {
             let mnemonic = self.parse_mnemonic();
             let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
 
-            eprintln!(
-                "parsed mnemonic: {:#?}, addr_mode: {:#?}, operand: {:#?}",
-                mnemonic, addr_mode, operand
-            );
+            // eprintln!(
+            //     "parsed mnemonic: {:#?}, addr_mode: {:#?}, operand: {:#?}",
+            //     mnemonic, addr_mode, operand
+            // );
 
             ASTInstructionNode::new(mnemonic, addr_mode, operand)
         } else {
