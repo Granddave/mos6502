@@ -1,3 +1,6 @@
+![ci](https://github.com/Granddave/mos6502/actions/workflows/ci.yml/badge.svg)
+
+
 # MOS6502
 
 This is a toy project where I've created an assembler for the 6502 assembly language. An emulator is in the works and a dissasembler would be fun to do as well.
