@@ -304,7 +304,7 @@ impl<'a> Parser<'a> {
         let byte = {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Some(byte)
-            } else if let Some(byte) = self.current_token.literal.parse::<u8>().ok() {
+            } else if let Ok(byte) = self.current_token.literal.parse::<u8>() {
                 Some(byte)
             } else {
                 None
@@ -345,7 +345,7 @@ impl<'a> Parser<'a> {
                 // Hex
                 self.next_token(); // Consume the closing parenthesis
                 (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
-            } else if let Some(word) = self.current_token.literal.parse::<u16>().ok() {
+            } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
                 // Decimal
                 self.next_token(); // Consume the closing parenthesis
                 (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
