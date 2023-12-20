@@ -11,7 +11,7 @@ fn main() {
     let input = std::env::args().nth(1).expect("Filename missing");
     let bytes = std::fs::read(input).expect("Unable to read file");
 
-    let mut disassembler = Disassembler::default(bytes);
+    let mut disassembler = Disassembler::new(bytes);
     let ast = disassembler.disassemble_code();
 
     let mut listing = Listing::default(ast);

@@ -2,26 +2,16 @@ use crate::ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTNode,
 
 pub mod listing;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Disassembler {
     input: Vec<u8>,
-    starting_address: usize,
     curr_ix: usize,
 }
 
 impl Disassembler {
     #[tracing::instrument]
-    pub fn new(input: Vec<u8>, starting_address: usize) -> Self {
-        Self {
-            input,
-            starting_address,
-            curr_ix: 0,
-        }
-    }
-
-    #[tracing::instrument]
-    pub fn default(input: Vec<u8>) -> Self {
-        Self::new(input, 0x0600)
+    pub fn new(input: Vec<u8>) -> Self {
+        Self { input, curr_ix: 0 }
     }
 
     #[tracing::instrument]
@@ -183,7 +173,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let mut disassembler = Disassembler::default(input);
+            let mut disassembler = Disassembler::new(input);
             let actual = disassembler.disassemble_code();
             assert_eq!(actual, expected);
         }

@@ -3,7 +3,6 @@ use crate::ast::{ASTInstructionNode, ASTNode};
 #[derive(Debug)]
 pub struct Listing {
     ast: Vec<ASTNode>,
-    start_address: usize,
     current_address: usize,
     str: String,
 }
@@ -13,7 +12,6 @@ impl Listing {
     pub fn new(ast: Vec<ASTNode>, start_address: usize) -> Self {
         Self {
             ast,
-            start_address,
             current_address: start_address,
             str: String::new(),
         }
