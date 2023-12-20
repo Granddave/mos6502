@@ -238,6 +238,31 @@ impl ASTInstructionNode {
             ASTOperand::Implied => 1,
         }
     }
+
+    // TODO: Merge with the implementation in the compiler module
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+
+        bytes.push(
+            crate::assembler::compiler::opcode::OPCODE_MAPPING
+                .find_opcode(self.ins)
+                .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", self.ins.mnemonic as u8)),
+        );
+
+        match self.operand {
+            ASTOperand::Immediate(value) => bytes.push(value),
+            ASTOperand::Absolute(address) => {
+                bytes.push((address & 0xFF) as u8);
+                bytes.push((address >> 8) as u8);
+            }
+            ASTOperand::ZeroPage(address) => bytes.push(address),
+            ASTOperand::Relative(offset) => bytes.push(offset as u8),
+            ASTOperand::Implied => {}
+            _ => panic!("Cannot calculate bytes for: {:#?}", self),
+        }
+
+        bytes
+    }
 }
 
 impl fmt::Display for ASTInstructionNode {

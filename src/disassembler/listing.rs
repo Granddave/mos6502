@@ -24,14 +24,23 @@ impl Listing {
 
     #[tracing::instrument]
     fn generate_line(&self, node: &ASTInstructionNode) -> String {
-        format!("{:04x}: {}\n", self.current_address, node)
+        let bytes = node.bytes();
+        let bytes_str = bytes
+            .iter()
+            .map(|b| format!("{:02X}", b))
+            .collect::<Vec<String>>()
+            .join(" ");
+        format!(
+            "${:04X}  {:08}  {}\n",
+            self.current_address, bytes_str, node
+        )
     }
 
     #[tracing::instrument]
     pub fn generate(&mut self) -> String {
-        self.str.push_str("Addr  Ins\n");
-        self.str.push_str("---------------\n");
-        //                 0600: JSR $0606
+        self.str.push_str(" Addr  Hexdump   Instructions\n");
+        self.str.push_str("-----------------------------\n");
+        //                 $0600  20 06 06  JSR $0606
 
         for node in &self.ast {
             // TODO: Add support for other AST nodes
@@ -76,12 +85,12 @@ mod tests {
             ),
         ];
         let mut listing = Listing::default(ast);
-        let expected = "Addr  Ins
----------------
-0600: JSR $0606
-0603: LDA #$01
-0605: LDA $0200
-0608: LDA $0200,X
+        let expected = " Addr  Hexdump   Instructions
+-----------------------------
+$0600  20 06 06  JSR $0606
+$0603  A9 01     LDA #$01
+$0605  AD 00 02  LDA $0200
+$0608  BD 00 02  LDA $0200,X
 ";
 
         assert_eq!(listing.generate(), expected);
