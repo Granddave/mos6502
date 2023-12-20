@@ -123,7 +123,8 @@ impl ASTMnemonic {
 
 impl fmt::Display for ASTMnemonic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "  {:?}", self)
+        // TODO: Why did it have spaces in front?
+        write!(f, "{:?}", self)
     }
 }
 

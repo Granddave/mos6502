@@ -25,6 +25,9 @@ pub mod ast;
 ///     - Pass 2: Code generation - generating machine code
 pub mod assembler;
 
+/// Transforms machine code to assembly code.
+pub mod disassembler;
+
 /// 6502 CPU emulator
 pub mod emulator;
 

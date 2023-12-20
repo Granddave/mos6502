@@ -3,7 +3,7 @@ use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand, AST};
 
 /// Mapping from ASTInstruction to opcode.
-mod opcode;
+pub mod opcode;
 
 /// Resolves symbols in the AST.
 mod symbol_resolver;
