@@ -134,25 +134,38 @@ impl fmt::Display for ASTMnemonic {
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum ASTAddressingMode {
     // Addressing modes
-    Absolute,         // a
-    ZeroPage,         // zp
-    ZeroPageX,        // zp,x
-    ZeroPageY,        // zp,y
-    AbsoluteX,        // a,x
-    AbsoluteY,        // a,y
-    Relative,         // r, for branch instructions (Labels are resolved to relative offsets)
-    Indirect,         // (a)
-    IndirectIndexedX, // (zp,x)
-    IndirectIndexedY, // (zp),y
-    // Direct and immediate operands
-    Immediate, // #v
+    /// `a`
+    Absolute,
+    /// `zp`
+    ZeroPage,
+    /// `zp,x`
+    ZeroPageX,
+    /// `zp,y`
+    ZeroPageY,
+    /// `a,x`
+    AbsoluteX,
+    /// `a,y`
+    AbsoluteY,
+    /// `r` for branch instructions. [`ASTOperand::Label`][self::ASTOperand#variant.Label] is resolved to relative offsets
+    Relative,
+    /// `(a)`
+    Indirect,
+    /// `(zp,x)`
+    IndirectIndexedX,
+    /// `(zp),y`
+    IndirectIndexedY,
+
+    /// `#v`
+    Immediate,
+
     Accumulator,
     Implied,
-    // Special used for parsing
+
+    /// Special addressing mode used in parsing: [`ASTOperand::Constant`][self::ASTOperand#variant.Constant]
     Constant,
 }
 
-/// An operand of an instruction.
+/// An operand of an [`instruction`][self::ASTInstruction].
 ///
 /// This represents the actual data that is used by the instruction.
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
@@ -161,9 +174,15 @@ pub enum ASTOperand {
     Absolute(u16),
     ZeroPage(u8),
     Relative(i8),
+    /// `Label` is only used during parsing of the source code.
+    /// A reference to a [`ASTNode::Label`][crate::ast::ASTNode#variant.Label] node.
     Label(String),
+    /// `Constant` is only used during parsing of the source code.
+    /// A reference to [`ASTNode::Constant`][crate::ast::ASTNode#variant.Constant] node.
     Constant(String),
-    Implied, // Covers accumulator and implied addressing mode
+    /// `Implied` covers both [`ASTAddressingMode::Accumulator`][self::ASTAddressingMode#variant.Accumulator] and
+    /// [`ASTAddressingMode::Implied`][self::ASTAddressingMode#variant.Implied]
+    Implied,
 }
 
 /// An instruction without an operand.
@@ -171,14 +190,14 @@ pub enum ASTOperand {
 pub struct ASTInstruction {
     /// Mnemonic of the instruction
     pub mnemonic: ASTMnemonic,
-    /// Combined addressing mode and operand
+    /// Addressing mode of the instruction
     pub addr_mode: ASTAddressingMode,
 }
 
 /// An instruction with an operand.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ASTInstructionNode {
-    /// The first part of the instruction
+    /// The type of instruction
     pub ins: ASTInstruction,
     /// Operand of the instruction
     pub operand: ASTOperand,
