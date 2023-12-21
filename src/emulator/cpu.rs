@@ -1,5 +1,6 @@
 use crate::{
-    ast::{self},
+    assembler::compiler::opcode::OPCODE_MAPPING,
+    ast::{ASTAddressingMode, ASTInstructionNode, ASTOperand},
     emulator::memory::Bus,
 };
 
@@ -35,25 +36,41 @@ impl Cpu {
         Self::default()
     }
 
-    fn fetch_and_decode(&mut self, _memory: &mut dyn Bus) -> Option<ast::ASTInstructionNode> {
-        // let opcode = memory.read(self.pc);
-        // self.pc += 1;
-        //
-        // if let Some(ins) = OPCODE_MAPPING.find_instruction(opcode) {
-        //     return Some(ast::ASTInstructionNode::new(
-        //         ins.mnemonic,
-        //         ins.addr_mode,
-        //         ast::ASTOperand::Immediate(0),
-        //     ));
-        // }
+    /// Fetches and decodes the next instruction from memory.
+    /// Returns the instruction and increments the program counter.
+    fn fetch_and_decode(&mut self, memory: &mut dyn Bus) -> ASTInstructionNode {
+        let opcode = memory.read_byte(self.pc);
+        let ins = OPCODE_MAPPING
+            .find_instruction(opcode)
+            .unwrap_or_else(|| panic!("Invalid opcode: '{:#02x}'", opcode));
 
-        None
+        let operand = match ins.addr_mode {
+            ASTAddressingMode::Absolute
+            | ASTAddressingMode::AbsoluteX
+            | ASTAddressingMode::AbsoluteY
+            | ASTAddressingMode::Indirect => ASTOperand::Absolute(memory.read_word(self.pc)),
+            ASTAddressingMode::ZeroPage
+            | ASTAddressingMode::ZeroPageX
+            | ASTAddressingMode::ZeroPageY
+            | ASTAddressingMode::IndirectIndexedX
+            | ASTAddressingMode::IndirectIndexedY => {
+                ASTOperand::ZeroPage(memory.read_byte(self.pc))
+            }
+            ASTAddressingMode::Relative => ASTOperand::Relative(memory.read_byte(self.pc) as i8),
+            ASTAddressingMode::Immediate => ASTOperand::Immediate(memory.read_byte(self.pc)),
+            ASTAddressingMode::Accumulator | ASTAddressingMode::Implied => ASTOperand::Implied,
+            _ => panic!("Invalid addressing mode: '{:#?}'", ins.addr_mode),
+        };
+
+        let instruction = ASTInstructionNode { ins, operand };
+        self.pc += instruction.size() as u16;
+        instruction
     }
 
     pub fn run(&mut self, _memory: &mut dyn Bus, _cycles: usize) {
         todo!();
         // while cycles > 0 {
-        //     let instruction = self.fetch_and_decode(memory).expect("Valid opcode");
+        //     let instruction = self.fetch_and_decode(memory)
         //
         //     println!("{:?}", instruction);
         // }

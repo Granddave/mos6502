@@ -1,5 +1,6 @@
 pub trait Bus {
-    fn read(&self, address: u16) -> u8;
+    fn read_byte(&self, address: u16) -> u8;
+    fn read_word(&self, address: u16) -> u16;
     fn write(&mut self, address: u16, data: u8);
 }
 
@@ -32,10 +33,18 @@ impl Default for Memory {
 }
 
 impl Bus for Memory {
-    fn read(&self, address: u16) -> u8 {
+    /// Reads a byte from memory.
+    fn read_byte(&self, address: u16) -> u8 {
         self.data[address as usize]
     }
 
+    /// Reads a 16-bit word from memory.
+    /// The 16-bit word is stored in little-endian format.
+    fn read_word(&self, address: u16) -> u16 {
+        self.data[address as usize] as u16 | ((self.data[(address + 1) as usize] as u16) << 8)
+    }
+
+    /// Writes a byte to memory.
     fn write(&mut self, address: u16, data: u8) {
         self.data[address as usize] = data;
     }
