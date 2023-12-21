@@ -1,4 +1,3 @@
-use self::opcode::OPCODE_MAPPING;
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand, AST};
 
@@ -139,13 +138,13 @@ impl Compiler {
 
     /// Compile a single instruction node from the AST to machine code.
     #[tracing::instrument]
-    fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
-        let mut bytes: Vec<u8> = Vec::new();
+    pub fn instruction_to_bytes(ins: &ASTInstructionNode) -> Vec<u8> {
+        let mut bytes = vec![];
 
         bytes.push(
-            OPCODE_MAPPING
+            crate::assembler::compiler::opcode::OPCODE_MAPPING
                 .find_opcode(ins.ins)
-                .unwrap_or_else(|| panic!("Invalid instruction for opcode: {:#?}", ins)),
+                .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", ins.ins.mnemonic as u8)),
         );
 
         bytes.extend(match ins.operand {
@@ -153,13 +152,19 @@ impl Compiler {
             ASTOperand::Absolute(address) => vec![address as u8, (address >> 8) as u8],
             ASTOperand::ZeroPage(address) => vec![address],
             ASTOperand::Relative(offset) => vec![offset as u8],
+            ASTOperand::Implied => vec![],
             ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
             ASTOperand::Constant(_) => panic!("Constant should have been resolved to its value"),
-            ASTOperand::Implied => vec![],
         });
 
-        self.current_address += ins.size() as u16;
+        bytes
+    }
 
+    /// Compile a instruction to machine code and increment address.
+    #[tracing::instrument]
+    fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
+        let bytes: Vec<u8> = Compiler::instruction_to_bytes(ins);
+        self.current_address += ins.size() as u16;
         bytes
     }
 

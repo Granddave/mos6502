@@ -1,4 +1,7 @@
-use crate::ast::{ASTInstructionNode, ASTNode};
+use crate::{
+    assembler::compiler::Compiler,
+    ast::{ASTInstructionNode, ASTNode},
+};
 
 #[derive(Debug)]
 pub struct Listing {
@@ -23,17 +26,14 @@ impl Listing {
     }
 
     #[tracing::instrument]
-    fn generate_line(&self, node: &ASTInstructionNode) -> String {
-        let bytes = node.bytes();
+    fn generate_line(&self, ins: &ASTInstructionNode) -> String {
+        let bytes = Compiler::instruction_to_bytes(ins);
         let bytes_str = bytes
             .iter()
             .map(|b| format!("{:02X}", b))
             .collect::<Vec<String>>()
             .join(" ");
-        format!(
-            "${:04X}  {:08}  {}\n",
-            self.current_address, bytes_str, node
-        )
+        format!("${:04X}  {:08}  {}\n", self.current_address, bytes_str, ins)
     }
 
     #[tracing::instrument]
