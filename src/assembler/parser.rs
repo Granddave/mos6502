@@ -641,6 +641,7 @@ mod tests {
                 ),
             ),
             (
+                // Immediate - hex
                 "LDA #$C8",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDA,
@@ -649,6 +650,7 @@ mod tests {
                 ),
             ),
             (
+                // Immediate - decimal
                 "LDA #128",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDA,
@@ -657,6 +659,7 @@ mod tests {
                 ),
             ),
             (
+                // Absolute - hex
                 "ADC $BEEF",
                 ASTInstructionNode::new(
                     ASTMnemonic::ADC,
@@ -674,6 +677,7 @@ mod tests {
                 ),
             ),
             (
+                // Absolute - decimal
                 "ADC 65535",
                 ASTInstructionNode::new(
                     ASTMnemonic::ADC,
@@ -682,6 +686,7 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPage - hex
                 "ADC $C8",
                 ASTInstructionNode::new(
                     ASTMnemonic::ADC,
@@ -699,6 +704,7 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPage - decimal
                 "ADC 128",
                 ASTInstructionNode::new(
                     ASTMnemonic::ADC,
@@ -707,6 +713,7 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPageX - hex
                 "INC $C8,X",
                 ASTInstructionNode::new(
                     ASTMnemonic::INC,
@@ -715,6 +722,7 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPageX - decimal
                 "INC 128,X",
                 ASTInstructionNode::new(
                     ASTMnemonic::INC,
@@ -723,6 +731,7 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPageY - hex
                 "LDX $C8,Y",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDX,
@@ -731,6 +740,7 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPageY - decimal
                 "LDX 128,Y",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDX,
@@ -739,6 +749,7 @@ mod tests {
                 ),
             ),
             (
+                // AbsoluteX - hex
                 "CMP $00EF,X",
                 ASTInstructionNode::new(
                     ASTMnemonic::CMP,
@@ -747,6 +758,7 @@ mod tests {
                 ),
             ),
             (
+                // AbsoluteX - decimal
                 "CMP 65535,X",
                 ASTInstructionNode::new(
                     ASTMnemonic::CMP,
@@ -755,6 +767,7 @@ mod tests {
                 ),
             ),
             (
+                // AbsoluteY - decimal
                 "EOR 65535,Y",
                 ASTInstructionNode::new(
                     ASTMnemonic::EOR,
@@ -763,6 +776,7 @@ mod tests {
                 ),
             ),
             (
+                // Relative - hex
                 "BEQ $03",
                 ASTInstructionNode::new(
                     ASTMnemonic::BEQ,
@@ -771,6 +785,7 @@ mod tests {
                 ),
             ),
             (
+                // Relative - decimal
                 "BEQ 3",
                 ASTInstructionNode::new(
                     ASTMnemonic::BEQ,
@@ -779,6 +794,7 @@ mod tests {
                 ),
             ),
             (
+                // Indirect - hex
                 "JMP ($BEEF)",
                 ASTInstructionNode::new(
                     ASTMnemonic::JMP,
@@ -787,6 +803,7 @@ mod tests {
                 ),
             ),
             (
+                // Indirect - decimal
                 "JMP (65535)",
                 ASTInstructionNode::new(
                     ASTMnemonic::JMP,
@@ -795,6 +812,7 @@ mod tests {
                 ),
             ),
             (
+                // Indirect indexed X - hex
                 "EOR ($C8,X)",
                 ASTInstructionNode::new(
                     ASTMnemonic::EOR,
@@ -803,6 +821,7 @@ mod tests {
                 ),
             ),
             (
+                // Indirect indexed X - decimal
                 "EOR (128,X)",
                 ASTInstructionNode::new(
                     ASTMnemonic::EOR,
@@ -811,6 +830,7 @@ mod tests {
                 ),
             ),
             (
+                // Indirect indexed Y - hex
                 "LDA ($C8),Y",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDA,
@@ -819,6 +839,7 @@ mod tests {
                 ),
             ),
             (
+                // Indirect indexed Y - decimal
                 "LDA (128),Y",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDA,
@@ -827,6 +848,7 @@ mod tests {
                 ),
             ),
             (
+                // Implied
                 "BRK",
                 ASTInstructionNode::new(
                     ASTMnemonic::BRK,
@@ -835,6 +857,7 @@ mod tests {
                 ),
             ),
             (
+                // Accumulator
                 "LSR",
                 ASTInstructionNode::new(
                     ASTMnemonic::LSR,
