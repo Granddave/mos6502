@@ -16,6 +16,17 @@ pub enum ParseError {
     InvalidToken(String, Token),
 }
 
+// ParseError helpers.
+// Takes a reference to a `Parser` and a format string with optional arguments.
+macro_rules! invalid_token {
+    ($parser:ident, $fmt:expr) => {
+        ParseError::InvalidToken(format!($fmt), $parser.current_token.clone())
+    };
+    ($parser:ident, $fmt:expr, $($arg:tt)+) => {
+        ParseError::InvalidToken(format!($fmt, $($arg)+), $parser.current_token.clone())
+    };
+}
+
 /// Allow the parser to peek `PEEK_BUFFER_SIZE` tokens in advance
 const PEEK_BUFFER_SIZE: usize = 2;
 
@@ -88,21 +99,14 @@ impl<'a> Parser<'a> {
             self.next_token(); // Consume the colon
             Ok(label)
         } else {
-            Err(ParseError::InvalidToken(
-                "identifier followed by colon".to_owned(),
-                self.current_token.clone(),
-            ))
+            Err(invalid_token!(self, "identifier followed by colon"))
         }
     }
 
     #[tracing::instrument]
     fn parse_mnemonic(&mut self) -> Result<ASTMnemonic, ParseError> {
-        ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str()).map_err(|err| {
-            ParseError::InvalidToken(
-                format!("invalid mnemonic: {}", err),
-                self.current_token.clone(),
-            )
-        })
+        ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str())
+            .map_err(|err| invalid_token!(self, "invalid mnemonic: {}", err))
     }
 
     #[tracing::instrument]
@@ -147,20 +151,14 @@ impl<'a> Parser<'a> {
                 if let Some(byte) = self.try_parse_hex_u8() {
                     Ok((ASTAddressingMode::Immediate, ASTOperand::Immediate(byte)))
                 } else {
-                    Err(ParseError::InvalidToken(
-                        "invalid hex byte".to_owned(),
-                        self.current_token.clone(),
-                    ))
+                    Err(invalid_token!(self, "invalid hex byte"))
                 }
             }
             TokenType::Decimal => {
                 if let Ok(byte) = self.current_token.literal.parse::<u8>() {
                     Ok((ASTAddressingMode::Immediate, ASTOperand::Immediate(byte)))
                 } else {
-                    Err(ParseError::InvalidToken(
-                        "invalid decimal byte".to_owned(),
-                        self.current_token.clone(),
-                    ))
+                    Err(invalid_token!(self, "invalid decimal byte"))
                 }
             }
             TokenType::Identifier => {
@@ -170,16 +168,10 @@ impl<'a> Parser<'a> {
                         ASTOperand::Constant(identifier),
                     ))
                 } else {
-                    Err(ParseError::InvalidToken(
-                        "invalid identifier".to_owned(),
-                        self.current_token.clone(),
-                    ))
+                    Err(invalid_token!(self, "invalid identifier"))
                 }
             }
-            _ => Err(ParseError::InvalidToken(
-                "invalid literal number".to_owned(),
-                self.current_token.clone(),
-            )),
+            _ => Err(invalid_token!(self, "invalid literal number")),
         }
     }
 
@@ -194,19 +186,13 @@ impl<'a> Parser<'a> {
             // ZeroPageX/Y
             self.next_token();
             if !self.peek_token_is(0, TokenType::Identifier) {
-                return Err(ParseError::InvalidToken(
-                    "invalid ZeroPageX/Y operand".to_owned(),
-                    self.current_token.clone(),
-                ));
+                return Err(invalid_token!(self, "invalid ZeroPageX/Y operand"));
             }
             self.next_token();
             match self.current_token.literal.to_uppercase().as_str() {
                 "X" => Ok((ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte))),
                 "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte))),
-                _ => Err(ParseError::InvalidToken(
-                    "invalid ZeroPageX/Y operand".to_owned(),
-                    self.current_token.clone(),
-                )),
+                _ => Err(invalid_token!(self, "invalid ZeroPageX/Y operand")),
             }
         } else if mnemonic.is_branch() {
             Ok((
@@ -224,19 +210,13 @@ impl<'a> Parser<'a> {
         if self.peek_token_is(0, TokenType::Comma) {
             self.next_token();
             if !self.peek_token_is(0, TokenType::Identifier) {
-                return Err(ParseError::InvalidToken(
-                    "invalid hex operand".to_owned(),
-                    self.current_token.clone(),
-                ));
+                return Err(invalid_token!(self, "invalid hex operand"));
             }
             self.next_token();
             match self.current_token.literal.to_uppercase().as_str() {
                 "X" => Ok((ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word))),
                 "Y" => Ok((ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word))),
-                _ => Err(ParseError::InvalidToken(
-                    "invalid X/Y operand".to_owned(),
-                    self.current_token.clone(),
-                )),
+                _ => Err(invalid_token!(self, "invalid X/Y operand")),
             }
         } else {
             Ok((ASTAddressingMode::Absolute, ASTOperand::Absolute(word)))
@@ -254,10 +234,7 @@ impl<'a> Parser<'a> {
         } else if let Some(word) = self.try_parse_hex_u16() {
             self.parse_hex_word(word)
         } else {
-            Err(ParseError::InvalidToken(
-                "invalid hex operand".to_owned(),
-                self.current_token.clone(),
-            ))
+            Err(invalid_token!(self, "invalid hex operand"))
         }
     }
 
@@ -271,10 +248,7 @@ impl<'a> Parser<'a> {
         } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
             self.parse_hex_word(word)
         } else {
-            Err(ParseError::InvalidToken(
-                "invalid decimal operand".to_owned(),
-                self.current_token.clone(),
-            ))
+            Err(invalid_token!(self, "invalid decimal operand"))
         }
     }
 
@@ -401,10 +375,7 @@ impl<'a> Parser<'a> {
                     ASTOperand::Constant(identifier),
                 ))
             } else {
-                Err(ParseError::InvalidToken(
-                    "invalid indirect operand".to_owned(),
-                    self.current_token.clone(),
-                ))
+                Err(invalid_token!(self, "invalid indirect operand"))
             }
         }
     }
@@ -437,10 +408,7 @@ impl<'a> Parser<'a> {
             match self.current_token.literal.to_uppercase().as_str() {
                 "X" => Ok((ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant))),
                 "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant))),
-                _ => Err(ParseError::InvalidToken(
-                    "invalid ZeroPageX/Y identifier".to_owned(),
-                    self.current_token.clone(),
-                )),
+                _ => Err(invalid_token!(self, "invalid ZeroPageX/Y identifier")),
             }
         } else {
             Ok((
@@ -482,10 +450,7 @@ impl<'a> Parser<'a> {
             TokenType::Decimal => self.parse_decimal(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
             TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
-            _ => Err(ParseError::InvalidToken(
-                "invalid operand".to_owned(),
-                self.current_token.clone(),
-            )),
+            _ => Err(invalid_token!(self, "invalid operand")),
         }
     }
 
@@ -497,20 +462,14 @@ impl<'a> Parser<'a> {
 
             Ok(ASTInstructionNode::new(mnemonic, addr_mode, operand))
         } else {
-            Err(ParseError::InvalidToken(
-                "expected identifier".to_owned(),
-                self.current_token.clone(),
-            ))
+            Err(invalid_token!(self, "expected identifier"))
         }
     }
 
     #[tracing::instrument]
     fn parse_constant(&mut self) -> Result<ASTConstantNode, ParseError> {
         if !self.peek_token_is(0, TokenType::Identifier) {
-            return Err(ParseError::InvalidToken(
-                "expected identifier, got".to_owned(),
-                self.current_token.clone(),
-            ));
+            return Err(invalid_token!(self, "expected identifier, got"));
         }
 
         self.next_token(); // Consume the define keyword
@@ -525,10 +484,7 @@ impl<'a> Parser<'a> {
             } else if let Some(word) = self.try_parse_hex_u16() {
                 Ok(ASTConstantNode::new_word(identifier, word))
             } else {
-                Err(ParseError::InvalidToken(
-                    "expected hex constant".to_owned(),
-                    self.current_token.clone(),
-                ))
+                Err(invalid_token!(self, "expected hex constant"))
             }
         } else if self.current_token_is(TokenType::Decimal) {
             if let Ok(byte) = self.current_token.literal.parse::<u8>() {
@@ -536,15 +492,12 @@ impl<'a> Parser<'a> {
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
                 Ok(ASTConstantNode::new_word(identifier, word))
             } else {
-                Err(ParseError::InvalidToken(
-                    "expected decimal constant".to_owned(),
-                    self.current_token.clone(),
-                ))
+                Err(invalid_token!(self, "expected decimal constant"))
             }
         } else {
-            Err(ParseError::InvalidToken(
-                "constant expression, expected hex or decimal".to_owned(),
-                self.current_token.clone(),
+            Err(invalid_token!(
+                self,
+                "constant expression, expected hex or decimal"
             ))
         }
     }
@@ -560,10 +513,7 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenType::Define => Ok(ASTNode::Constant(self.parse_constant()?)),
-            _ => Err(ParseError::InvalidToken(
-                "start of node".to_owned(),
-                self.current_token.clone(),
-            )),
+            _ => Err(invalid_token!(self, "start of node")),
         }
     }
 
