@@ -64,8 +64,16 @@ impl<'a> Parser<'a> {
 
     #[tracing::instrument]
     fn load_next_token(&mut self) {
-        self.peek_tokens
-            .push_back(self.lexer.next_token().expect("Failed to load next token"));
+        self.peek_tokens.push_back(
+            (match self.lexer.next_token() {
+                Ok(token) => token,
+                Err(err) => {
+                    // TODO: Return a proper error
+                    panic!("Lexer error: {}", err);
+                }
+            })
+            .unwrap(),
+        );
     }
 
     #[tracing::instrument]

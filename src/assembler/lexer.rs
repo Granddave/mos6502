@@ -1,6 +1,14 @@
+use thiserror::Error;
+
 use self::token::{Token, TokenType};
 
 pub mod token;
+
+#[derive(Error, Debug)]
+pub enum LexingError {
+    #[error("Unexpected character: '{0}'")]
+    UnexpectedCharacter(char),
+}
 
 /// Lexer is used to tokenize source code.
 #[derive(Debug)]
@@ -37,7 +45,12 @@ impl<'a> Lexer<'a> {
         if self.read_position >= self.src.len() {
             self.ch = None;
         } else {
-            self.ch = Some(self.src.chars().nth(self.read_position).unwrap());
+            self.ch = Some(
+                self.src
+                    .chars()
+                    .nth(self.read_position)
+                    .expect("Index should be valid"),
+            );
         }
         self.position = self.read_position;
         self.read_position += 1;
@@ -46,10 +59,16 @@ impl<'a> Lexer<'a> {
     #[tracing::instrument]
     #[inline(always)]
     fn skip_whitespace(&mut self) {
-        while self.ch.is_some() && self.ch.unwrap().is_whitespace() {
-            if self.ch.unwrap() == '\n' {
+        while self.ch.is_some() {
+            let ch = self.ch.expect("ch should be some");
+            if !ch.is_whitespace() {
+                break;
+            }
+
+            if ch == '\n' {
                 self.line_number += 1;
             }
+
             self.read_char();
         }
     }
@@ -57,7 +76,7 @@ impl<'a> Lexer<'a> {
     #[tracing::instrument]
     #[inline(always)]
     fn skip_comment(&mut self) {
-        while self.ch.is_some() && self.ch.unwrap() != '\n' {
+        while self.ch.is_some() && self.ch.expect("ch should be some") != '\n' {
             self.read_char();
         }
     }
@@ -65,7 +84,7 @@ impl<'a> Lexer<'a> {
     #[tracing::instrument]
     fn read_while_condition(&mut self, condition: fn(char) -> bool) -> String {
         let position = self.position;
-        while self.ch.is_some() && condition(self.ch.unwrap()) {
+        while self.ch.is_some() && condition(self.ch.expect("ch should be some")) {
             self.read_char();
         }
         self.src[position..self.position].to_string()
@@ -92,13 +111,13 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
-    pub fn next_token(&mut self) -> Option<Token> {
+    pub fn next_token(&mut self) -> Result<Option<Token>, LexingError> {
         self.skip_whitespace();
-        match self.ch {
+        let token = match self.ch {
             Some(ch) => match ch {
                 ';' => {
                     self.skip_comment();
-                    self.next_token()
+                    self.next_token()?
                 }
                 '$' => {
                     self.read_char();
@@ -138,20 +157,23 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 _ => {
-                    panic!("Lexer: Unexpected character: '{}'", ch)
+                    return Err(LexingError::UnexpectedCharacter(ch));
                 }
             },
             None => Some(self.create_token(TokenType::Eof, "")),
-        }
+        };
+        Ok(token)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Ok;
+
     use super::*;
 
     #[test]
-    fn test_hex() {
+    fn test_hex() -> anyhow::Result<()> {
         let tests = vec![
             ("$00", "00"),
             ("$01", "01"),
@@ -162,14 +184,15 @@ mod tests {
         ];
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Hex);
             assert_eq!(token.literal, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_decimal() {
+    fn test_decimal() -> anyhow::Result<()> {
         let tests = vec![
             ("0", "0"),
             ("1", "1"),
@@ -179,25 +202,27 @@ mod tests {
         ];
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Decimal);
             assert_eq!(token.literal, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_identifier() {
+    fn test_identifier() -> anyhow::Result<()> {
         let tests = vec![("LDA", "LDA"), ("X", "X"), ("my_label", "my_label")];
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Identifier);
             assert_eq!(token.literal, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_instruction() {
+    fn test_instruction() -> anyhow::Result<()> {
         let tests = vec![
             (
                 "LDA #$00",
@@ -254,7 +279,7 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let mut tokens = Vec::new();
             loop {
-                let token = lexer.next_token().unwrap();
+                let token = lexer.next_token()?.unwrap();
                 tokens.push(token.clone());
                 if token.token == TokenType::Eof {
                     break;
@@ -262,10 +287,11 @@ mod tests {
             }
             assert_eq!(tokens, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_label() {
+    fn test_label() -> anyhow::Result<()> {
         let input = "my_label:";
         let result = vec![
             Token {
@@ -287,17 +313,18 @@ mod tests {
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         loop {
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             tokens.push(token.clone());
             if token.token == TokenType::Eof {
                 break;
             }
         }
         assert_eq!(tokens, result);
+        Ok(())
     }
 
     #[test]
-    fn test_define() {
+    fn test_define() -> anyhow::Result<()> {
         let input = "define my_constant $FE";
         let result = vec![
             Token {
@@ -324,17 +351,18 @@ mod tests {
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         loop {
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             tokens.push(token.clone());
             if token.token == TokenType::Eof {
                 break;
             }
         }
         assert_eq!(tokens, result);
+        Ok(())
     }
 
     #[test]
-    fn test_comment() {
+    fn test_comment() -> anyhow::Result<()> {
         let input = "; this is a comment
 LDA #$00 ; Another one
 ;Last one";
@@ -363,17 +391,18 @@ LDA #$00 ; Another one
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         loop {
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             tokens.push(token.clone());
             if token.token == TokenType::Eof {
                 break;
             }
         }
         assert_eq!(tokens, result);
+        Ok(())
     }
 
     #[test]
-    fn test_paren() {
+    fn test_paren() -> anyhow::Result<()> {
         let input = "LDA ($D2,X)";
         let result = vec![
             Token {
@@ -415,12 +444,13 @@ LDA #$00 ; Another one
         let mut lexer = Lexer::new(input);
         let mut tokens = Vec::new();
         loop {
-            let token = lexer.next_token().unwrap();
+            let token = lexer.next_token()?.unwrap();
             tokens.push(token.clone());
             if token.token == TokenType::Eof {
                 break;
             }
         }
         assert_eq!(tokens, result);
+        Ok(())
     }
 }
