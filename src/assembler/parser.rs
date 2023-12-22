@@ -263,27 +263,27 @@ impl<'a> Parser<'a> {
         &mut self,
         byte: Option<u8>,
         identifier: Option<String>,
-    ) -> (ASTAddressingMode, ASTOperand) {
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         self.next_token(); // Consume the comma
         if !self.peek_token_is(0, TokenType::Identifier) {
-            panic!("Invalid indirect indexed X operand");
+            return Err(invalid_token!(
+                self,
+                "invalid indirect indexed X operand, expected 'X'"
+            ));
         }
         self.next_token(); // Consume the 'X'
         let operand = match self.current_token.literal.to_uppercase().as_str() {
-            "X" => (
+            "X" => Ok((
                 ASTAddressingMode::IndirectIndexedX,
                 if let Some(byte) = byte {
                     ASTOperand::ZeroPage(byte)
                 } else if let Some(identifier) = identifier {
                     ASTOperand::Constant(identifier)
                 } else {
-                    panic!("Invalid indirect indexed X operand")
+                    return Err(invalid_token!(self, "invalid indirect indexed X operand"));
                 },
-            ),
-            _ => panic!(
-                "Invalid indirect indexed X operand, got {:#?}",
-                self.current_token.literal
-            ),
+            )),
+            _ => Err(invalid_token!(self, "Invalid indirect indexed X operand")),
         };
         self.next_token(); // Consume the closing parenthesis
         operand
@@ -295,34 +295,40 @@ impl<'a> Parser<'a> {
         &mut self,
         byte: Option<u8>,
         identifier: Option<String>,
-    ) -> (ASTAddressingMode, ASTOperand) {
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         self.next_token(); // Consume the closing parenthesis
         if !self.peek_token_is(0, TokenType::Comma) {
-            panic!("Invalid indirect indexed Y operand. Expected ','")
+            return Err(invalid_token!(
+                self,
+                "invalid indirect indexed Y operand, expected ','"
+            ));
         }
         self.next_token(); // Consume the comma
         self.next_token(); // Consume the 'Y' identifier
         match self.current_token.literal.to_uppercase().as_str() {
-            "Y" => (
+            "Y" => Ok((
                 ASTAddressingMode::IndirectIndexedY,
                 if let Some(byte) = byte {
                     ASTOperand::ZeroPage(byte)
                 } else if let Some(identifier) = identifier {
                     ASTOperand::Constant(identifier)
                 } else {
-                    panic!("Invalid indirect indexed Y operand")
+                    return Err(invalid_token!(self, "invalid indirect indexed Y operand"));
                 },
-            ),
-            _ => panic!(
-                "Invalid indirect indexed Y operand, Expected 'Y', got {:#?}",
-                self.current_token.literal
-            ),
+            )),
+            _ => Err(invalid_token!(
+                self,
+                "Invalid indirect indexed Y operand, Expected 'Y'"
+            )),
         }
     }
 
     // (u8,X) or (u8),Y - where u8 is a byte or a constant
     #[tracing::instrument]
-    fn try_parse_indirect_indexed(&mut self) -> Option<(ASTAddressingMode, ASTOperand)> {
+    fn try_parse_indirect_indexed(
+        &mut self,
+    ) -> Result<Option<(ASTAddressingMode, ASTOperand)>, ParseError> {
+        // Note: open parenthesis is already consumed
         let byte = {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Some(byte)
@@ -338,27 +344,27 @@ impl<'a> Parser<'a> {
             if self.peek_token_is(0, TokenType::Comma)
                 && self.peek_token_is(1, TokenType::Identifier)
             {
-                Some(self.parse_indirect_indexed_x(byte, identifier))
+                Ok(Some(self.parse_indirect_indexed_x(byte, identifier)?))
             } else if self.peek_token_is(0, TokenType::ParenRight)
                 && self.peek_token_is(1, TokenType::Comma)
             {
-                Some(self.parse_indirect_indexed_y(byte, identifier))
+                Ok(Some(self.parse_indirect_indexed_y(byte, identifier)?))
             } else {
-                None
+                Ok(None)
             }
         } else {
-            None
+            Ok(None)
         }
     }
 
-    // (u8,X) or (u8),Y - where u8 is a byte or a constant
+    // (u8,X) or (u8),Y - indirect indexed where u8 is a byte or a constant
     // or
-    // (u16) or - where u16 is a word or a constant
+    // (u16) or - absolute indirect where u16 is a word or a constant
     #[tracing::instrument]
     fn parse_indirect(&mut self) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         self.next_token(); // Consume the opening parenthesis
 
-        if let Some(indirect_indexed) = self.try_parse_indirect_indexed() {
+        if let Some(indirect_indexed) = self.try_parse_indirect_indexed()? {
             Ok(indirect_indexed)
         } else {
             // Absolute indirect, i.e. ($BEEF)
