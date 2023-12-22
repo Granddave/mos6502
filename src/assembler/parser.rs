@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, str::FromStr};
 
 use crate::{
-    assembler::lexer::{Lexer, Token, TokenType},
+    assembler::lexer::{token::Token, token::TokenType, Lexer},
     ast::{
         ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand,
         AST,
