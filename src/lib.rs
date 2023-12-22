@@ -1,6 +1,12 @@
 // Allow during initial development
 #![allow(dead_code)]
 
+// Error handling:
+// - Use anyhow for user facing errors
+// - Use thiserror for internal errors
+//
+// Error from inside the library should be converted to anyhow::Error before returning to the user.
+
 /// AST (Abstract Syntax Tree) node types.
 ///
 /// The AST is a tree representation of the source code.

@@ -1,5 +1,7 @@
 use std::{collections::VecDeque, str::FromStr};
 
+use thiserror::Error;
+
 use crate::{
     assembler::lexer::{token::Token, token::TokenType, Lexer},
     ast::{
@@ -7,6 +9,12 @@ use crate::{
         AST,
     },
 };
+
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Invalid token - {0}:\n{1:#?}")]
+    InvalidToken(String, Token),
+}
 
 /// Allow the parser to peek `PEEK_BUFFER_SIZE` tokens in advance
 const PEEK_BUFFER_SIZE: usize = 2;
@@ -74,25 +82,27 @@ impl<'a> Parser<'a> {
     }
 
     #[tracing::instrument]
-    fn parse_label(&mut self) -> String {
+    fn parse_label(&mut self) -> Result<String, ParseError> {
         if self.current_token_is(TokenType::Identifier) && self.peek_token_is(0, TokenType::Colon) {
             let label = self.current_token.literal.clone();
             self.next_token(); // Consume the colon
-            label
+            Ok(label)
         } else {
-            panic!(
-                "Expected identifier followed by colon, got {:#?}",
-                self.current_token.token
-            );
+            Err(ParseError::InvalidToken(
+                "identifier followed by colon".to_owned(),
+                self.current_token.clone(),
+            ))
         }
     }
 
     #[tracing::instrument]
-    fn parse_mnemonic(&mut self) -> ASTMnemonic {
-        match ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str()) {
-            Ok(mnemonic) => mnemonic,
-            Err(err) => panic!("Invalid mnemonic: {}: {}", err, self.current_token.literal),
-        }
+    fn parse_mnemonic(&mut self) -> Result<ASTMnemonic, ParseError> {
+        ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str()).map_err(|err| {
+            ParseError::InvalidToken(
+                format!("invalid mnemonic: {}", err),
+                self.current_token.clone(),
+            )
+        })
     }
 
     #[tracing::instrument]
@@ -130,37 +140,46 @@ impl<'a> Parser<'a> {
     /// - Decimal: #xx
     /// - Identifier: #constant
     #[tracing::instrument]
-    fn parse_literal_number(&mut self) -> (ASTAddressingMode, ASTOperand) {
+    fn parse_literal_number(&mut self) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         self.next_token();
         match self.current_token.token {
             TokenType::Hex => {
                 if let Some(byte) = self.try_parse_hex_u8() {
-                    (ASTAddressingMode::Immediate, ASTOperand::Immediate(byte))
+                    Ok((ASTAddressingMode::Immediate, ASTOperand::Immediate(byte)))
                 } else {
-                    panic!("Invalid hex byte");
+                    Err(ParseError::InvalidToken(
+                        "invalid hex byte".to_owned(),
+                        self.current_token.clone(),
+                    ))
                 }
             }
             TokenType::Decimal => {
                 if let Ok(byte) = self.current_token.literal.parse::<u8>() {
-                    (ASTAddressingMode::Immediate, ASTOperand::Immediate(byte))
+                    Ok((ASTAddressingMode::Immediate, ASTOperand::Immediate(byte)))
                 } else {
-                    panic!("Invalid decimal byte");
+                    Err(ParseError::InvalidToken(
+                        "invalid decimal byte".to_owned(),
+                        self.current_token.clone(),
+                    ))
                 }
             }
             TokenType::Identifier => {
                 if let Some(identifier) = self.try_parse_identifier() {
-                    (
+                    Ok((
                         ASTAddressingMode::Immediate,
                         ASTOperand::Constant(identifier),
-                    )
+                    ))
                 } else {
-                    panic!("Invalid identifier");
+                    Err(ParseError::InvalidToken(
+                        "invalid identifier".to_owned(),
+                        self.current_token.clone(),
+                    ))
                 }
             }
-            _ => panic!(
-                "Invalid literal number, got {:#?}",
-                self.current_token.token
-            ),
+            _ => Err(ParseError::InvalidToken(
+                "invalid literal number".to_owned(),
+                self.current_token.clone(),
+            )),
         }
     }
 
@@ -417,50 +436,54 @@ impl<'a> Parser<'a> {
     fn parse_addressing_mode_and_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
-    ) -> (ASTAddressingMode, ASTOperand) {
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if mnemonic.is_implied() {
-            return (ASTAddressingMode::Implied, ASTOperand::Implied);
+            return Ok((ASTAddressingMode::Implied, ASTOperand::Implied));
         }
 
         if mnemonic.has_accumulator_addressing_mode()
             && (self.peek_token_is_mnemonic(0) || self.peek_token_is(0, TokenType::Eof))
         {
-            return (ASTAddressingMode::Accumulator, ASTOperand::Implied);
+            return Ok((ASTAddressingMode::Accumulator, ASTOperand::Implied));
         }
 
         self.next_token();
 
         match self.current_token.token {
             TokenType::LiteralNumber => self.parse_literal_number(),
-            TokenType::Hex => self.parse_hex(mnemonic),
-            TokenType::Decimal => self.parse_decimal(mnemonic),
-            TokenType::ParenLeft => self.parse_indirect(),
-            TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
-            _ => panic!("Invalid operand, got {:#?}", self.current_token.token),
+            TokenType::Hex => Ok(self.parse_hex(mnemonic)), // TODO: Error handling
+            TokenType::Decimal => Ok(self.parse_decimal(mnemonic)), // TODO: Error handling
+            TokenType::ParenLeft => Ok(self.parse_indirect()), // TODO: Error handling
+            TokenType::Identifier => Ok(self.parse_operand_with_identifier(mnemonic)), // TODO: Error handling
+            _ => Err(ParseError::InvalidToken(
+                "invalid operand".to_owned(),
+                self.current_token.clone(),
+            )),
         }
     }
 
     #[tracing::instrument]
-    fn parse_instruction(&mut self) -> ASTInstructionNode {
+    fn parse_instruction(&mut self) -> Result<ASTInstructionNode, ParseError> {
         if self.current_token_is(TokenType::Identifier) {
-            let mnemonic = self.parse_mnemonic();
-            let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic);
+            let mnemonic = self.parse_mnemonic()?;
+            let (addr_mode, operand) = self.parse_addressing_mode_and_operand(&mnemonic)?;
 
-            // eprintln!(
-            //     "parsed mnemonic: {:#?}, addr_mode: {:#?}, operand: {:#?}",
-            //     mnemonic, addr_mode, operand
-            // );
-
-            ASTInstructionNode::new(mnemonic, addr_mode, operand)
+            Ok(ASTInstructionNode::new(mnemonic, addr_mode, operand))
         } else {
-            panic!("Expected identifier, got {:#?}", self.current_token.token);
+            Err(ParseError::InvalidToken(
+                "expected identifier".to_owned(),
+                self.current_token.clone(),
+            ))
         }
     }
 
     #[tracing::instrument]
-    fn parse_constant(&mut self) -> ASTConstantNode {
+    fn parse_constant(&mut self) -> Result<ASTConstantNode, ParseError> {
         if !self.peek_token_is(0, TokenType::Identifier) {
-            panic!("Expected identifier");
+            return Err(ParseError::InvalidToken(
+                "expected identifier, got".to_owned(),
+                self.current_token.clone(),
+            ));
         }
 
         self.next_token(); // Consume the define keyword
@@ -470,61 +493,67 @@ impl<'a> Parser<'a> {
 
         if self.current_token_is(TokenType::Hex) {
             if let Some(byte) = self.try_parse_hex_u8() {
-                ASTConstantNode::new_byte(identifier, byte)
+                Ok(ASTConstantNode::new_byte(identifier, byte))
             // TODO: Make sure to not let 0x00FF be parsed as a byte!
             } else if let Some(word) = self.try_parse_hex_u16() {
-                ASTConstantNode::new_word(identifier, word)
+                Ok(ASTConstantNode::new_word(identifier, word))
             } else {
-                panic!("Invalid hex constant: {}", self.current_token.literal);
+                Err(ParseError::InvalidToken(
+                    "expected hex constant".to_owned(),
+                    self.current_token.clone(),
+                ))
             }
         } else if self.current_token_is(TokenType::Decimal) {
             if let Ok(byte) = self.current_token.literal.parse::<u8>() {
-                ASTConstantNode::new_byte(identifier, byte)
+                Ok(ASTConstantNode::new_byte(identifier, byte))
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
-                ASTConstantNode::new_word(identifier, word)
+                Ok(ASTConstantNode::new_word(identifier, word))
             } else {
-                panic!("Invalid decimal constant: {}", self.current_token.literal);
+                Err(ParseError::InvalidToken(
+                    "expected decimal constant".to_owned(),
+                    self.current_token.clone(),
+                ))
             }
         } else {
-            panic!(
-                "Expected hex or decimal constant: {}",
-                self.current_token.literal
-            );
+            Err(ParseError::InvalidToken(
+                "constant expression, expected hex or decimal".to_owned(),
+                self.current_token.clone(),
+            ))
         }
     }
 
     #[tracing::instrument]
-    fn parse_node(&mut self) -> ASTNode {
+    fn parse_node(&mut self) -> Result<ASTNode, ParseError> {
         match &self.current_token.token {
             TokenType::Identifier => {
                 if self.peek_token_is(0, TokenType::Colon) {
-                    ASTNode::Label(self.parse_label())
+                    Ok(ASTNode::Label(self.parse_label()?))
                 } else {
-                    ASTNode::Instruction(self.parse_instruction())
+                    Ok(ASTNode::Instruction(self.parse_instruction()?))
                 }
             }
-            TokenType::Define => ASTNode::Constant(self.parse_constant()),
-            _ => panic!(
-                "parse_node: Unexpected token type: {:#?}",
-                self.current_token.token
-            ),
+            TokenType::Define => Ok(ASTNode::Constant(self.parse_constant()?)),
+            _ => Err(ParseError::InvalidToken(
+                "start of node".to_owned(),
+                self.current_token.clone(),
+            )),
         }
     }
 
     /// Parse the entire program into an AST
     #[tracing::instrument]
-    pub fn parse_program(&mut self) -> AST {
+    pub fn parse_program(&mut self) -> Result<AST, ParseError> {
         let mut ast_nodes = Vec::new();
         loop {
             if self.current_token_is(TokenType::Eof) {
                 break;
             }
 
-            ast_nodes.push(self.parse_node());
+            ast_nodes.push(self.parse_node()?);
             self.next_token();
         }
 
-        ast_nodes
+        Ok(ast_nodes)
     }
 }
 
@@ -572,18 +601,19 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_label() {
+    fn test_parse_label() -> Result<(), ParseError> {
         let tests = vec![("label:", "label".to_string())];
 
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let mut parser = Parser::new(&mut lexer);
-            assert_eq!(parser.parse_label(), expected);
+            assert_eq!(parser.parse_label()?, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_mnemonic() {
+    fn test_parse_mnemonic() -> Result<(), ParseError> {
         // A subset of the 6502 mnemonics
         let tests = vec![
             ("LDA", ASTMnemonic::LDA),
@@ -597,12 +627,13 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let mut parser = Parser::new(&mut lexer);
-            assert_eq!(parser.parse_mnemonic(), expected);
+            assert_eq!(parser.parse_mnemonic()?, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_instruction() {
+    fn test_instruction() -> Result<(), ParseError> {
         let tests = vec![
             (
                 "LDA #$C8",
@@ -793,12 +824,13 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let mut parser = Parser::new(&mut lexer);
-            assert_eq!(parser.parse_instruction(), expected);
+            assert_eq!(parser.parse_instruction()?, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_constant() {
+    fn test_parse_constant() -> Result<(), ParseError> {
         let tests = vec![
             (
                 "define zero $00",
@@ -945,12 +977,13 @@ mod tests {
             let mut parser = Parser::new(&mut lexer);
             eprintln!("-----");
             eprintln!("input: \n\n{}\n", input);
-            assert_eq!(parser.parse_program(), expected);
+            assert_eq!(parser.parse_program()?, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn test_parse_program() {
+    fn test_parse_program() -> Result<(), ParseError> {
         let input = "  define zero 0
   LDX #zero
   LDY #0
@@ -1045,7 +1078,7 @@ secondloop:
         ];
         let mut lexer = Lexer::new(input);
         let mut parser = Parser::new(&mut lexer);
-        let program = parser.parse_program();
-        assert_eq!(program, expected);
+        assert_eq!(parser.parse_program()?, expected);
+        Ok(())
     }
 }
