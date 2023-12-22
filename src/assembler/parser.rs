@@ -113,6 +113,9 @@ impl<'a> Parser<'a> {
     fn try_parse_hex_u8(&mut self) -> Option<u8> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
+        if operand.len() != 2 {
+            return None;
+        }
         match u8::from_str_radix(operand, 16) {
             Ok(word) => Some(word),
             Err(_) => None,
@@ -123,6 +126,9 @@ impl<'a> Parser<'a> {
     fn try_parse_hex_u16(&mut self) -> Option<u16> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
+        if operand.len() != 4 {
+            return None;
+        }
         match u16::from_str_radix(operand, 16) {
             Ok(word) => Some(word),
             Err(_) => None,
@@ -228,7 +234,6 @@ impl<'a> Parser<'a> {
         &mut self,
         mnemonic: &ASTMnemonic,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        // TODO: Make sure to not let 0x00FF be parsed as a byte!
         if let Some(byte) = self.try_parse_hex_u8() {
             self.parse_hex_byte(byte, mnemonic)
         } else if let Some(word) = self.try_parse_hex_u16() {
@@ -357,7 +362,6 @@ impl<'a> Parser<'a> {
             Ok(indirect_indexed)
         } else {
             // Absolute indirect, i.e. ($BEEF)
-            // TODO: Make sure to not let 0x00FF be parsed as a byte!
             if let Some(word) = self.try_parse_hex_u16() {
                 // Hex
                 self.next_token(); // Consume the closing parenthesis
@@ -480,7 +484,6 @@ impl<'a> Parser<'a> {
         if self.current_token_is(TokenType::Hex) {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Ok(ASTConstantNode::new_byte(identifier, byte))
-            // TODO: Make sure to not let 0x00FF be parsed as a byte!
             } else if let Some(word) = self.try_parse_hex_u16() {
                 Ok(ASTConstantNode::new_word(identifier, word))
             } else {
@@ -692,15 +695,14 @@ mod tests {
                     ASTOperand::ZeroPage(128),
                 ),
             ),
-            // TODO: Enable test when fix for zero padded u16 is in place
-            // (
-            //     "CMP $00EF,X",
-            //     ASTInstructionNode::new(
-            //         ASTMnemonic::CMP,
-            //         ASTAddressingMode::AbsoluteX,
-            //         ASTOperand::Absolute(0x00EF),
-            //     ),
-            // ),
+            (
+                "CMP $00EF,X",
+                ASTInstructionNode::new(
+                    ASTMnemonic::CMP,
+                    ASTAddressingMode::AbsoluteX,
+                    ASTOperand::Absolute(0x00EF),
+                ),
+            ),
             (
                 "CMP 65535,X",
                 ASTInstructionNode::new(
