@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::prelude::*;
 
-fn default() -> &'static str {
+fn demo() -> &'static str {
     "
   LDX #$00
   LDY #$00
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
     let input_source = if let Some(filename) = std::env::args().nth(1) {
         std::fs::read_to_string(filename).unwrap()
     } else {
-        default().to_string()
+        demo().to_string()
     };
 
     let bytes =
