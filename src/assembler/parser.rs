@@ -30,7 +30,7 @@ impl<'a> Parser<'a> {
 
         let mut parser = Self {
             lexer,
-            current_token: Token::new(),
+            current_token: Token::default(),
             peek_tokens: VecDeque::with_capacity(PEEK_BUFFER_SIZE),
         };
 

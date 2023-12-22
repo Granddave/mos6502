@@ -33,7 +33,7 @@ impl Default for TokenType {
 }
 
 /// Token is a lexical unit of source code.
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     /// Type of Token
     pub token: TokenType,
@@ -43,13 +43,24 @@ pub struct Token {
     pub line_number: usize,
 }
 
-impl Token {
+impl Default for Token {
     #[tracing::instrument]
-    pub fn new() -> Self {
+    fn default() -> Self {
         Self {
             token: TokenType::Eof,
             literal: "".to_string(),
             line_number: 1,
+        }
+    }
+}
+
+impl Token {
+    #[tracing::instrument]
+    pub fn new(token: TokenType, literal: &str, line_number: usize) -> Self {
+        Self {
+            token,
+            literal: literal.to_owned(),
+            line_number,
         }
     }
 }
@@ -132,33 +143,33 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Instruction mnemonic, label or constant definition
     #[tracing::instrument]
-    fn read_string(&mut self) -> String {
+    fn read_while_condition(&mut self, condition: fn(char) -> bool) -> String {
         let position = self.position;
-        // Allow alphanumeric and underscore
-        while self.ch.is_some() && (self.ch.unwrap().is_alphanumeric() || self.ch.unwrap() == '_') {
+        while self.ch.is_some() && condition(self.ch.unwrap()) {
             self.read_char();
         }
         self.src[position..self.position].to_string()
+    }
+
+    #[tracing::instrument]
+    fn read_string(&mut self) -> String {
+        self.read_while_condition(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_')
     }
 
     #[tracing::instrument]
     fn read_hex(&mut self) -> String {
-        let position = self.position;
-        while self.ch.is_some() && self.ch.unwrap().is_ascii_hexdigit() {
-            self.read_char();
-        }
-        self.src[position..self.position].to_string()
+        self.read_while_condition(|ch| ch.is_ascii_hexdigit())
+    }
+
+    #[tracing::instrument]
+    fn read_decimal(&mut self) -> String {
+        self.read_while_condition(|ch| ch.is_ascii_digit())
     }
 
     #[tracing::instrument]
     fn create_token(&mut self, token: TokenType, literal: &str) -> Token {
-        Token {
-            token,
-            literal: literal.to_string(),
-            line_number: self.line_number,
-        }
+        Token::new(token, literal, self.line_number)
     }
 
     #[tracing::instrument]
@@ -176,7 +187,7 @@ impl<'a> Lexer<'a> {
                     Some(self.create_token(TokenType::Hex, &hex))
                 }
                 '0'..='9' => {
-                    let decimal = self.read_string();
+                    let decimal = self.read_decimal();
                     Some(self.create_token(TokenType::Decimal, &decimal))
                 }
                 '#' => {
