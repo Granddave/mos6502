@@ -121,7 +121,8 @@ impl<'a> Parser<'a> {
     fn try_parse_hex_u8(&mut self) -> Option<u8> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
-        if operand.len() != 2 {
+        if operand.len() > 2 {
+            // Allow $F and $0F
             return None;
         }
         match u8::from_str_radix(operand, 16) {
@@ -134,7 +135,8 @@ impl<'a> Parser<'a> {
     fn try_parse_hex_u16(&mut self) -> Option<u16> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
-        if operand.len() != 4 {
+        if operand.len() < 2 || operand.len() > 4 {
+            // Allow $00F and $000F
             return None;
         }
         match u16::from_str_radix(operand, 16) {
@@ -630,6 +632,15 @@ mod tests {
     fn test_instruction() -> Result<(), ParseError> {
         let tests = vec![
             (
+                // Immediate - small hex
+                "LDA #$c8",
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::Immediate,
+                    ASTOperand::Immediate(0xC8),
+                ),
+            ),
+            (
                 "LDA #$C8",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDA,
@@ -654,6 +665,15 @@ mod tests {
                 ),
             ),
             (
+                // Absolute - hex, word with leading zeros
+                "ADC $ABC",
+                ASTInstructionNode::new(
+                    ASTMnemonic::ADC,
+                    ASTAddressingMode::Absolute,
+                    ASTOperand::Absolute(0x0ABC),
+                ),
+            ),
+            (
                 "ADC 65535",
                 ASTInstructionNode::new(
                     ASTMnemonic::ADC,
@@ -667,6 +687,15 @@ mod tests {
                     ASTMnemonic::ADC,
                     ASTAddressingMode::ZeroPage,
                     ASTOperand::ZeroPage(0xC8),
+                ),
+            ),
+            (
+                // ZeroPage - hex, byte with leading zeros
+                "ADC $F",
+                ASTInstructionNode::new(
+                    ASTMnemonic::ADC,
+                    ASTAddressingMode::ZeroPage,
+                    ASTOperand::ZeroPage(0x0F),
                 ),
             ),
             (
