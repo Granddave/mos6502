@@ -189,68 +189,92 @@ impl<'a> Parser<'a> {
         &mut self,
         byte: u8,
         mnemonic: &ASTMnemonic,
-    ) -> (ASTAddressingMode, ASTOperand) {
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y
             self.next_token();
             if !self.peek_token_is(0, TokenType::Identifier) {
-                panic!("Invalid ZeroPageX/Y operand")
+                return Err(ParseError::InvalidToken(
+                    "invalid ZeroPageX/Y operand".to_owned(),
+                    self.current_token.clone(),
+                ));
             }
             self.next_token();
             match self.current_token.literal.to_uppercase().as_str() {
-                "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte)),
-                "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte)),
-                _ => panic!("Invalid ZeroPageX/Y operand"),
+                "X" => Ok((ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte))),
+                "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte))),
+                _ => Err(ParseError::InvalidToken(
+                    "invalid ZeroPageX/Y operand".to_owned(),
+                    self.current_token.clone(),
+                )),
             }
         } else if mnemonic.is_branch() {
-            (
+            Ok((
                 ASTAddressingMode::Relative,
                 ASTOperand::Relative(byte as i8),
-            )
+            ))
         } else {
-            (ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(byte))
+            Ok((ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(byte)))
         }
     }
 
     // TODO: Rename to generic parse_word
     #[tracing::instrument]
-    fn parse_hex_word(&mut self, word: u16) -> (ASTAddressingMode, ASTOperand) {
+    fn parse_hex_word(&mut self, word: u16) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
             self.next_token();
             if !self.peek_token_is(0, TokenType::Identifier) {
-                panic!("Invalid hex operand");
+                return Err(ParseError::InvalidToken(
+                    "invalid hex operand".to_owned(),
+                    self.current_token.clone(),
+                ));
             }
             self.next_token();
             match self.current_token.literal.to_uppercase().as_str() {
-                "X" => (ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word)),
-                "Y" => (ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word)),
-                _ => panic!("Invalid AbsoluteX/Y operand"),
+                "X" => Ok((ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word))),
+                "Y" => Ok((ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word))),
+                _ => Err(ParseError::InvalidToken(
+                    "invalid X/Y operand".to_owned(),
+                    self.current_token.clone(),
+                )),
             }
         } else {
-            (ASTAddressingMode::Absolute, ASTOperand::Absolute(word))
+            Ok((ASTAddressingMode::Absolute, ASTOperand::Absolute(word)))
         }
     }
 
     #[tracing::instrument]
-    fn parse_hex(&mut self, mnemonic: &ASTMnemonic) -> (ASTAddressingMode, ASTOperand) {
+    fn parse_hex(
+        &mut self,
+        mnemonic: &ASTMnemonic,
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         // TODO: Make sure to not let 0x00FF be parsed as a byte!
         if let Some(byte) = self.try_parse_hex_u8() {
             self.parse_hex_byte(byte, mnemonic)
         } else if let Some(word) = self.try_parse_hex_u16() {
             self.parse_hex_word(word)
         } else {
-            panic!("Invalid hex operand: {}", self.current_token.literal);
+            Err(ParseError::InvalidToken(
+                "invalid hex operand".to_owned(),
+                self.current_token.clone(),
+            ))
         }
     }
 
     #[tracing::instrument]
-    fn parse_decimal(&mut self, mnemonic: &ASTMnemonic) -> (ASTAddressingMode, ASTOperand) {
+    fn parse_decimal(
+        &mut self,
+        mnemonic: &ASTMnemonic,
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if let Ok(byte) = self.current_token.literal.parse::<u8>() {
             self.parse_hex_byte(byte, mnemonic)
         } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
             self.parse_hex_word(word)
         } else {
-            panic!("Invalid decimal operand: {}", self.current_token.literal);
+            Err(ParseError::InvalidToken(
+                "invalid decimal operand".to_owned(),
+                self.current_token.clone(),
+            ))
         }
     }
 
@@ -352,32 +376,35 @@ impl<'a> Parser<'a> {
     // or
     // (u16) or - where u16 is a word or a constant
     #[tracing::instrument]
-    fn parse_indirect(&mut self) -> (ASTAddressingMode, ASTOperand) {
+    fn parse_indirect(&mut self) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         self.next_token(); // Consume the opening parenthesis
 
         if let Some(indirect_indexed) = self.try_parse_indirect_indexed() {
-            indirect_indexed
+            Ok(indirect_indexed)
         } else {
             // Absolute indirect, i.e. ($BEEF)
             // TODO: Make sure to not let 0x00FF be parsed as a byte!
             if let Some(word) = self.try_parse_hex_u16() {
                 // Hex
                 self.next_token(); // Consume the closing parenthesis
-                (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
+                Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
                 // Decimal
                 self.next_token(); // Consume the closing parenthesis
-                (ASTAddressingMode::Indirect, ASTOperand::Absolute(word))
+                Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
             } else if self.current_token_is(TokenType::Identifier) {
                 // Constant
                 let identifier = self.current_token.literal.clone();
                 self.next_token(); // Consume the identifier
-                (
+                Ok((
                     ASTAddressingMode::Indirect,
                     ASTOperand::Constant(identifier),
-                )
+                ))
             } else {
-                panic!("Invalid indirect operand")
+                Err(ParseError::InvalidToken(
+                    "invalid indirect operand".to_owned(),
+                    self.current_token.clone(),
+                ))
             }
         }
     }
@@ -396,34 +423,34 @@ impl<'a> Parser<'a> {
     fn parse_operand_with_identifier(
         &mut self,
         mnemonic: &ASTMnemonic,
-    ) -> (ASTAddressingMode, ASTOperand) {
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if mnemonic.is_branch() || mnemonic.is_jump() {
-            (
+            Ok((
                 self.addressing_mode_for_label(mnemonic),
                 ASTOperand::Label(self.current_token.literal.clone()),
-            )
+            ))
         } else if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y with constant
             let constant = self.current_token.literal.clone();
             self.next_token(); // Consume the comma
             self.next_token(); // Consume the 'X' or 'Y'
             match self.current_token.literal.to_uppercase().as_str() {
-                "X" => (ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant)),
-                "Y" => (ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant)),
-                _ => panic!(
-                    "Invalid ZeroPageX/Y identifier, got {:#?}",
-                    self.current_token.literal
-                ),
+                "X" => Ok((ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant))),
+                "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant))),
+                _ => Err(ParseError::InvalidToken(
+                    "invalid ZeroPageX/Y identifier".to_owned(),
+                    self.current_token.clone(),
+                )),
             }
         } else {
-            (
+            Ok((
                 // We don't know the size of the constant as this point (i.e. byte or word), so we
                 // have to use the Constant addressing mode.
                 // The compiler will later determine the size of the constant and switch to the
                 // correct addressing mode, i.e. Absolute or ZeroPage.
                 ASTAddressingMode::Constant,
                 ASTOperand::Constant(self.current_token.literal.clone()),
-            )
+            ))
         }
     }
 
@@ -451,10 +478,10 @@ impl<'a> Parser<'a> {
 
         match self.current_token.token {
             TokenType::LiteralNumber => self.parse_literal_number(),
-            TokenType::Hex => Ok(self.parse_hex(mnemonic)), // TODO: Error handling
-            TokenType::Decimal => Ok(self.parse_decimal(mnemonic)), // TODO: Error handling
-            TokenType::ParenLeft => Ok(self.parse_indirect()), // TODO: Error handling
-            TokenType::Identifier => Ok(self.parse_operand_with_identifier(mnemonic)), // TODO: Error handling
+            TokenType::Hex => self.parse_hex(mnemonic),
+            TokenType::Decimal => self.parse_decimal(mnemonic),
+            TokenType::ParenLeft => self.parse_indirect(),
+            TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
             _ => Err(ParseError::InvalidToken(
                 "invalid operand".to_owned(),
                 self.current_token.clone(),
