@@ -5,6 +5,8 @@ pub enum TokenType {
     LiteralNumber,
     /// `$` Hex prefix including hex number
     Hex,
+    /// `%` Binary prefix including binary number
+    Binary,
     /// Decimal number
     Decimal,
     /// `:` Label suffix character
@@ -60,6 +62,7 @@ impl ToString for Token {
         match self.token {
             TokenType::LiteralNumber => self.literal.to_owned(),
             TokenType::Hex => "$".to_string() + &self.literal,
+            TokenType::Binary => "%".to_string() + &self.literal,
             TokenType::Decimal => self.literal.to_owned(),
             TokenType::Colon => ":".to_owned(),
             TokenType::Define => "define".to_owned(),

@@ -101,6 +101,11 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
+    fn read_binary(&mut self) -> String {
+        self.read_while_condition(|ch| ch == '0' || ch == '1')
+    }
+
+    #[tracing::instrument]
     fn read_decimal(&mut self) -> String {
         self.read_while_condition(|ch| ch.is_ascii_digit())
     }
@@ -123,6 +128,11 @@ impl<'a> Lexer<'a> {
                     self.read_char();
                     let hex = self.read_hex();
                     Some(self.create_token(TokenType::Hex, &hex))
+                }
+                '%' => {
+                    self.read_char();
+                    let binary = self.read_binary();
+                    Some(self.create_token(TokenType::Binary, &binary))
                 }
                 '0'..='9' => {
                     let decimal = self.read_decimal();
@@ -175,6 +185,7 @@ mod tests {
     #[test]
     fn test_hex() -> anyhow::Result<()> {
         let tests = vec![
+            ("$0", "0"),
             ("$00", "00"),
             ("$01", "01"),
             ("$10", "10"),
@@ -186,6 +197,24 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Hex);
+            assert_eq!(token.literal, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_binary() -> anyhow::Result<()> {
+        let tests = vec![
+            ("%0", "0"),
+            ("%00", "00"),
+            ("%0000", "0000"),
+            ("%0101", "0101"),
+            ("%01010101", "01010101"),
+        ];
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let token = lexer.next_token()?.unwrap();
+            assert_eq!(token.token, TokenType::Binary);
             assert_eq!(token.literal, expected);
         }
         Ok(())
@@ -240,6 +269,31 @@ mod tests {
                     Token {
                         token: TokenType::Hex,
                         literal: "00".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::Eof,
+                        literal: "".to_string(),
+                        line_number: 1,
+                    },
+                ],
+            ),
+            (
+                "LDA #%01010101",
+                vec![
+                    Token {
+                        token: TokenType::Identifier,
+                        literal: "LDA".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::LiteralNumber,
+                        literal: "#".to_string(),
+                        line_number: 1,
+                    },
+                    Token {
+                        token: TokenType::Binary,
+                        literal: "01010101".to_string(),
                         line_number: 1,
                     },
                     Token {
