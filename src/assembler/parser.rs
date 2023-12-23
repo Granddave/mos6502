@@ -650,6 +650,15 @@ mod tests {
                 ),
             ),
             (
+                // Immediate - hex
+                "LDA #%01010101",
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::Immediate,
+                    ASTOperand::Immediate(0b01010101),
+                ),
+            ),
+            (
                 // Immediate - decimal
                 "LDA #128",
                 ASTInstructionNode::new(
@@ -674,6 +683,15 @@ mod tests {
                     ASTMnemonic::ADC,
                     ASTAddressingMode::Absolute,
                     ASTOperand::Absolute(0x0ABC),
+                ),
+            ),
+            (
+                // Absolute - decimal
+                "ADC %1111111111111111",
+                ASTInstructionNode::new(
+                    ASTMnemonic::ADC,
+                    ASTAddressingMode::Absolute,
+                    ASTOperand::Absolute(0b1111111111111111),
                 ),
             ),
             (
@@ -704,6 +722,15 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPage - binary
+                "ADC %10000000",
+                ASTInstructionNode::new(
+                    ASTMnemonic::ADC,
+                    ASTAddressingMode::ZeroPage,
+                    ASTOperand::ZeroPage(0b10000000),
+                ),
+            ),
+            (
                 // ZeroPage - decimal
                 "ADC 128",
                 ASTInstructionNode::new(
@@ -719,6 +746,15 @@ mod tests {
                     ASTMnemonic::INC,
                     ASTAddressingMode::ZeroPageX,
                     ASTOperand::ZeroPage(0xC8),
+                ),
+            ),
+            (
+                // ZeroPageX - binary
+                "INC %01010101,X",
+                ASTInstructionNode::new(
+                    ASTMnemonic::INC,
+                    ASTAddressingMode::ZeroPageX,
+                    ASTOperand::ZeroPage(0b01010101),
                 ),
             ),
             (
@@ -740,6 +776,15 @@ mod tests {
                 ),
             ),
             (
+                // ZeroPageY - binary
+                "LDX %010101010,Y",
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDX,
+                    ASTAddressingMode::ZeroPageY,
+                    ASTOperand::ZeroPage(0b01010101),
+                ),
+            ),
+            (
                 // ZeroPageY - decimal
                 "LDX 128,Y",
                 ASTInstructionNode::new(
@@ -755,6 +800,15 @@ mod tests {
                     ASTMnemonic::CMP,
                     ASTAddressingMode::AbsoluteX,
                     ASTOperand::Absolute(0x00EF),
+                ),
+            ),
+            (
+                // AbsoluteX - binary
+                "CMP %01010101,X",
+                ASTInstructionNode::new(
+                    ASTMnemonic::CMP,
+                    ASTAddressingMode::AbsoluteX,
+                    ASTOperand::Absolute(0b01010101),
                 ),
             ),
             (
@@ -785,6 +839,15 @@ mod tests {
                 ),
             ),
             (
+                // Relative - binary
+                "BEQ %00000011",
+                ASTInstructionNode::new(
+                    ASTMnemonic::BEQ,
+                    ASTAddressingMode::Relative,
+                    ASTOperand::Relative(3),
+                ),
+            ),
+            (
                 // Relative - decimal
                 "BEQ 3",
                 ASTInstructionNode::new(
@@ -800,6 +863,15 @@ mod tests {
                     ASTMnemonic::JMP,
                     ASTAddressingMode::Indirect,
                     ASTOperand::Absolute(0xBEEF),
+                ),
+            ),
+            (
+                // Indirect - binary
+                "JMP (%1111111111111111)",
+                ASTInstructionNode::new(
+                    ASTMnemonic::JMP,
+                    ASTAddressingMode::Indirect,
+                    ASTOperand::Absolute(65535),
                 ),
             ),
             (
@@ -821,6 +893,15 @@ mod tests {
                 ),
             ),
             (
+                // Indirect indexed X - binary
+                "EOR (%01010101,X)",
+                ASTInstructionNode::new(
+                    ASTMnemonic::EOR,
+                    ASTAddressingMode::IndirectIndexedX,
+                    ASTOperand::ZeroPage(0b0101010),
+                ),
+            ),
+            (
                 // Indirect indexed X - decimal
                 "EOR (128,X)",
                 ASTInstructionNode::new(
@@ -836,6 +917,15 @@ mod tests {
                     ASTMnemonic::LDA,
                     ASTAddressingMode::IndirectIndexedY,
                     ASTOperand::ZeroPage(0xC8),
+                ),
+            ),
+            (
+                // Indirect indexed Y - binary
+                "LDA (%01010101),Y",
+                ASTInstructionNode::new(
+                    ASTMnemonic::LDA,
+                    ASTAddressingMode::IndirectIndexedY,
+                    ASTOperand::ZeroPage(0b01010101),
                 ),
             ),
             (
@@ -878,20 +968,31 @@ mod tests {
     fn test_parse_constant() -> Result<(), ParseError> {
         let tests = vec![
             (
-                "define zero $00",
+                // byte hex
+                "define val $FE",
                 vec![ASTNode::Constant(ASTConstantNode::new_byte(
-                    "zero".to_string(),
-                    0x00,
+                    "val".to_string(),
+                    0xFE,
                 ))],
             ),
             (
-                "define zero 0",
+                // byte binary
+                "define val %01010101",
                 vec![ASTNode::Constant(ASTConstantNode::new_byte(
-                    "zero".to_string(),
-                    0,
+                    "val".to_string(),
+                    0b01010101,
                 ))],
             ),
             (
+                // byte decimal
+                "define val 32",
+                vec![ASTNode::Constant(ASTConstantNode::new_byte(
+                    "val".to_string(),
+                    32,
+                ))],
+            ),
+            (
+                // word hex
                 "define sysRandom $d010",
                 vec![ASTNode::Constant(ASTConstantNode::new_word(
                     "sysRandom".to_string(),
@@ -899,12 +1000,22 @@ mod tests {
                 ))],
             ),
             (
+                // word decimal
+                "define sysRandom %0101010101010101",
+                vec![ASTNode::Constant(ASTConstantNode::new_word(
+                    "sysRandom".to_string(),
+                    0b0101010101010101,
+                ))],
+            ),
+            (
+                // word decimal
                 "define sysRandom 53264",
                 vec![ASTNode::Constant(ASTConstantNode::new_word(
                     "sysRandom".to_string(),
                     53264,
                 ))],
             ),
+            // Different usages
             (
                 "define sysRandom $d010\nLDY sysRandom",
                 vec![
@@ -1020,8 +1131,8 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let mut parser = Parser::new(&mut lexer);
-            eprintln!("-----");
-            eprintln!("input: \n\n{}\n", input);
+            // eprintln!("-----");
+            // eprintln!("input: \n\n{}\n", input);
             assert_eq!(parser.parse_program()?, expected);
         }
         Ok(())
@@ -1030,6 +1141,7 @@ mod tests {
     #[test]
     fn test_parse_program() -> Result<(), ParseError> {
         let input = "  define zero 0
+  define some_constant %01010101
   LDX #zero
   LDY #0
 firstloop:
@@ -1048,6 +1160,10 @@ secondloop:
   BNE secondloop";
         let expected = vec![
             ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),
+            ASTNode::Constant(ASTConstantNode::new_byte(
+                "some_constant".to_string(),
+                0b01010101,
+            )),
             ASTNode::Instruction(ASTInstructionNode::new(
                 ASTMnemonic::LDX,
                 ASTAddressingMode::Immediate,
