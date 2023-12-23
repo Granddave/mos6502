@@ -7,6 +7,12 @@ pub mod opcode;
 /// Resolves symbols in the AST.
 mod symbol_resolver;
 
+// #[derive(Debug)]
+// enum CompilerError {
+//     SymbolNotFound,
+//     InvalidSymbolType,
+// }
+
 /// Compiler for the 6502 CPU.
 ///
 /// The compiler compiles the [AST] into machine code.
@@ -15,6 +21,7 @@ pub struct Compiler {
     symbol_table: SymbolTable,
     current_address: u16,
     program_offset: u16,
+    // errors: Vec<CompilerError>,
 }
 
 impl Default for Compiler {
