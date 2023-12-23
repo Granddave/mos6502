@@ -1,10 +1,10 @@
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
-    ast::{ASTAddressingMode, ASTInstructionNode, ASTOperand},
+    ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTOperand},
     emulator::memory::Bus,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Status {
     carry: bool,
     zero: bool,
@@ -15,7 +15,7 @@ struct Status {
     negative: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Cpu {
     a: u8,
     x: u8,
@@ -23,12 +23,6 @@ pub struct Cpu {
     pc: u16,
     sp: u8,
     status: Status,
-}
-
-impl Default for Cpu {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Cpu {
@@ -67,13 +61,26 @@ impl Cpu {
         instruction
     }
 
-    pub fn run(&mut self, _memory: &mut dyn Bus, _cycles: usize) {
-        todo!();
-        // while cycles > 0 {
-        //     let instruction = self.fetch_and_decode(memory)
-        //
-        //     println!("{:?}", instruction);
-        // }
+    fn execute_instruction(
+        &mut self,
+        ins: ASTInstructionNode,
+        _memory: &mut dyn Bus,
+        _cycles: &mut usize,
+    ) {
+        match ins.ins.mnemonic {
+            ASTMnemonic::BRK => {
+                self.pc += 1;
+                panic!("BRK");
+            }
+            _ => panic!("Invalid instruction: '{:#?}'", ins.ins.mnemonic),
+        }
+    }
+
+    pub fn run(&mut self, memory: &mut dyn Bus, mut cycles: usize) {
+        while cycles > 0 {
+            let instruction = self.fetch_and_decode(memory);
+            self.execute_instruction(instruction, memory, &mut cycles);
+        }
     }
 }
 
