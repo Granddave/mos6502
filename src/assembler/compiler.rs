@@ -33,50 +33,55 @@ impl Compiler {
         }
     }
 
+    fn resolve_label_to_addr(&mut self, ins_node: &mut ASTInstructionNode, current_addr: usize) {
+        if let ASTOperand::Label(label_operand) = &ins_node.operand {
+            let label_symbol = self
+                .symbol_table
+                .find_symbol(label_operand)
+                .expect("Label not found");
+            if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
+                match ins_node.ins.addr_mode {
+                    ASTAddressingMode::Absolute => {
+                        let address = (absolute_offset_in_program as u16)
+                            .checked_add(self.program_offset)
+                            .expect("Overflow error");
+                        ins_node.operand = ASTOperand::Absolute(address);
+                    }
+                    ASTAddressingMode::Relative => {
+                        let offset_addr = (absolute_offset_in_program as u16)
+                            .wrapping_sub(current_addr as u16)
+                            as i8;
+                        ins_node.operand = ASTOperand::Relative(offset_addr);
+                    }
+                    _ => panic!("Invalid addressing mode for label"),
+                }
+            }
+        }
+    }
+
     /// Resolve labels to absolute and relative addresses. This is done by looking up the label in
     /// the symbol table and replacing the label with the address of the label.
     #[tracing::instrument]
     fn resolve_labels_to_addr(&mut self, ast: &mut AST) {
         let mut current_addr = 0;
 
-        ast.iter_mut().for_each(|node| {
-            if let ASTNode::Instruction(ins) = node {
+        ast.iter_mut()
+            .filter_map(|node| node.get_instruction())
+            .for_each(|ins_node| {
                 // The current address is pointing to the address of the next instruction.
                 // The relative offset is calculated from the address of the following
                 // instruction due to the fact that the CPU has already incremented the
                 // program counter past the current instruction.
-                current_addr += ins.size();
-                if let ASTOperand::Label(label) = &ins.operand {
-                    let symbol = self
-                        .symbol_table
-                        .find_symbol(label)
-                        .expect("Label not found");
-                    if let SymbolType::Label(absolute_offset_in_program) = symbol.symbol {
-                        match ins.ins.addr_mode {
-                            ASTAddressingMode::Absolute => {
-                                let address = (absolute_offset_in_program as u16)
-                                    .checked_add(self.program_offset)
-                                    .expect("Overflow error");
-                                ins.operand = ASTOperand::Absolute(address);
-                            }
-                            ASTAddressingMode::Relative => {
-                                let offset_addr = (absolute_offset_in_program as u16)
-                                    .wrapping_sub(current_addr as u16)
-                                    as i8;
-                                ins.operand = ASTOperand::Relative(offset_addr);
-                            }
-                            _ => panic!("Invalid addressing mode for label"),
-                        }
-                    }
-                }
-            }
-        })
+                current_addr += ins_node.size();
+                self.resolve_label_to_addr(ins_node, current_addr);
+            })
     }
 
     #[tracing::instrument]
     fn resolve_constants_to_values(&mut self, ast: &mut AST) {
-        ast.iter_mut().for_each(|node| {
-            if let ASTNode::Instruction(ins) = node {
+        ast.iter_mut()
+            .filter_map(|node| node.get_instruction())
+            .for_each(|ins| {
                 if let ASTOperand::Constant(constant) = &ins.operand {
                     match self
                         .symbol_table
@@ -100,7 +105,9 @@ impl Compiler {
                                 ins.operand = ASTOperand::ZeroPage(byte);
                                 ins.ins.addr_mode = ASTAddressingMode::ZeroPage;
                             }
-                            _ => panic!("Invalid addressing mode for constant byte: {:#?}", ins),
+                            _ => {
+                                panic!("Invalid addressing mode for constant byte: {:#?}", ins)
+                            }
                         },
                         SymbolType::ConstantWord(word) => match ins.ins.addr_mode {
                             ASTAddressingMode::Constant => {
@@ -109,13 +116,14 @@ impl Compiler {
                                 ins.operand = ASTOperand::Absolute(word);
                                 ins.ins.addr_mode = ASTAddressingMode::Absolute;
                             }
-                            _ => panic!("Invalid addressing mode for constant word: {:#?}", ins),
+                            _ => {
+                                panic!("Invalid addressing mode for constant word: {:#?}", ins)
+                            }
                         },
                         _ => panic!("Invalid symbol type for constant operand: {:#?}", ins),
                     }
                 }
-            }
-        })
+            })
     }
 
     /// Pass 1 of the compiler.

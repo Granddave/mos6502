@@ -399,6 +399,13 @@ impl ASTNode {
     ) -> ASTNode {
         ASTNode::Instruction(ASTInstructionNode::new(mnemonic, addr_mode, operand))
     }
+
+    pub fn get_instruction(&mut self) -> Option<&mut ASTInstructionNode> {
+        match self {
+            ASTNode::Instruction(instruction) => Some(instruction),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for ASTNode {
