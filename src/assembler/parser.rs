@@ -146,6 +146,33 @@ impl<'a> Parser<'a> {
     }
 
     #[tracing::instrument]
+    fn try_parse_binary_u8(&mut self) -> Option<u8> {
+        let operand = self.current_token.literal.clone();
+        let operand = operand.trim_start_matches('%');
+        if operand.len() > 8 {
+            // Allow %0 and %10 etc
+            return None;
+        }
+        match u8::from_str_radix(operand, 2) {
+            Ok(word) => Some(word),
+            Err(_) => None,
+        }
+    }
+
+    #[tracing::instrument]
+    fn try_parse_binary_u16(&mut self) -> Option<u16> {
+        let operand = self.current_token.literal.clone();
+        let operand = operand.trim_start_matches('%');
+        if operand.len() < 8 || operand.len() > 16 {
+            return None;
+        }
+        match u16::from_str_radix(operand, 2) {
+            Ok(word) => Some(word),
+            Err(_) => None,
+        }
+    }
+
+    #[tracing::instrument]
     fn try_parse_identifier(&mut self) -> Option<String> {
         if self.current_token_is(TokenType::Identifier) {
             Some(self.current_token.literal.clone())
@@ -154,9 +181,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a literal number, i.e. a hex byte, decimal byte or a constant
+    /// Parse a literal number (byte)
     /// The literal number is denoted by the following tokens:
     /// - Hex: #$xx
+    /// - Binary: %xx
     /// - Decimal: #xx
     /// - Identifier: #constant
     #[tracing::instrument]
@@ -168,6 +196,13 @@ impl<'a> Parser<'a> {
                     Ok((ASTAddressingMode::Immediate, ASTOperand::Immediate(byte)))
                 } else {
                     Err(invalid_token!(self, "invalid hex byte"))
+                }
+            }
+            TokenType::Binary => {
+                if let Some(byte) = self.try_parse_binary_u8() {
+                    Ok((ASTAddressingMode::Immediate, ASTOperand::Immediate(byte)))
+                } else {
+                    Err(invalid_token!(self, "invalid binary byte"))
                 }
             }
             TokenType::Decimal => {
@@ -250,6 +285,20 @@ impl<'a> Parser<'a> {
             self.parse_hex_word(word)
         } else {
             Err(invalid_token!(self, "invalid hex operand"))
+        }
+    }
+
+    #[tracing::instrument]
+    fn parse_binary(
+        &mut self,
+        mnemonic: &ASTMnemonic,
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
+        if let Some(byte) = self.try_parse_binary_u8() {
+            self.parse_hex_byte(byte, mnemonic)
+        } else if let Some(word) = self.try_parse_binary_u16() {
+            self.parse_hex_word(word)
+        } else {
+            Err(invalid_token!(self, "invalid binary operand"))
         }
     }
 
@@ -342,6 +391,8 @@ impl<'a> Parser<'a> {
         let byte = {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Some(byte)
+            } else if let Some(byte) = self.try_parse_binary_u8() {
+                Some(byte)
             } else if let Ok(byte) = self.current_token.literal.parse::<u8>() {
                 Some(byte)
             } else {
@@ -380,6 +431,10 @@ impl<'a> Parser<'a> {
             // Absolute indirect, i.e. ($BEEF)
             if let Some(word) = self.try_parse_hex_u16() {
                 // Hex
+                self.next_token(); // Consume the closing parenthesis
+                Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
+            } else if let Some(word) = self.try_parse_binary_u16() {
+                // Binary
                 self.next_token(); // Consume the closing parenthesis
                 Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
@@ -467,6 +522,7 @@ impl<'a> Parser<'a> {
         match self.current_token.token {
             TokenType::LiteralNumber => self.parse_literal_number(),
             TokenType::Hex => self.parse_hex(mnemonic),
+            TokenType::Binary => self.parse_binary(mnemonic),
             TokenType::Decimal => self.parse_decimal(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
             TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
@@ -501,6 +557,14 @@ impl<'a> Parser<'a> {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Ok(ASTConstantNode::new_byte(identifier, byte))
             } else if let Some(word) = self.try_parse_hex_u16() {
+                Ok(ASTConstantNode::new_word(identifier, word))
+            } else {
+                Err(invalid_token!(self, "expected hex constant"))
+            }
+        } else if self.current_token_is(TokenType::Binary) {
+            if let Some(byte) = self.try_parse_binary_u8() {
+                Ok(ASTConstantNode::new_byte(identifier, byte))
+            } else if let Some(word) = self.try_parse_binary_u16() {
                 Ok(ASTConstantNode::new_word(identifier, word))
             } else {
                 Err(invalid_token!(self, "expected hex constant"))
@@ -777,7 +841,7 @@ mod tests {
             ),
             (
                 // ZeroPageY - binary
-                "LDX %010101010,Y",
+                "LDX %01010101,Y",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDX,
                     ASTAddressingMode::ZeroPageY,
@@ -804,11 +868,11 @@ mod tests {
             ),
             (
                 // AbsoluteX - binary
-                "CMP %01010101,X",
+                "CMP %0101010101010101,X",
                 ASTInstructionNode::new(
                     ASTMnemonic::CMP,
                     ASTAddressingMode::AbsoluteX,
-                    ASTOperand::Absolute(0b01010101),
+                    ASTOperand::Absolute(0b0101010101010101),
                 ),
             ),
             (
@@ -898,7 +962,7 @@ mod tests {
                 ASTInstructionNode::new(
                     ASTMnemonic::EOR,
                     ASTAddressingMode::IndirectIndexedX,
-                    ASTOperand::ZeroPage(0b0101010),
+                    ASTOperand::ZeroPage(0b01010101),
                 ),
             ),
             (
