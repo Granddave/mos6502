@@ -348,7 +348,7 @@ impl fmt::Display for ASTConstantValue {
 pub struct ASTConstantNode {
     /// The name of the constant (e.g. `max_items`)
     pub identifier: String,
-    /// The value of the constant (e.g. `$FF`)
+    /// The value of the constant
     pub value: ASTConstantValue,
 }
 
@@ -418,7 +418,7 @@ impl fmt::Display for ASTNode {
     }
 }
 
-/// A AST (Abstract Syntax Tree) is a collection of AST nodes.
+/// An AST (Abstract Syntax Tree) is a collection of AST nodes.
 ///
 /// The AST is the result of parsing the source code.
 pub type AST = Vec<ASTNode>;
