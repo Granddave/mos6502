@@ -6,8 +6,8 @@ pub mod token;
 
 #[derive(Error, Debug)]
 pub enum LexingError {
-    #[error("Unexpected character: '{0}'")]
-    UnexpectedCharacter(char),
+    #[error("Unexpected character on line {0}: '{1}'")]
+    UnexpectedCharacter(usize, char),
 }
 
 /// Lexer is used to tokenize source code.
@@ -167,7 +167,7 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 _ => {
-                    return Err(LexingError::UnexpectedCharacter(ch));
+                    return Err(LexingError::UnexpectedCharacter(self.line_number, ch));
                 }
             },
             None => Some(self.create_token(TokenType::Eof, "")),
