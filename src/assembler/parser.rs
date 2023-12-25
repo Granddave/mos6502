@@ -3,7 +3,7 @@ use std::{collections::VecDeque, str::FromStr};
 use thiserror::Error;
 
 use crate::{
-    assembler::lexer::{token::Token, token::TokenType, Lexer},
+    assembler::lexer::{token::Token, token::TokenType, Lexer, LexingError},
     ast::{
         ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand,
         AST,
@@ -14,6 +14,8 @@ use crate::{
 pub enum ParseError {
     #[error("Invalid token - {0}:\n{1:#?}")]
     InvalidToken(String, Token),
+    #[error(transparent)]
+    LexingError(#[from] LexingError),
 }
 
 // ParseError helpers.
@@ -44,7 +46,7 @@ pub struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     #[tracing::instrument]
-    pub fn new(lexer: &'a mut Lexer<'a>) -> Self {
+    pub fn new(lexer: &'a mut Lexer<'a>) -> Result<Self, ParseError> {
         // Feed the lexer so its tokens are ready to be consumed
 
         let mut parser = Self {
@@ -54,32 +56,27 @@ impl<'a> Parser<'a> {
         };
 
         for _ in 0..PEEK_BUFFER_SIZE {
-            parser.load_next_token();
+            parser.load_next_token()?;
         }
 
-        parser.next_token(); // Load the first token
+        parser.next_token()?; // Load the first token
 
-        parser
+        Ok(parser)
     }
 
     #[tracing::instrument]
-    fn load_next_token(&mut self) {
-        self.peek_tokens.push_back(
-            (match self.lexer.next_token() {
-                Ok(token) => token,
-                Err(err) => {
-                    // TODO: Return a proper error
-                    panic!("Lexer error: {}", err);
-                }
-            })
-            .unwrap(),
-        );
+    fn load_next_token(&mut self) -> Result<(), ParseError> {
+        self.peek_tokens
+            .push_back(self.lexer.next_token()?.unwrap());
+
+        Ok(())
     }
 
     #[tracing::instrument]
-    fn next_token(&mut self) {
-        self.load_next_token();
+    fn next_token(&mut self) -> Result<(), ParseError> {
+        self.load_next_token()?;
         self.current_token = self.peek_tokens.pop_front().unwrap();
+        Ok(())
     }
 
     #[tracing::instrument]
@@ -104,7 +101,7 @@ impl<'a> Parser<'a> {
     fn parse_label(&mut self) -> Result<String, ParseError> {
         if self.current_token_is(TokenType::Identifier) && self.peek_token_is(0, TokenType::Colon) {
             let label = self.current_token.literal.clone();
-            self.next_token(); // Consume the colon
+            self.next_token()?; // Consume the colon
             Ok(label)
         } else {
             Err(invalid_token!(
@@ -190,7 +187,7 @@ impl<'a> Parser<'a> {
     /// - Identifier: #constant
     #[tracing::instrument]
     fn parse_literal_number(&mut self) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        self.next_token();
+        self.next_token()?;
         match self.current_token.token {
             TokenType::Hex => {
                 if let Some(byte) = self.try_parse_hex_u8() {
@@ -235,11 +232,11 @@ impl<'a> Parser<'a> {
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y
-            self.next_token();
+            self.next_token()?;
             if !self.peek_token_is(0, TokenType::Identifier) {
                 return Err(invalid_token!(self, "invalid ZeroPageX/Y operand"));
             }
-            self.next_token();
+            self.next_token()?;
             match self.current_token.literal.to_uppercase().as_str() {
                 "X" => Ok((ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(byte))),
                 "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte))),
@@ -262,11 +259,11 @@ impl<'a> Parser<'a> {
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
             // AbsoluteX/Y
-            self.next_token();
+            self.next_token()?;
             if !self.peek_token_is(0, TokenType::Identifier) {
                 return Err(invalid_token!(self, "invalid hex operand"));
             }
-            self.next_token();
+            self.next_token()?;
             match self.current_token.literal.to_uppercase().as_str() {
                 "X" => Ok((ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(word))),
                 "Y" => Ok((ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(word))),
@@ -327,14 +324,14 @@ impl<'a> Parser<'a> {
         byte: Option<u8>,
         identifier: Option<String>,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        self.next_token(); // Consume the comma
+        self.next_token()?; // Consume the comma
         if !self.peek_token_is(0, TokenType::Identifier) {
             return Err(invalid_token!(
                 self,
                 "invalid indirect indexed X operand, expected 'X'"
             ));
         }
-        self.next_token(); // Consume the 'X'
+        self.next_token()?; // Consume the 'X'
         let operand = match self.current_token.literal.to_uppercase().as_str() {
             "X" => Ok((
                 ASTAddressingMode::IndirectIndexedX,
@@ -348,7 +345,7 @@ impl<'a> Parser<'a> {
             )),
             _ => Err(invalid_token!(self, "Invalid indirect indexed X operand")),
         };
-        self.next_token(); // Consume the closing parenthesis
+        self.next_token()?; // Consume the closing parenthesis
         operand
     }
 
@@ -359,15 +356,15 @@ impl<'a> Parser<'a> {
         byte: Option<u8>,
         identifier: Option<String>,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        self.next_token(); // Consume the closing parenthesis
+        self.next_token()?; // Consume the closing parenthesis
         if !self.peek_token_is(0, TokenType::Comma) {
             return Err(invalid_token!(
                 self,
                 "invalid indirect indexed Y operand, expected ','"
             ));
         }
-        self.next_token(); // Consume the comma
-        self.next_token(); // Consume the 'Y' identifier
+        self.next_token()?; // Consume the comma
+        self.next_token()?; // Consume the 'Y' identifier
         match self.current_token.literal.to_uppercase().as_str() {
             "Y" => Ok((
                 ASTAddressingMode::IndirectIndexedY,
@@ -427,7 +424,7 @@ impl<'a> Parser<'a> {
     // (u16) or - absolute indirect where u16 is a word or a constant
     #[tracing::instrument]
     fn parse_indirect(&mut self) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        self.next_token(); // Consume the opening parenthesis
+        self.next_token()?; // Consume the opening parenthesis
 
         if let Some(indirect_indexed) = self.try_parse_indirect_indexed()? {
             Ok(indirect_indexed)
@@ -435,20 +432,20 @@ impl<'a> Parser<'a> {
             // Absolute indirect, i.e. ($BEEF)
             if let Some(word) = self.try_parse_hex_u16() {
                 // Hex
-                self.next_token(); // Consume the closing parenthesis
+                self.next_token()?; // Consume the closing parenthesis
                 Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
             } else if let Some(word) = self.try_parse_binary_u16() {
                 // Binary
-                self.next_token(); // Consume the closing parenthesis
+                self.next_token()?; // Consume the closing parenthesis
                 Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
                 // Decimal
-                self.next_token(); // Consume the closing parenthesis
+                self.next_token()?; // Consume the closing parenthesis
                 Ok((ASTAddressingMode::Indirect, ASTOperand::Absolute(word)))
             } else if self.current_token_is(TokenType::Identifier) {
                 // Constant
                 let identifier = self.current_token.literal.clone();
-                self.next_token(); // Consume the identifier
+                self.next_token()?; // Consume the identifier
                 Ok((
                     ASTAddressingMode::Indirect,
                     ASTOperand::Constant(identifier),
@@ -482,8 +479,8 @@ impl<'a> Parser<'a> {
         } else if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y with constant
             let constant = self.current_token.literal.clone();
-            self.next_token(); // Consume the comma
-            self.next_token(); // Consume the 'X' or 'Y'
+            self.next_token()?; // Consume the comma
+            self.next_token()?; // Consume the 'X' or 'Y'
             match self.current_token.literal.to_uppercase().as_str() {
                 "X" => Ok((ASTAddressingMode::ZeroPageX, ASTOperand::Constant(constant))),
                 "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::Constant(constant))),
@@ -521,7 +518,7 @@ impl<'a> Parser<'a> {
             return Ok((ASTAddressingMode::Accumulator, ASTOperand::Implied));
         }
 
-        self.next_token();
+        self.next_token()?;
 
         match self.current_token.token {
             TokenType::LiteralNumber => self.parse_literal_number(),
@@ -552,10 +549,10 @@ impl<'a> Parser<'a> {
             return Err(invalid_token!(self, "expected identifier, got"));
         }
 
-        self.next_token(); // Consume the define keyword
+        self.next_token()?; // Consume the define keyword
 
         let identifier = self.current_token.literal.clone();
-        self.next_token(); // Consume the identifier
+        self.next_token()?; // Consume the identifier
 
         if self.current_token_is(TokenType::Hex) {
             if let Some(byte) = self.try_parse_hex_u8() {
@@ -614,7 +611,7 @@ impl<'a> Parser<'a> {
             }
 
             ast_nodes.push(self.parse_node()?);
-            self.next_token();
+            self.next_token()?;
         }
 
         Ok(ast_nodes)
@@ -628,10 +625,10 @@ mod tests {
 
     // ** Happy path tests **
     #[test]
-    fn test_parser() {
+    fn test_parser() -> Result<(), ParseError> {
         let input = "LDA #$C8\nSTA $0200";
         let mut lexer = Lexer::new(input);
-        let mut parser = Parser::new(&mut lexer);
+        let mut parser = Parser::new(&mut lexer)?;
 
         // Check that current token and lookahead tokens are loaded correctly
         assert_eq!(parser.current_token.token, TokenType::Identifier);
@@ -640,28 +637,30 @@ mod tests {
         assert_eq!(parser.peek_token(1).token, TokenType::Hex);
         assert!(parser.peek_token_is(1, TokenType::Hex));
 
-        parser.next_token(); // Consume the LDA token
+        parser.next_token()?; // Consume the LDA token
         assert_eq!(parser.current_token.token, TokenType::LiteralNumber);
         assert_eq!(parser.peek_token(0).token, TokenType::Hex);
         assert_eq!(parser.peek_token(1).token, TokenType::Identifier);
 
-        parser.next_token(); // Consume the literal number token
-        parser.next_token(); // Consume the hex token
+        parser.next_token()?; // Consume the literal number token
+        parser.next_token()?; // Consume the hex token
         assert_eq!(parser.current_token.token, TokenType::Identifier);
         assert_eq!(parser.peek_token(0).token, TokenType::Hex);
         assert_eq!(parser.peek_token(1).token, TokenType::Eof);
 
-        parser.next_token(); // Consume the STA token
+        parser.next_token()?; // Consume the STA token
         assert_eq!(parser.current_token.token, TokenType::Hex);
         assert_eq!(parser.peek_token(0).token, TokenType::Eof);
         assert_eq!(parser.peek_token(1).token, TokenType::Eof);
 
-        parser.next_token(); // Consume the Hex token
-        parser.next_token(); // Consume the Eof token
-        parser.next_token(); // Will only get eof tokens from now on
+        parser.next_token()?; // Consume the Hex token
+        parser.next_token()?; // Consume the Eof token
+        parser.next_token()?; // Will only get eof tokens from now on
         assert_eq!(parser.current_token.token, TokenType::Eof);
         assert_eq!(parser.peek_token(0).token, TokenType::Eof);
         assert_eq!(parser.peek_token(1).token, TokenType::Eof);
+
+        Ok(())
     }
 
     #[test]
@@ -670,7 +669,7 @@ mod tests {
 
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let mut parser = Parser::new(&mut lexer);
+            let mut parser = Parser::new(&mut lexer)?;
             assert_eq!(parser.parse_label()?, expected);
         }
         Ok(())
@@ -690,7 +689,7 @@ mod tests {
         ];
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let mut parser = Parser::new(&mut lexer);
+            let mut parser = Parser::new(&mut lexer)?;
             assert_eq!(parser.parse_mnemonic()?, expected);
         }
         Ok(())
@@ -1026,7 +1025,7 @@ mod tests {
         ];
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let mut parser = Parser::new(&mut lexer);
+            let mut parser = Parser::new(&mut lexer)?;
             assert_eq!(parser.parse_instruction()?, expected);
         }
         Ok(())
@@ -1198,7 +1197,7 @@ mod tests {
 
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
-            let mut parser = Parser::new(&mut lexer);
+            let mut parser = Parser::new(&mut lexer)?;
             // eprintln!("-----");
             // eprintln!("input: \n\n{}\n", input);
             assert_eq!(parser.parse_program()?, expected);
@@ -1306,7 +1305,7 @@ secondloop:
             )),
         ];
         let mut lexer = Lexer::new(input);
-        let mut parser = Parser::new(&mut lexer);
+        let mut parser = Parser::new(&mut lexer)?;
         assert_eq!(parser.parse_program()?, expected);
         Ok(())
     }
