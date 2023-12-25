@@ -107,7 +107,10 @@ impl<'a> Parser<'a> {
             self.next_token(); // Consume the colon
             Ok(label)
         } else {
-            Err(invalid_token!(self, "identifier followed by colon"))
+            Err(invalid_token!(
+                self,
+                "expected identifier followed by colon"
+            ))
         }
     }
 
@@ -122,11 +125,10 @@ impl<'a> Parser<'a> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
         if operand.len() > 2 {
-            // Allow $F and $0F
             return None;
         }
         match u8::from_str_radix(operand, 16) {
-            Ok(word) => Some(word),
+            Ok(byte) => Some(byte),
             Err(_) => None,
         }
     }
@@ -136,7 +138,6 @@ impl<'a> Parser<'a> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('$');
         if operand.len() < 2 || operand.len() > 4 {
-            // Allow $00F and $000F
             return None;
         }
         match u16::from_str_radix(operand, 16) {
@@ -150,11 +151,10 @@ impl<'a> Parser<'a> {
         let operand = self.current_token.literal.clone();
         let operand = operand.trim_start_matches('%');
         if operand.len() > 8 {
-            // Allow %0 and %10 etc
             return None;
         }
         match u8::from_str_radix(operand, 2) {
-            Ok(word) => Some(word),
+            Ok(byte) => Some(byte),
             Err(_) => None,
         }
     }
@@ -181,7 +181,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a literal number (byte)
+    /// Parse a literal byte
+    ///
     /// The literal number is denoted by the following tokens:
     /// - Hex: #$xx
     /// - Binary: %xx
@@ -226,9 +227,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // TODO: Rename to generic parse_byte
     #[tracing::instrument]
-    fn parse_hex_byte(
+    fn parse_byte_operand(
         &mut self,
         byte: u8,
         mnemonic: &ASTMnemonic,
@@ -255,10 +255,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // TODO: Rename to generic parse_word
     #[tracing::instrument]
-    fn parse_hex_word(&mut self, word: u16) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
+    fn parse_word_operand(
+        &mut self,
+        word: u16,
+    ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
+            // AbsoluteX/Y
             self.next_token();
             if !self.peek_token_is(0, TokenType::Identifier) {
                 return Err(invalid_token!(self, "invalid hex operand"));
@@ -270,47 +273,48 @@ impl<'a> Parser<'a> {
                 _ => Err(invalid_token!(self, "invalid X/Y operand")),
             }
         } else {
+            // Absolute
             Ok((ASTAddressingMode::Absolute, ASTOperand::Absolute(word)))
         }
     }
 
     #[tracing::instrument]
-    fn parse_hex(
+    fn parse_hex_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if let Some(byte) = self.try_parse_hex_u8() {
-            self.parse_hex_byte(byte, mnemonic)
+            self.parse_byte_operand(byte, mnemonic)
         } else if let Some(word) = self.try_parse_hex_u16() {
-            self.parse_hex_word(word)
+            self.parse_word_operand(word)
         } else {
             Err(invalid_token!(self, "invalid hex operand"))
         }
     }
 
     #[tracing::instrument]
-    fn parse_binary(
+    fn parse_binary_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if let Some(byte) = self.try_parse_binary_u8() {
-            self.parse_hex_byte(byte, mnemonic)
+            self.parse_byte_operand(byte, mnemonic)
         } else if let Some(word) = self.try_parse_binary_u16() {
-            self.parse_hex_word(word)
+            self.parse_word_operand(word)
         } else {
             Err(invalid_token!(self, "invalid binary operand"))
         }
     }
 
     #[tracing::instrument]
-    fn parse_decimal(
+    fn parse_decimal_operand(
         &mut self,
         mnemonic: &ASTMnemonic,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
         if let Ok(byte) = self.current_token.literal.parse::<u8>() {
-            self.parse_hex_byte(byte, mnemonic)
+            self.parse_byte_operand(byte, mnemonic)
         } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
-            self.parse_hex_word(word)
+            self.parse_word_operand(word)
         } else {
             Err(invalid_token!(self, "invalid decimal operand"))
         }
@@ -521,9 +525,9 @@ impl<'a> Parser<'a> {
 
         match self.current_token.token {
             TokenType::LiteralNumber => self.parse_literal_number(),
-            TokenType::Hex => self.parse_hex(mnemonic),
-            TokenType::Binary => self.parse_binary(mnemonic),
-            TokenType::Decimal => self.parse_decimal(mnemonic),
+            TokenType::Hex => self.parse_hex_operand(mnemonic),
+            TokenType::Binary => self.parse_binary_operand(mnemonic),
+            TokenType::Decimal => self.parse_decimal_operand(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
             TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
             _ => Err(invalid_token!(self, "invalid operand")),
@@ -538,7 +542,7 @@ impl<'a> Parser<'a> {
 
             Ok(ASTInstructionNode::new(mnemonic, addr_mode, operand))
         } else {
-            Err(invalid_token!(self, "expected identifier"))
+            Err(invalid_token!(self, "expected a mnemonic identifier"))
         }
     }
 
@@ -714,7 +718,7 @@ mod tests {
                 ),
             ),
             (
-                // Immediate - hex
+                // Immediate - binary
                 "LDA #%01010101",
                 ASTInstructionNode::new(
                     ASTMnemonic::LDA,
@@ -750,7 +754,7 @@ mod tests {
                 ),
             ),
             (
-                // Absolute - decimal
+                // Absolute - binary
                 "ADC %1111111111111111",
                 ASTInstructionNode::new(
                     ASTMnemonic::ADC,

@@ -4,7 +4,8 @@ use tracing_subscriber::prelude::*;
 
 fn demo() -> &'static str {
     "
-  LDX #$00
+  define zero $00
+  LDX #zero
   LDY #$00
 firstloop:
   TXA
