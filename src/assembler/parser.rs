@@ -242,7 +242,7 @@ impl<'a> Parser<'a> {
                 "Y" => Ok((ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(byte))),
                 _ => Err(invalid_token!(self, "invalid ZeroPageX/Y operand")),
             }
-        } else if mnemonic.is_branch() {
+        } else if mnemonic.is_branching_instruction() {
             Ok((
                 ASTAddressingMode::Relative,
                 ASTOperand::Relative(byte as i8),
@@ -459,7 +459,7 @@ impl<'a> Parser<'a> {
     #[tracing::instrument]
     fn addressing_mode_for_label(&self, mnemonic: &ASTMnemonic) -> ASTAddressingMode {
         // TODO: Is this correct?
-        if mnemonic.is_branch() {
+        if mnemonic.is_branching_instruction() {
             ASTAddressingMode::Relative
         } else {
             ASTAddressingMode::Absolute
@@ -471,7 +471,7 @@ impl<'a> Parser<'a> {
         &mut self,
         mnemonic: &ASTMnemonic,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        if mnemonic.is_branch() || mnemonic.is_jump() {
+        if mnemonic.is_branching_instruction() || mnemonic.is_jumping_instruction() {
             Ok((
                 self.addressing_mode_for_label(mnemonic),
                 ASTOperand::Label(self.current_token.literal.clone()),
@@ -508,7 +508,7 @@ impl<'a> Parser<'a> {
         &mut self,
         mnemonic: &ASTMnemonic,
     ) -> Result<(ASTAddressingMode, ASTOperand), ParseError> {
-        if mnemonic.is_implied() {
+        if mnemonic.has_implied_addressing_mode() {
             return Ok((ASTAddressingMode::Implied, ASTOperand::Implied));
         }
 

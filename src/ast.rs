@@ -64,11 +64,11 @@ pub enum ASTMnemonic {
 }
 
 impl ASTMnemonic {
-    pub fn is_jump(&self) -> bool {
+    pub fn is_jumping_instruction(&self) -> bool {
         matches!(self, ASTMnemonic::JMP | ASTMnemonic::JSR)
     }
 
-    pub fn is_branch(&self) -> bool {
+    pub fn is_branching_instruction(&self) -> bool {
         matches!(
             self,
             ASTMnemonic::BCC
@@ -82,7 +82,7 @@ impl ASTMnemonic {
         )
     }
 
-    pub fn is_implied(&self) -> bool {
+    pub fn has_implied_addressing_mode(&self) -> bool {
         matches!(
             self,
             ASTMnemonic::BRK
