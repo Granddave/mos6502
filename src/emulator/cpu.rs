@@ -4,8 +4,6 @@ use crate::{
     emulator::memory::Bus,
 };
 
-const PROGRAM_START_ADDR: u16 = 0x0000;
-
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Status {
     /// (C) Carry flag, set if the last operation caused an overflow from bit 7 or an
@@ -56,7 +54,6 @@ impl Cpu {
     }
 
     /// Fetches and decodes the next instruction from memory.
-    /// Returns the instruction and increments the program counter.
     fn fetch_and_decode(&mut self, memory: &mut dyn Bus) -> ASTInstructionNode {
         let opcode = memory.read_byte(self.pc);
         let ins = OPCODE_MAPPING
@@ -127,15 +124,13 @@ impl Cpu {
                 *cycles -= if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::LDA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
-                let indirect_addr = memory.read_word((*addr + self.x) as u16);
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.load_register(Register::A, memory.read_byte(indirect_addr));
                 *cycles -= 6;
             }
             (ASTMnemonic::LDA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
-                let indirect_addr = memory.read_word(*addr as u16);
-                let (page_boundary_crossed, indexed_addr) =
-                    self.indexed_indirect(Register::Y, indirect_addr);
-                self.load_register(Register::A, memory.read_byte(indexed_addr));
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.load_register(Register::A, memory.read_byte(indexed_addr & 0xff));
                 *cycles -= if page_boundary_crossed { 6 } else { 5 };
             }
             // LDX
@@ -214,6 +209,15 @@ impl Cpu {
         (page_boundary_crossed, indexed_addr)
     }
 
+    fn indexed_indirect_x(&self, memory: &mut dyn Bus, zp_addr: u8) -> u16 {
+        memory.read_word((zp_addr + self.x) as u16) & 0xff
+    }
+
+    fn indexed_indirect_y(&self, memory: &mut dyn Bus, zp_addr: u8) -> (bool, u16) {
+        let indirect_addr = memory.read_word(zp_addr as u16);
+        self.indexed_indirect(Register::Y, indirect_addr)
+    }
+
     fn set_zero_and_negative_flags(&mut self, value: u8) {
         self.status.zero = value == 0;
         self.status.negative = value & 0x80 != 0;
@@ -237,6 +241,10 @@ impl Cpu {
         memory.write(addr, value);
     }
 
+    fn set_program_counter(&mut self, addr: u16) {
+        self.pc = addr;
+    }
+
     pub fn run(&mut self, memory: &mut dyn Bus, mut cycles: usize) {
         while cycles > 0 {
             let instruction = self.fetch_and_decode(memory);
@@ -251,12 +259,14 @@ mod tests {
     use super::*;
     use crate::emulator::memory::Memory;
 
+    const PROGRAM_START: u16 = 0x0600;
+
     fn init(code: &str) -> (Cpu, Memory) {
-        let cpu = Cpu::new();
+        let mut cpu = Cpu::new();
         let mut memory = Memory::new();
         let program = crate::assembler::compile_code(code).expect("Failed to compile code");
-        memory.load(PROGRAM_START_ADDR, &program);
-        memory.dump(PROGRAM_START_ADDR, PROGRAM_START_ADDR + 0x10);
+        cpu.set_program_counter(PROGRAM_START);
+        memory.load(PROGRAM_START, &program);
         (cpu, memory)
     }
 
@@ -264,6 +274,20 @@ mod tests {
         code: &'static str,
         expected_cpu: Cpu,
         expected_cycles: usize,
+        init_memory_fn: Option<fn(&mut Memory)>,
+        expected_memory: Option<fn(&Memory)>,
+    }
+
+    impl Default for TestCase {
+        fn default() -> Self {
+            Self {
+                code: "",
+                expected_cpu: Cpu::new(),
+                expected_cycles: 0,
+                init_memory_fn: None,
+                expected_memory: None,
+            }
+        }
     }
 
     #[test]
@@ -273,16 +297,17 @@ mod tests {
                 code: "LDA #$10",
                 expected_cpu: Cpu {
                     a: 0x10,
-                    pc: 2,
+                    pc: PROGRAM_START + 2,
                     ..Default::default()
                 },
                 expected_cycles: 2,
+                ..Default::default()
             },
             TestCase {
                 code: "LDA #$ff",
                 expected_cpu: Cpu {
                     a: 0xff,
-                    pc: 2,
+                    pc: PROGRAM_START + 2,
                     status: Status {
                         negative: true,
                         ..Default::default()
@@ -290,12 +315,13 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2,
+                ..Default::default()
             },
             TestCase {
                 code: "LDA #$00",
                 expected_cpu: Cpu {
                     a: 0x00,
-                    pc: 2,
+                    pc: PROGRAM_START + 2,
                     status: Status {
                         zero: true,
                         ..Default::default()
@@ -303,6 +329,7 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2,
+                ..Default::default()
             },
         ];
 
@@ -310,6 +337,177 @@ mod tests {
             let (mut cpu, mut memory) = init(tc.code);
             cpu.run(&mut memory, tc.expected_cycles);
             assert_eq!(cpu, tc.expected_cpu);
+        }
+    }
+
+    #[test]
+    fn test_lda() {
+        let tests = vec![
+            // Zero page
+            TestCase {
+                code: "LDA $10",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    pc: PROGRAM_START + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 3,
+                ..Default::default()
+            },
+            // Zero page, X
+            TestCase {
+                code: "LDX #$01\nLDA $10,X",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x11, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    x: 0x01,
+                    pc: PROGRAM_START + 4,
+                    ..Default::default()
+                },
+                expected_cycles: 6,
+                ..Default::default()
+            },
+            // Absolute
+            TestCase {
+                code: "LDA $1234",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x1234, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    pc: PROGRAM_START + 3,
+                    ..Default::default()
+                },
+                expected_cycles: 4,
+                ..Default::default()
+            },
+            // Absolute, X
+            TestCase {
+                code: "LDX #$01\nLDA $1234,X",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x1235, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    x: 0x01,
+                    pc: PROGRAM_START + 5,
+                    ..Default::default()
+                },
+                expected_cycles: 6,
+                ..Default::default()
+            },
+            // Absolute, X, page boundary crossed
+            TestCase {
+                code: "LDX #$01\nLDA $12ff,X",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x1300, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    x: 0x01,
+                    pc: PROGRAM_START + 5,
+                    ..Default::default()
+                },
+                expected_cycles: 7, // An extra cycle
+                ..Default::default()
+            },
+            // Absolute, Y
+            TestCase {
+                code: "LDY #$01\nLDA $1234,Y",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x1235, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    y: 0x01,
+                    pc: PROGRAM_START + 5,
+                    ..Default::default()
+                },
+                expected_cycles: 6,
+                ..Default::default()
+            },
+            // Absolute, Y, page boundary crossed
+            TestCase {
+                code: "LDY #$01\nLDA $12ff,Y",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x1300, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    y: 0x01,
+                    pc: PROGRAM_START + 5,
+                    ..Default::default()
+                },
+                expected_cycles: 7, // An extra cycle due to page boundary crossing
+                ..Default::default()
+            },
+            // Indirect, X
+            TestCase {
+                code: "LDX #$01\nLDA ($10,X)",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x11, 0x34);
+                    memory.write(0x34, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    x: 0x01,
+                    pc: PROGRAM_START + 4,
+                    ..Default::default()
+                },
+                expected_cycles: 8,
+                ..Default::default()
+            },
+            // Indirect, Y
+            TestCase {
+                code: "LDY #$01\nLDA ($10),Y",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x34);
+                    memory.write(0x35, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    y: 0x01,
+                    pc: PROGRAM_START + 4,
+                    ..Default::default()
+                },
+                expected_cycles: 7,
+                ..Default::default()
+            },
+            // Indirect, Y, page boundary crossed
+            TestCase {
+                code: "LDY #$01\nLDA ($34),Y",
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x0034, 0xff);
+                    memory.write(0x0000, 0x10);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    y: 0x01,
+                    pc: PROGRAM_START + 4,
+                    ..Default::default()
+                },
+                expected_cycles: 8, // An extra cycle due to page boundary crossing
+                ..Default::default()
+            },
+        ];
+
+        for tc in tests {
+            eprintln!("Test case: {}", tc.code);
+            let (mut cpu, mut memory) = init(tc.code);
+            if let Some(init_memory_fn) = tc.init_memory_fn {
+                init_memory_fn(&mut memory);
+            }
+            cpu.run(&mut memory, tc.expected_cycles);
+
+            assert_eq!(cpu, tc.expected_cpu);
+            if let Some(expected_memory_fn) = tc.expected_memory {
+                expected_memory_fn(&memory);
+            }
         }
     }
 }
