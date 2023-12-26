@@ -221,10 +221,26 @@ impl Cpu {
                 self.store_register(Register::X, *addr as u16, memory);
                 *cycles -= 3;
             }
+            (ASTMnemonic::STX, ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(addr)) => {
+                self.store_register(Register::X, (*addr + self.y) as u16, memory);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::STX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.store_register(Register::X, *addr, memory);
+                *cycles -= 4;
+            }
             // STY
             (ASTMnemonic::STY, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::Y, *addr as u16, memory);
                 *cycles -= 3;
+            }
+            (ASTMnemonic::STY, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.store_register(Register::Y, (*addr + self.x) as u16, memory);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::STY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.store_register(Register::Y, *addr, memory);
+                *cycles -= 4;
             }
             _ => panic!("Invalid instruction: '{:#?}'", &ins),
         }
