@@ -242,6 +242,28 @@ impl Cpu {
                 self.store_register(Register::Y, *addr, memory);
                 *cycles -= 4;
             }
+            // TAX
+            (ASTMnemonic::TAX, _, ASTOperand::Implied) => {
+                self.load_register(Register::X, self.a);
+                *cycles -= 2;
+            }
+            // TAY
+            (ASTMnemonic::TAY, _, ASTOperand::Implied) => {
+                self.load_register(Register::Y, self.a);
+                *cycles -= 2;
+            }
+            // TSX
+            // TXA
+            (ASTMnemonic::TXA, _, ASTOperand::Implied) => {
+                self.load_register(Register::A, self.x);
+                *cycles -= 2;
+            }
+            // TXS
+            // TYA
+            (ASTMnemonic::TYA, _, ASTOperand::Implied) => {
+                self.load_register(Register::A, self.y);
+                *cycles -= 2;
+            }
             _ => panic!("Invalid instruction: '{:#?}'", &ins),
         }
     }
@@ -628,6 +650,65 @@ mod tests {
             if let Some(expected_memory_fn) = tc.expected_memory {
                 expected_memory_fn(&memory);
             }
+        }
+    }
+
+    #[test]
+    fn test_register_transfers() {
+        let tests = vec![
+            // TAX
+            TestCase {
+                code: "LDA #$34\nTAX",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    x: 0x34,
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // TAY
+            TestCase {
+                code: "LDA #$34\nTAY",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    y: 0x34,
+                    pc: PROGRAM_START + 2+ 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // TXA
+            TestCase {
+                code: "LDX #$34\nTXA",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    x: 0x34,
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // TYA
+            TestCase {
+                code: "LDY #$34\nTYA",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    y: 0x34,
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+        ];
+        for tc in tests {
+            let (mut cpu, mut memory) = init(tc.code);
+            cpu.run(&mut memory, tc.expected_cycles);
+            assert_eq!(cpu, tc.expected_cpu);
         }
     }
 }
