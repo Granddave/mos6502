@@ -188,6 +188,34 @@ impl Cpu {
                 self.store_register(Register::A, *addr as u16, memory);
                 *cycles -= 3;
             }
+            (ASTMnemonic::STA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.store_register(Register::A, (*addr + self.x) as u16, memory);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::STA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.store_register(Register::A, *addr, memory);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::STA, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (_, indexed_addr) = self.indexed_indirect(Register::X, *addr);
+                self.store_register(Register::A, indexed_addr, memory);
+                *cycles -= 5;
+            }
+            (ASTMnemonic::STA, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (_, indexed_addr) = self.indexed_indirect(Register::Y, *addr);
+                self.store_register(Register::A, indexed_addr, memory);
+                *cycles -= 5;
+            }
+            (ASTMnemonic::STA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.store_register(Register::A, indirect_addr, memory);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::STA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (_, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.store_register(Register::A, indexed_addr, memory);
+                *cycles -= 6;
+            }
             // STX
             (ASTMnemonic::STX, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::X, *addr as u16, memory);
@@ -542,6 +570,48 @@ mod tests {
             let (mut cpu, mut memory) = init(tc.code);
             cpu.run(&mut memory, tc.expected_cycles);
             assert_eq!(cpu, tc.expected_cpu);
+        }
+    }
+
+    #[test]
+    fn test_sta() {
+        let tests = vec![
+            // Zero page
+            TestCase {
+                code: "LDA #$34\nSTA $10",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    pc: PROGRAM_START + 4,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 3,
+                expected_memory: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x10), 0x34);
+                }),
+                ..Default::default()
+            },
+            // Absolute
+            TestCase {
+                code: "LDA #$34\nSTA $1234",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    pc: PROGRAM_START + 2 + 3,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 4,
+                expected_memory: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x1234), 0x34);
+                }),
+                ..Default::default()
+            },
+        ];
+        for tc in tests {
+            let (mut cpu, mut memory) = init(tc.code);
+            cpu.run(&mut memory, tc.expected_cycles);
+            assert_eq!(cpu, tc.expected_cpu);
+            if let Some(expected_memory_fn) = tc.expected_memory {
+                expected_memory_fn(&memory);
+            }
         }
     }
 }
