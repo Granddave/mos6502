@@ -179,6 +179,10 @@ impl Cpu {
                 self.load_register(Register::Y, memory.read_byte(indexed_addr));
                 *cycles -= if page_boundary_crossed { 5 } else { 4 };
             }
+            // NOP
+            (ASTMnemonic::NOP, _, ASTOperand::Implied) => {
+                *cycles -= 2;
+            }
             // STA
             (ASTMnemonic::STA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::A, *addr as u16, memory);
@@ -508,6 +512,36 @@ mod tests {
             if let Some(expected_memory_fn) = tc.expected_memory {
                 expected_memory_fn(&memory);
             }
+        }
+    }
+
+    #[test]
+    fn test_nop() {
+        let tests = vec![
+            TestCase {
+                code: "NOP",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "NOP\nNOP",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    ..Default::default()
+                },
+
+                expected_cycles: 4,
+                ..Default::default()
+            },
+        ];
+        for tc in tests {
+            let (mut cpu, mut memory) = init(tc.code);
+            cpu.run(&mut memory, tc.expected_cycles);
+            assert_eq!(cpu, tc.expected_cpu);
         }
     }
 }
