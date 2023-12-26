@@ -17,6 +17,12 @@ impl Memory {
         }
     }
 
+    pub fn dump(&self, start_address: u16, end_address: u16) {
+        for address in start_address..end_address {
+            eprintln!("{:#06x}: {:#04x}", address, self.read_byte(address));
+        }
+    }
+
     pub fn load(&mut self, start_address: u16, data: &[u8]) {
         let mut address = start_address;
         for byte in data {
