@@ -90,6 +90,54 @@ impl Cpu {
         cycles: &mut usize,
     ) {
         match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
+            // AND
+            (ASTMnemonic::AND, _, ASTOperand::Immediate(value)) => {
+                self.a &= *value;
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.a &= memory.read_byte(*addr as u16);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 3;
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.a &= memory.read_byte((*addr + self.x) as u16);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.a &= memory.read_byte(*addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::X, *addr);
+                self.a &= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::Y, *addr);
+                self.a &= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.a &= memory.read_byte(indirect_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::AND, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.a &= memory.read_byte(indexed_addr & 0xff);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+            }
+            // BRK
             (ASTMnemonic::BRK, _, ASTOperand::Implied) => {
                 self.pc += 1;
                 panic!("BRK");
@@ -454,6 +502,66 @@ mod tests {
                 expected_memory_fn(&memory);
             }
         }
+    }
+
+    #[test]
+    fn test_and() {
+        // AND
+        vec![
+            TestCase {
+                code: "LDA #$10\nAND #$10",
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    pc: PROGRAM_START + 2 + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #%10101010\nAND #$0f",
+                expected_cpu: Cpu {
+                    a: 0b1010,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "AND #$ff",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    pc: PROGRAM_START + 2,
+                    status: Status {
+                        zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$ff\nAND #$00",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
