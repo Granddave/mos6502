@@ -182,6 +182,53 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.y);
                 *cycles -= 2;
             }
+            // EOR
+            (ASTMnemonic::EOR, _, ASTOperand::Immediate(value)) => {
+                self.a ^= *value;
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.a ^= memory.read_byte(*addr as u16);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 3;
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.a ^= memory.read_byte((*addr + self.x) as u16);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.a ^= memory.read_byte(*addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::X, *addr);
+                self.a ^= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::Y, *addr);
+                self.a ^= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.a ^= memory.read_byte(indirect_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::EOR, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.a ^= memory.read_byte(indexed_addr & 0xff);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+            }
             // INC
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
@@ -599,6 +646,49 @@ mod tests {
                     pc: PROGRAM_START + 2 + 2,
                     status: Status {
                         zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // EOR
+            TestCase {
+                code: "LDA #$10\nEOR #$10",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$f0\nEOR #$0f",
+                expected_cpu: Cpu {
+                    a: 0xff,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$0f\nEOR #$ff",
+                expected_cpu: Cpu {
+                    a: 0xf0,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        negative: true,
                         ..Default::default()
                     },
                     ..Default::default()
