@@ -407,22 +407,9 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::emulator::memory::Memory;
+    use crate::{assembler::compile_code, emulator::memory::Memory};
 
     const PROGRAM_START: u16 = 0x0600;
-
-    fn init(text_case: &TestCase) -> (Cpu, Memory) {
-        let mut cpu = Cpu::new();
-        let mut memory = Memory::new();
-        let program =
-            crate::assembler::compile_code(text_case.code).expect("Failed to compile code");
-        cpu.set_program_counter(PROGRAM_START);
-        memory.load(PROGRAM_START, &program);
-        if let Some(init_memory_fn) = text_case.init_memory_fn {
-            init_memory_fn(&mut memory);
-        }
-        (cpu, memory)
-    }
 
     struct TestCase {
         code: &'static str,
@@ -444,9 +431,34 @@ mod tests {
         }
     }
 
+    impl TestCase {
+        pub fn run_test(&mut self) {
+            // Arrange
+            let mut cpu = Cpu::new();
+            let mut memory = Memory::new();
+            memory.load(
+                PROGRAM_START,
+                &compile_code(self.code).expect("Failed to compile code"),
+            );
+            if let Some(init_memory_fn) = self.init_memory_fn {
+                init_memory_fn(&mut memory);
+            }
+            cpu.set_program_counter(PROGRAM_START);
+
+            // Act
+            cpu.run(&mut memory, self.expected_cycles);
+
+            // Assert
+            assert_eq!(cpu, self.expected_cpu);
+            if let Some(expected_memory_fn) = self.expected_memory_fn {
+                expected_memory_fn(&memory);
+            }
+        }
+    }
+
     #[test]
     fn test_decrement() {
-        let tests = vec![
+        vec![
             // DEC
             TestCase {
                 code: "DEC $10",
@@ -527,21 +539,14 @@ mod tests {
                 expected_cycles: 2,
                 ..Default::default()
             },
-        ];
-
-        for tc in tests {
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-            assert_eq!(cpu, tc.expected_cpu);
-            if let Some(expected_memory_fn) = tc.expected_memory_fn {
-                expected_memory_fn(&memory);
-            }
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 
     #[test]
     fn test_increment() {
-        let tests = vec![
+        vec![
             // INC
             TestCase {
                 code: "INC $10",
@@ -610,20 +615,14 @@ mod tests {
                 expected_cycles: 2,
                 ..Default::default()
             },
-        ];
-        for tc in tests {
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-            assert_eq!(cpu, tc.expected_cpu);
-            if let Some(expected_memory_fn) = tc.expected_memory_fn {
-                expected_memory_fn(&memory);
-            }
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 
     #[test]
     fn test_lda_imm() {
-        let tests = vec![
+        vec![
             TestCase {
                 code: "LDA #$10",
                 expected_cpu: Cpu {
@@ -662,18 +661,14 @@ mod tests {
                 expected_cycles: 2,
                 ..Default::default()
             },
-        ];
-
-        for tc in tests {
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-            assert_eq!(cpu, tc.expected_cpu);
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 
     #[test]
     fn test_lda() {
-        let tests = vec![
+        vec![
             // Zero page
             TestCase {
                 code: "LDA $10",
@@ -697,7 +692,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     x: 0x01,
-                    pc: PROGRAM_START + 4,
+                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -726,7 +721,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     x: 0x01,
-                    pc: PROGRAM_START + 5,
+                    pc: PROGRAM_START + 2 + 3,
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -741,7 +736,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     x: 0x01,
-                    pc: PROGRAM_START + 5,
+                    pc: PROGRAM_START + 2 + 3,
                     ..Default::default()
                 },
                 expected_cycles: 7, // An extra cycle
@@ -756,7 +751,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     y: 0x01,
-                    pc: PROGRAM_START + 5,
+                    pc: PROGRAM_START + 2 + 3,
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -771,7 +766,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     y: 0x01,
-                    pc: PROGRAM_START + 5,
+                    pc: PROGRAM_START + 2 + 3,
                     ..Default::default()
                 },
                 expected_cycles: 7, // An extra cycle due to page boundary crossing
@@ -787,7 +782,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     x: 0x01,
-                    pc: PROGRAM_START + 4,
+                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 8,
@@ -803,7 +798,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     y: 0x01,
-                    pc: PROGRAM_START + 4,
+                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 7,
@@ -819,29 +814,20 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x10,
                     y: 0x01,
-                    pc: PROGRAM_START + 4,
+                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 8, // An extra cycle due to page boundary crossing
                 ..Default::default()
             },
-        ];
-
-        for tc in tests {
-            eprintln!("Test case: {}", tc.code);
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-
-            assert_eq!(cpu, tc.expected_cpu);
-            if let Some(expected_memory_fn) = tc.expected_memory_fn {
-                expected_memory_fn(&memory);
-            }
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 
     #[test]
     fn test_nop() {
-        let tests = vec![
+        vec![
             TestCase {
                 code: "NOP",
                 expected_cpu: Cpu {
@@ -861,23 +847,20 @@ mod tests {
                 expected_cycles: 4,
                 ..Default::default()
             },
-        ];
-        for tc in tests {
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-            assert_eq!(cpu, tc.expected_cpu);
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 
     #[test]
     fn test_sta() {
-        let tests = vec![
+        vec![
             // Zero page
             TestCase {
                 code: "LDA #$34\nSTA $10",
                 expected_cpu: Cpu {
                     a: 0x34,
-                    pc: PROGRAM_START + 4,
+                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
@@ -900,20 +883,14 @@ mod tests {
                 }),
                 ..Default::default()
             },
-        ];
-        for tc in tests {
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-            assert_eq!(cpu, tc.expected_cpu);
-            if let Some(expected_memory_fn) = tc.expected_memory_fn {
-                expected_memory_fn(&memory);
-            }
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 
     #[test]
     fn test_register_transfers() {
-        let tests = vec![
+        vec![
             // TAX
             TestCase {
                 code: "LDA #$34\nTAX",
@@ -962,11 +939,8 @@ mod tests {
                 expected_cycles: 2 + 2,
                 ..Default::default()
             },
-        ];
-        for tc in tests {
-            let (mut cpu, mut memory) = init(&tc);
-            cpu.run(&mut memory, tc.expected_cycles);
-            assert_eq!(cpu, tc.expected_cpu);
-        }
+        ]
+        .into_iter()
+        .for_each(|mut tc| tc.run_test());
     }
 }
