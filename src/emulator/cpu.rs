@@ -94,6 +94,46 @@ impl Cpu {
                 self.pc += 1;
                 panic!("BRK");
             }
+            // INC
+            (ASTMnemonic::INC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let addr = *addr as u16;
+                let value = memory.read_byte(addr).wrapping_add(1);
+                memory.write(addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 5;
+            }
+            (ASTMnemonic::INC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                let addr = (*addr + self.x) as u16;
+                let value = memory.read_byte(addr).wrapping_add(1);
+                memory.write(addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::INC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr).wrapping_add(1);
+                memory.write(*addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::INC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let addr = addr.wrapping_add(self.x as u16);
+                let value = memory.read_byte(addr).wrapping_add(1);
+                memory.write(addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 7;
+            }
+            // INX
+            (ASTMnemonic::INX, _, ASTOperand::Implied) => {
+                self.x = self.x.wrapping_add(1);
+                self.set_zero_and_negative_flags(self.x);
+                *cycles -= 2;
+            }
+            // INY
+            (ASTMnemonic::INY, _, ASTOperand::Implied) => {
+                self.y = self.y.wrapping_add(1);
+                self.set_zero_and_negative_flags(self.y);
+                *cycles -= 2;
+            }
             // LDA
             (ASTMnemonic::LDA, _, ASTOperand::Immediate(value)) => {
                 self.load_register(Register::A, *value);
@@ -331,12 +371,16 @@ mod tests {
 
     const PROGRAM_START: u16 = 0x0600;
 
-    fn init(code: &str) -> (Cpu, Memory) {
+    fn init(text_case: &TestCase) -> (Cpu, Memory) {
         let mut cpu = Cpu::new();
         let mut memory = Memory::new();
-        let program = crate::assembler::compile_code(code).expect("Failed to compile code");
+        let program =
+            crate::assembler::compile_code(text_case.code).expect("Failed to compile code");
         cpu.set_program_counter(PROGRAM_START);
         memory.load(PROGRAM_START, &program);
+        if let Some(init_memory_fn) = text_case.init_memory_fn {
+            init_memory_fn(&mut memory);
+        }
         (cpu, memory)
     }
 
@@ -345,7 +389,7 @@ mod tests {
         expected_cpu: Cpu,
         expected_cycles: usize,
         init_memory_fn: Option<fn(&mut Memory)>,
-        expected_memory: Option<fn(&Memory)>,
+        expected_memory_fn: Option<fn(&Memory)>,
     }
 
     impl Default for TestCase {
@@ -355,7 +399,89 @@ mod tests {
                 expected_cpu: Cpu::new(),
                 expected_cycles: 0,
                 init_memory_fn: None,
-                expected_memory: None,
+                expected_memory_fn: None,
+            }
+        }
+    }
+
+    #[test]
+    fn test_increment_registers() {
+        let tests = vec![
+            // INC
+            TestCase {
+                code: "INC $10",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x01);
+                }),
+                ..Default::default()
+            },
+            TestCase {
+                code: "INC $10",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    status: Status {
+                        zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0xff);
+                }),
+                ..Default::default()
+            },
+            // INC test negative flag
+            TestCase {
+                code: "INC $10",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x7f);
+                }),
+                ..Default::default()
+            },
+            // INX
+            TestCase {
+                code: "INX",
+                expected_cpu: Cpu {
+                    x: 0x01,
+                    pc: PROGRAM_START + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+            // INY
+            TestCase {
+                code: "INY",
+                expected_cpu: Cpu {
+                    y: 0x01,
+                    pc: PROGRAM_START + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+        ];
+        for tc in tests {
+            let (mut cpu, mut memory) = init(&tc);
+            cpu.run(&mut memory, tc.expected_cycles);
+            assert_eq!(cpu, tc.expected_cpu);
+            if let Some(expected_memory_fn) = tc.expected_memory_fn {
+                expected_memory_fn(&memory);
             }
         }
     }
@@ -404,7 +530,7 @@ mod tests {
         ];
 
         for tc in tests {
-            let (mut cpu, mut memory) = init(tc.code);
+            let (mut cpu, mut memory) = init(&tc);
             cpu.run(&mut memory, tc.expected_cycles);
             assert_eq!(cpu, tc.expected_cpu);
         }
@@ -568,14 +694,11 @@ mod tests {
 
         for tc in tests {
             eprintln!("Test case: {}", tc.code);
-            let (mut cpu, mut memory) = init(tc.code);
-            if let Some(init_memory_fn) = tc.init_memory_fn {
-                init_memory_fn(&mut memory);
-            }
+            let (mut cpu, mut memory) = init(&tc);
             cpu.run(&mut memory, tc.expected_cycles);
 
             assert_eq!(cpu, tc.expected_cpu);
-            if let Some(expected_memory_fn) = tc.expected_memory {
+            if let Some(expected_memory_fn) = tc.expected_memory_fn {
                 expected_memory_fn(&memory);
             }
         }
@@ -605,7 +728,7 @@ mod tests {
             },
         ];
         for tc in tests {
-            let (mut cpu, mut memory) = init(tc.code);
+            let (mut cpu, mut memory) = init(&tc);
             cpu.run(&mut memory, tc.expected_cycles);
             assert_eq!(cpu, tc.expected_cpu);
         }
@@ -623,7 +746,7 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
-                expected_memory: Some(|memory| {
+                expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x34);
                 }),
                 ..Default::default()
@@ -637,17 +760,17 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 4,
-                expected_memory: Some(|memory| {
+                expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x1234), 0x34);
                 }),
                 ..Default::default()
             },
         ];
         for tc in tests {
-            let (mut cpu, mut memory) = init(tc.code);
+            let (mut cpu, mut memory) = init(&tc);
             cpu.run(&mut memory, tc.expected_cycles);
             assert_eq!(cpu, tc.expected_cpu);
-            if let Some(expected_memory_fn) = tc.expected_memory {
+            if let Some(expected_memory_fn) = tc.expected_memory_fn {
                 expected_memory_fn(&memory);
             }
         }
@@ -674,7 +797,7 @@ mod tests {
                 expected_cpu: Cpu {
                     a: 0x34,
                     y: 0x34,
-                    pc: PROGRAM_START + 2+ 1,
+                    pc: PROGRAM_START + 2 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -706,7 +829,7 @@ mod tests {
             },
         ];
         for tc in tests {
-            let (mut cpu, mut memory) = init(tc.code);
+            let (mut cpu, mut memory) = init(&tc);
             cpu.run(&mut memory, tc.expected_cycles);
             assert_eq!(cpu, tc.expected_cpu);
         }
