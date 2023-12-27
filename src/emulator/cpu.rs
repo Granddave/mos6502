@@ -94,6 +94,46 @@ impl Cpu {
                 self.pc += 1;
                 panic!("BRK");
             }
+            // DEC
+            (ASTMnemonic::DEC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let addr = *addr as u16;
+                let value = memory.read_byte(addr).wrapping_sub(1);
+                memory.write(addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 5;
+            }
+            (ASTMnemonic::DEC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                let addr = (*addr + self.x) as u16;
+                let value = memory.read_byte(addr).wrapping_sub(1);
+                memory.write(addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::DEC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr).wrapping_sub(1);
+                memory.write(*addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::DEC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let addr = addr.wrapping_add(self.x as u16);
+                let value = memory.read_byte(addr).wrapping_sub(1);
+                memory.write(addr, value);
+                self.set_zero_and_negative_flags(value);
+                *cycles -= 7;
+            }
+            // DEX
+            (ASTMnemonic::DEX, _, ASTOperand::Implied) => {
+                self.x = self.x.wrapping_sub(1);
+                self.set_zero_and_negative_flags(self.x);
+                *cycles -= 2;
+            }
+            // DEY
+            (ASTMnemonic::DEY, _, ASTOperand::Implied) => {
+                self.y = self.y.wrapping_sub(1);
+                self.set_zero_and_negative_flags(self.y);
+                *cycles -= 2;
+            }
             // INC
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
@@ -405,7 +445,102 @@ mod tests {
     }
 
     #[test]
-    fn test_increment_registers() {
+    fn test_decrement() {
+        let tests = vec![
+            // DEC
+            TestCase {
+                code: "DEC $10",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x10);
+                }),
+                expected_memory_fn: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x10), 0x0f);
+                }),
+                ..Default::default()
+            },
+            TestCase {
+                code: "DEC $10",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    status: Status {
+                        zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x01);
+                }),
+                expected_memory_fn: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x10), 0x00);
+                }),
+                ..Default::default()
+            },
+            TestCase {
+                code: "DEC $10",
+                expected_cpu: Cpu {
+                    pc: PROGRAM_START + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                init_memory_fn: Some(|memory| {
+                    memory.write(0x10, 0x80);
+                }),
+                expected_memory_fn: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x10), 0x7f);
+                }),
+                ..Default::default()
+            },
+            // DEX
+            TestCase {
+                code: "DEX",
+                expected_cpu: Cpu {
+                    x: 0xff,
+                    pc: PROGRAM_START + 1,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+            // DEY
+            TestCase {
+                code: "DEY",
+                expected_cpu: Cpu {
+                    y: 0xff,
+                    pc: PROGRAM_START + 1,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+        ];
+
+        for tc in tests {
+            let (mut cpu, mut memory) = init(&tc);
+            cpu.run(&mut memory, tc.expected_cycles);
+            assert_eq!(cpu, tc.expected_cpu);
+            if let Some(expected_memory_fn) = tc.expected_memory_fn {
+                expected_memory_fn(&memory);
+            }
+        }
+    }
+
+    #[test]
+    fn test_increment() {
         let tests = vec![
             // INC
             TestCase {
