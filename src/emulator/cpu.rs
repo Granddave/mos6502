@@ -311,6 +311,53 @@ impl Cpu {
             (ASTMnemonic::NOP, _, ASTOperand::Implied) => {
                 *cycles -= 2;
             }
+            // ORA
+            (ASTMnemonic::ORA, _, ASTOperand::Immediate(value)) => {
+                self.a |= *value;
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.a |= memory.read_byte(*addr as u16);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 3;
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.a |= memory.read_byte((*addr + self.x) as u16);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.a |= memory.read_byte(*addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 4;
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::X, *addr);
+                self.a |= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::Y, *addr);
+                self.a |= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.a |= memory.read_byte(indirect_addr);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ORA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.a |= memory.read_byte(indexed_addr & 0xff);
+                self.set_zero_and_negative_flags(self.a);
+                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+            }
             // STA
             (ASTMnemonic::STA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::A, *addr as u16, memory);
@@ -557,6 +604,58 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // OR
+            TestCase {
+                code: "LDA #$10\nORA #$10",
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    pc: PROGRAM_START + 2 + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$f0\nORA #$0f",
+                expected_cpu: Cpu {
+                    a: 0xff,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #%01010101\nORA #$0f",
+                expected_cpu: Cpu {
+                    a: 0b01011111,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "ORA #$ff",
+                expected_cpu: Cpu {
+                    a: 0xff,
+                    pc: PROGRAM_START + 2,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2,
                 ..Default::default()
             },
         ]
