@@ -432,7 +432,7 @@ mod tests {
     }
 
     impl TestCase {
-        pub fn run_test(&mut self) {
+        pub fn run_test(&self) {
             // Arrange
             let mut cpu = Cpu::new();
             let mut memory = Memory::new();
@@ -541,7 +541,7 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
@@ -617,7 +617,7 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
@@ -663,7 +663,7 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
@@ -849,7 +849,7 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
@@ -885,7 +885,7 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
@@ -941,6 +941,6 @@ mod tests {
             },
         ]
         .into_iter()
-        .for_each(|mut tc| tc.run_test());
+        .for_each(|tc| tc.run_test());
     }
 }
