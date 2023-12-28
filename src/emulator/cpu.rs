@@ -956,7 +956,6 @@ mod tests {
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x0f);
                 }),
-                ..Default::default()
             },
             TestCase {
                 code: "DEC $10",
@@ -975,7 +974,6 @@ mod tests {
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x00);
                 }),
-                ..Default::default()
             },
             TestCase {
                 code: "DEC $10",
@@ -990,7 +988,6 @@ mod tests {
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x7f);
                 }),
-                ..Default::default()
             },
             // DEX
             TestCase {
