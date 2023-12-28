@@ -142,6 +142,11 @@ impl Cpu {
                 self.pc += 1;
                 panic!("BRK");
             }
+            // CLC
+            (ASTMnemonic::CLC, _, ASTOperand::Implied) => {
+                self.status.carry = false;
+                *cycles -= 2;
+            }
             // CMP
             (ASTMnemonic::CMP, _, ASTOperand::Immediate(value)) => {
                 self.compare(Register::A, *value);
@@ -470,6 +475,11 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.a);
                 *cycles -= if page_boundary_crossed { 6 } else { 5 };
             }
+            // SEC
+            (ASTMnemonic::SEC, _, ASTOperand::Implied) => {
+                self.status.carry = true;
+                *cycles -= 2;
+            }
             // STA
             (ASTMnemonic::STA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::A, *addr as u16, memory);
@@ -673,6 +683,43 @@ mod tests {
                 expected_memory_fn(&memory);
             }
         }
+    }
+
+    #[test]
+    fn test_set_and_clear() {
+        vec![
+            // CLC
+            TestCase {
+                // First set carry flag and then clear it
+                code: "SEC\nCLC",
+                expected_cpu: Cpu {
+                    status: Status {
+                        carry: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 1 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // SEC
+            TestCase {
+                code: "SEC",
+                expected_cpu: Cpu {
+                    status: Status {
+                        carry: true,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
     }
 
     #[test]
