@@ -210,6 +210,8 @@ mod tests {
     use super::*;
     use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand};
 
+    use pretty_assertions::assert_eq;
+
     // Test that the compiler can compile single instructions
     #[test]
     fn test_compile_ast() {

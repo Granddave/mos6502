@@ -1,5 +1,7 @@
 use mos6502::assembler::compile_code;
 
+use pretty_assertions::assert_eq;
+
 #[test]
 fn test_basic() {
     let input = "

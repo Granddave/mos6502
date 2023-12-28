@@ -61,6 +61,9 @@ pub fn hexdump_1(program: &[u8], addr_width: usize, stride: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use pretty_assertions::assert_eq;
+
     #[test]
     fn test_hexdump_1() {
         let program = vec![

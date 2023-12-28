@@ -58,6 +58,8 @@ impl Listing {
 mod tests {
     use crate::ast::ASTOperand;
 
+    use pretty_assertions::assert_eq;
+
     #[test]
     fn test_listing() {
         use crate::ast::{ASTAddressingMode, ASTMnemonic, ASTNode};

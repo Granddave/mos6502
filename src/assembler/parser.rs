@@ -623,6 +623,8 @@ mod tests {
     use super::*;
     use crate::assembler::lexer::Lexer;
 
+    use pretty_assertions::assert_eq;
+
     // ** Happy path tests **
     #[test]
     fn test_parser() -> Result<(), ParseError> {

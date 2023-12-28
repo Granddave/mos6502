@@ -110,6 +110,8 @@ mod tests {
     use super::*;
     use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand, AST};
 
+    use pretty_assertions::assert_eq;
+
     fn example_ast() -> AST {
         vec![
             ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),

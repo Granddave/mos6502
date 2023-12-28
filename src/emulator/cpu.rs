@@ -551,6 +551,8 @@ mod tests {
     use super::*;
     use crate::{assembler::compile_code, emulator::memory::Memory};
 
+    use pretty_assertions::assert_eq;
+
     const PROGRAM_START: u16 = 0x0600;
 
     struct TestCase {

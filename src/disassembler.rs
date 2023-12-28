@@ -80,9 +80,10 @@ impl Disassembler {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::ast::ASTMnemonic;
 
-    use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_dissasemble_code() {
