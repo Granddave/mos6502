@@ -142,6 +142,71 @@ impl Cpu {
                 self.pc += 1;
                 panic!("BRK");
             }
+            // CMP
+            (ASTMnemonic::CMP, _, ASTOperand::Immediate(value)) => {
+                self.compare(Register::A, *value);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.compare(Register::A, memory.read_byte(*addr as u16));
+                *cycles -= 3;
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.compare(Register::A, memory.read_byte((*addr + self.x) as u16));
+                *cycles -= 4;
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.compare(Register::A, memory.read_byte(*addr));
+                *cycles -= 4;
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::X, *addr);
+                self.compare(Register::A, memory.read_byte(indexed_addr));
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::Y, *addr);
+                self.compare(Register::A, memory.read_byte(indexed_addr));
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.compare(Register::A, memory.read_byte(indirect_addr));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::CMP, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.compare(Register::A, memory.read_byte(indexed_addr & 0xff));
+                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+            }
+            // CPX
+            (ASTMnemonic::CPX, _, ASTOperand::Immediate(value)) => {
+                self.compare(Register::X, *value);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::CPX, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.compare(Register::X, memory.read_byte(*addr as u16));
+                *cycles -= 3;
+            }
+            (ASTMnemonic::CPX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.compare(Register::X, memory.read_byte(*addr));
+                *cycles -= 4;
+            }
+            // CPY
+            (ASTMnemonic::CPY, _, ASTOperand::Immediate(value)) => {
+                self.compare(Register::Y, *value);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::CPY, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.compare(Register::Y, memory.read_byte(*addr as u16));
+                *cycles -= 3;
+            }
+            (ASTMnemonic::CPY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.compare(Register::Y, memory.read_byte(*addr));
+                *cycles -= 4;
+            }
             // DEC
             (ASTMnemonic::DEC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
@@ -510,6 +575,16 @@ impl Cpu {
         self.indexed_indirect(Register::Y, indirect_addr)
     }
 
+    fn compare(&mut self, register: Register, value: u8) {
+        let register_value = match register {
+            Register::A => self.a,
+            Register::X => self.x,
+            Register::Y => self.y,
+        };
+        self.set_zero_and_negative_flags(register_value.wrapping_sub(value));
+        self.status.carry = register_value >= value;
+    }
+
     fn set_zero_and_negative_flags(&mut self, value: u8) {
         self.status.zero = value == 0;
         self.status.negative = value & 0x80 != 0;
@@ -748,6 +823,115 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_comparisons() {
+        vec![
+            // CMP
+            TestCase {
+                // Register = Operand
+                code: "LDA #$30\nCMP #$30",
+                expected_cpu: Cpu {
+                    a: 0x30,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        zero: true,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Register > Operand
+                code: "LDA #$80\nCMP #$40",
+                expected_cpu: Cpu {
+                    a: 0x80,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        zero: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Register < Operand
+                code: "LDA #$20\nCMP #$40",
+                expected_cpu: Cpu {
+                    a: 0x20,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: false,
+                        zero: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Register < Operand
+                code: "LDA #$f0\nCMP #$30",
+                expected_cpu: Cpu {
+                    a: 0xf0,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        zero: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$30\nCMP #$f0",
+                expected_cpu: Cpu {
+                    a: 0x30,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: false,
+                        zero: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$ff\nCMP #$00",
+                expected_cpu: Cpu {
+                    a: 0xff,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        zero: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
                 ..Default::default()
             },
         ]
