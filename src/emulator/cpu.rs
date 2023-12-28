@@ -676,7 +676,7 @@ mod tests {
     }
 
     #[test]
-    fn test_and() {
+    fn test_bitwise_operations() {
         // AND
         vec![
             TestCase {
