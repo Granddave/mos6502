@@ -195,6 +195,12 @@ pub struct ASTInstruction {
     pub addr_mode: ASTAddressingMode,
 }
 
+impl fmt::Display for ASTInstruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {:?}", self.mnemonic, self.addr_mode)
+    }
+}
+
 /// An instruction with an operand.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ASTInstructionNode {

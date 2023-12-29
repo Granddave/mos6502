@@ -1,11 +1,32 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
-use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand, AST};
+use crate::{
+    assembler::compiler::opcode::OPCODE_MAPPING,
+    ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTNode, ASTOperand, AST},
+};
+
+use thiserror::Error;
 
 /// Mapping from ASTInstruction to opcode.
 pub mod opcode;
 
 /// Resolves symbols in the AST.
 mod symbol_resolver;
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum CompilerError {
+    #[error("Symbol not found: {0}")]
+    SymbolNotFound(String),
+    #[error("Symbol already defined: {0}")]
+    SymbolAlreadyDefined(String),
+    #[error("Symbol not defined: {0}")]
+    UndefinedSymbol(String),
+    #[error("Invalid addressing mode: {0}")]
+    InvalidAddressingMode(ASTInstruction),
+    #[error("Invalid symbol type for constant operand: {0}")]
+    InvalidSymbolTypeForConstantOperand(ASTInstruction),
+    #[error("Invalid opcode: {0}")]
+    InvalidOpcode(ASTInstruction),
+}
 
 /// Compiler for the 6502 CPU.
 ///
@@ -33,12 +54,17 @@ impl Compiler {
         }
     }
 
-    fn resolve_label_to_addr(&mut self, ins_node: &mut ASTInstructionNode, current_addr: usize) {
+    fn resolve_label_to_addr(
+        &mut self,
+        ins_node: &mut ASTInstructionNode,
+        current_addr: usize,
+    ) -> Result<(), CompilerError> {
         if let ASTOperand::Label(label_operand) = &ins_node.operand {
-            let label_symbol = self
-                .symbol_table
-                .find_symbol(label_operand)
-                .expect("Label not found");
+            let label_symbol = match self.symbol_table.find_symbol(label_operand) {
+                Some(symbol) => symbol,
+                None => return Err(CompilerError::SymbolNotFound(label_operand.clone())),
+            };
+
             if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
                 match ins_node.ins.addr_mode {
                     ASTAddressingMode::Absolute => {
@@ -53,107 +79,114 @@ impl Compiler {
                             as i8;
                         ins_node.operand = ASTOperand::Relative(offset_addr);
                     }
-                    _ => panic!("Invalid addressing mode for label"),
+                    _ => {
+                        return Err(CompilerError::InvalidAddressingMode(ins_node.ins));
+                    }
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Resolve labels to absolute and relative addresses. This is done by looking up the label in
     /// the symbol table and replacing the label with the address of the label.
     #[tracing::instrument]
-    fn resolve_labels_to_addr(&mut self, ast: &mut AST) {
+    fn resolve_labels_to_addr(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
         let mut current_addr = 0;
 
-        ast.iter_mut()
-            .filter_map(|node| node.get_instruction())
-            .for_each(|ins_node| {
-                // The current address is pointing to the address of the next instruction.
-                // The relative offset is calculated from the address of the following
-                // instruction due to the fact that the CPU has already incremented the
-                // program counter past the current instruction.
-                current_addr += ins_node.size();
-                self.resolve_label_to_addr(ins_node, current_addr);
-            })
+        for ins_node in ast.iter_mut().filter_map(|node| node.get_instruction()) {
+            // The current address is pointing to the address of the next instruction.
+            // The relative offset is calculated from the address of the following
+            // instruction due to the fact that the CPU has already incremented the
+            // program counter past the current instruction.
+            current_addr += ins_node.size();
+            self.resolve_label_to_addr(ins_node, current_addr)?;
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument]
-    fn resolve_constants_to_values(&mut self, ast: &mut AST) {
-        ast.iter_mut()
-            .filter_map(|node| node.get_instruction())
-            .for_each(|ins| {
-                if let ASTOperand::Constant(constant) = &ins.operand {
-                    match self
-                        .symbol_table
-                        .find_symbol(constant)
-                        .expect("Constant not found")
-                        .symbol
-                    {
-                        SymbolType::ConstantByte(byte) => match ins.ins.addr_mode {
-                            ASTAddressingMode::Immediate => {
-                                ins.operand = ASTOperand::Immediate(byte);
-                            }
-                            ASTAddressingMode::ZeroPageX
-                            | ASTAddressingMode::ZeroPageY
-                            | ASTAddressingMode::IndirectIndexedX
-                            | ASTAddressingMode::IndirectIndexedY => {
-                                ins.operand = ASTOperand::ZeroPage(byte);
-                            }
-                            ASTAddressingMode::Constant => {
-                                // Special case for the zeropage addressing mode since we at the
-                                // parsing stage don't know if the operand is a byte or word.
-                                ins.operand = ASTOperand::ZeroPage(byte);
-                                ins.ins.addr_mode = ASTAddressingMode::ZeroPage;
-                            }
-                            _ => {
-                                panic!("Invalid addressing mode for constant byte: {:#?}", ins)
-                            }
-                        },
-                        SymbolType::ConstantWord(word) => match ins.ins.addr_mode {
-                            ASTAddressingMode::Constant => {
-                                // Special case for the absolute addressing mode since we at the
-                                // parsing stage don't know if the operand is a byte or word.
-                                ins.operand = ASTOperand::Absolute(word);
-                                ins.ins.addr_mode = ASTAddressingMode::Absolute;
-                            }
-                            _ => {
-                                panic!("Invalid addressing mode for constant word: {:#?}", ins)
-                            }
-                        },
-                        _ => panic!("Invalid symbol type for constant operand: {:#?}", ins),
+    fn resolve_constants_to_values(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
+        for ins in ast.iter_mut().filter_map(|node| node.get_instruction()) {
+            if let ASTOperand::Constant(constant) = &ins.operand {
+                let symbol = match self.symbol_table.find_symbol(constant) {
+                    Some(symbol) => symbol,
+                    None => {
+                        return Err(CompilerError::SymbolNotFound(constant.clone()));
                     }
+                };
+
+                match symbol.symbol {
+                    SymbolType::ConstantByte(byte) => match ins.ins.addr_mode {
+                        ASTAddressingMode::Immediate => {
+                            ins.operand = ASTOperand::Immediate(byte);
+                        }
+                        ASTAddressingMode::ZeroPageX
+                        | ASTAddressingMode::ZeroPageY
+                        | ASTAddressingMode::IndirectIndexedX
+                        | ASTAddressingMode::IndirectIndexedY => {
+                            ins.operand = ASTOperand::ZeroPage(byte);
+                        }
+                        ASTAddressingMode::Constant => {
+                            // Special case for the zeropage addressing mode since we at the
+                            // parsing stage don't know if the operand is a byte or word.
+                            ins.operand = ASTOperand::ZeroPage(byte);
+                            ins.ins.addr_mode = ASTAddressingMode::ZeroPage;
+                        }
+                        _ => {
+                            return Err(CompilerError::InvalidAddressingMode(ins.ins));
+                        }
+                    },
+                    SymbolType::ConstantWord(word) => match ins.ins.addr_mode {
+                        ASTAddressingMode::Constant => {
+                            // Special case for the absolute addressing mode since we at the
+                            // parsing stage don't know if the operand is a byte or word.
+                            ins.operand = ASTOperand::Absolute(word);
+                            ins.ins.addr_mode = ASTAddressingMode::Absolute;
+                        }
+                        _ => {
+                            return Err(CompilerError::InvalidAddressingMode(ins.ins));
+                        }
+                    },
+                    _ => return Err(CompilerError::InvalidSymbolTypeForConstantOperand(ins.ins)),
                 }
-            })
+            }
+        }
+
+        Ok(())
     }
 
     /// Pass 1 of the compiler.
     ///
     /// This pass resolves labels and constants and verifies that all symbols are valid.
     #[tracing::instrument]
-    fn pass_1(&mut self, ast: &mut AST) {
+    fn pass_1(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
         // The constant resolver needs to be run before the label resolver since the label
         // resolver depends on the constant resolver to have resolved all constants to their
         // values.
         symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
-        self.resolve_constants_to_values(ast);
+        self.resolve_constants_to_values(ast)?;
 
         symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
-        self.resolve_labels_to_addr(ast);
+        self.resolve_labels_to_addr(ast)?;
 
         // Verify that all symbols are valid before proceeding to the next pass
-        symbol_resolver::verify_symbols(ast, &mut self.symbol_table);
+        symbol_resolver::verify_symbols(ast, &mut self.symbol_table)?;
+
+        Ok(())
     }
 
     /// Compile a single instruction node from the AST to machine code.
     #[tracing::instrument]
-    pub fn instruction_to_bytes(ins: &ASTInstructionNode) -> Vec<u8> {
+    pub fn instruction_to_bytes(ins: &ASTInstructionNode) -> Result<Vec<u8>, CompilerError> {
         let mut bytes = vec![];
 
-        bytes.push(
-            crate::assembler::compiler::opcode::OPCODE_MAPPING
-                .find_opcode(ins.ins)
-                .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", ins.ins.mnemonic as u8)),
-        );
+        bytes.push(match OPCODE_MAPPING.find_opcode(ins.ins) {
+            Some(bytes) => bytes,
+            None => return Err(CompilerError::InvalidOpcode(ins.ins.clone())),
+        });
 
         bytes.extend(match ins.operand {
             ASTOperand::Immediate(value) => vec![value],
@@ -165,15 +198,15 @@ impl Compiler {
             ASTOperand::Constant(_) => panic!("Constant should have been resolved to its value"),
         });
 
-        bytes
+        Ok(bytes)
     }
 
     /// Compile a instruction to machine code and increment address.
     #[tracing::instrument]
-    fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Vec<u8> {
-        let bytes: Vec<u8> = Compiler::instruction_to_bytes(ins);
+    fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Result<Vec<u8>, CompilerError> {
+        let bytes: Vec<u8> = Compiler::instruction_to_bytes(ins)?;
         self.current_address += ins.size() as u16;
-        bytes
+        Ok(bytes)
     }
 
     /// Pass 2 of the compiler.
@@ -182,14 +215,17 @@ impl Compiler {
     /// and all labels and constants have been replaced with their respective addresses and
     /// values.
     #[tracing::instrument]
-    fn pass_2(&mut self, ast: &mut AST) -> Vec<u8> {
+    fn pass_2(&mut self, ast: &mut AST) -> Result<Vec<u8>, CompilerError> {
         ast.iter()
             .filter_map(|node| match node {
                 ASTNode::Instruction(ins) => Some(ins),
                 _ => None,
             })
-            .flat_map(|ins| self.compile_instruction(ins))
-            .collect()
+            .try_fold(Vec::new(), |mut acc, ins| {
+                let bytes = self.compile_instruction(ins)?;
+                acc.extend(bytes);
+                Ok(acc)
+            })
     }
 
     /// Compile the AST to machine code.
@@ -198,10 +234,12 @@ impl Compiler {
     /// 1. Resolve labels and constants
     /// 2. Generate machine code
     #[tracing::instrument]
-    pub fn compile(&mut self, ast: AST) -> Vec<u8> {
+    pub fn compile(&mut self, ast: AST) -> Result<Vec<u8>, CompilerError> {
         let mut ast = ast;
-        self.pass_1(&mut ast);
-        self.pass_2(&mut ast)
+        self.pass_1(&mut ast)?;
+        let bytes = self.pass_2(&mut ast)?;
+
+        Ok(bytes)
     }
 }
 
@@ -214,7 +252,7 @@ mod tests {
 
     // Test that the compiler can compile single instructions
     #[test]
-    fn test_compile_ast() {
+    fn test_compile_ast() -> Result<(), CompilerError> {
         // TODO: Test more instructions
         let tests = vec![
             (
@@ -265,13 +303,15 @@ mod tests {
 
         for (ast, expected) in tests {
             let mut compiler = Compiler::default();
-            let bytes = compiler.compile(ast);
+            let bytes = compiler.compile(ast)?;
             assert_eq!(bytes, expected);
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_compile_program() {
+    fn test_compile_program() -> Result<(), CompilerError> {
         let tests = vec![
             // test for relative branch instructions that verifies that the compiler can correctly
             // calculate the relative offset. Both forward and backward branches are tested.
@@ -346,13 +386,15 @@ mod tests {
 
         for (ast, expected) in tests {
             let mut compiler = Compiler::default();
-            let bytes = compiler.compile(ast);
+            let bytes = compiler.compile(ast)?;
             assert_eq!(bytes, expected);
         }
+
+        Ok(())
     }
 
     #[test]
-    fn test_program_offset() {
+    fn test_program_offset() -> Result<(), CompilerError> {
         let ast = vec![
             ASTNode::new_instruction(
                 ASTMnemonic::LDX,
@@ -417,8 +459,23 @@ mod tests {
 
         for (program_offset, expected) in tests {
             let mut compiler = Compiler::new(program_offset);
-            let bytes = compiler.compile(ast.clone());
+            let bytes = compiler.compile(ast.clone())?;
             assert_eq!(bytes, expected);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compile_errors() {
+        let tests = vec![
+            // TODO
+        ];
+
+        for (ast, expected) in tests {
+            let mut compiler = Compiler::default();
+            let output = compiler.compile(ast);
+            assert_eq!(output, Err(expected));
         }
     }
 }

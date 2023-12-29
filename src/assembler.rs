@@ -28,5 +28,5 @@ pub fn compile_code(input: &str) -> anyhow::Result<Vec<u8>> {
     let ast = parser.parse_program()?;
     let mut compiler = compiler::Compiler::new(0x0600);
 
-    Ok(compiler.compile(ast))
+    Ok(compiler.compile(ast)?)
 }

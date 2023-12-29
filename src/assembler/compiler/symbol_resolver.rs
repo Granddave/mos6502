@@ -1,11 +1,25 @@
 use crate::ast::{ASTConstantValue, ASTNode, ASTOperand, AST};
 
-#[derive(Debug, PartialEq)]
+use std::fmt;
+
+use super::CompilerError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolType {
     /// Label with an offset into the program
     Label(usize),
     ConstantByte(u8),
     ConstantWord(u16),
+}
+
+impl fmt::Display for SymbolType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SymbolType::Label(offset) => write!(f, "Label({:#x})", offset),
+            SymbolType::ConstantByte(byte) => write!(f, "ConstantByte({:#x})", byte),
+            SymbolType::ConstantWord(word) => write!(f, "ConstantWord({:#x})", word),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,6 +50,7 @@ impl SymbolTable {
     }
 }
 
+/// Resolve labels in the AST to the symbol table.
 #[tracing::instrument]
 pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
     let mut current_addr = 0;
@@ -52,6 +67,7 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
     })
 }
 
+/// Resolve constants in the AST to the symbol table.
 #[tracing::instrument]
 pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
     ast.iter().for_each(|node| {
@@ -71,38 +87,40 @@ pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
 ///   - no symbol is defined multiple times
 ///   - all symbols used in the AST are defined
 #[tracing::instrument]
-pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) {
+pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CompilerError> {
     // Verify that no symbol is defined multiple times
-    symbol_table.symbols.iter().for_each(|symbol| {
+    for outer in &symbol_table.symbols {
         let mut count = 0;
-        symbol_table.symbols.iter().for_each(|s| {
-            if s.name == symbol.name {
+        for inner in &symbol_table.symbols {
+            if inner.name == outer.name {
                 count += 1;
             }
             if count > 1 {
-                panic!("Symbol defined multiple times: '{}'", symbol.name);
+                return Err(CompilerError::SymbolAlreadyDefined(inner.name.clone()));
             }
-        });
-    });
+        }
+    }
 
     // Verify that all symbols used in the AST are defined
-    ast.iter().for_each(|node| {
+    for node in ast {
         if let ASTNode::Instruction(ins_node) = node {
             match &ins_node.operand {
-                ASTOperand::Label(label_str) => {
-                    symbol_table
-                        .find_symbol(label_str)
-                        .expect("Label not found");
-                }
+                ASTOperand::Label(label_str) => match symbol_table.find_symbol(label_str) {
+                    Some(_) => (),
+                    None => return Err(CompilerError::UndefinedSymbol(label_str.clone())),
+                },
                 ASTOperand::Constant(constant_str) => {
-                    symbol_table
-                        .find_symbol(constant_str)
-                        .expect("Constant not found");
+                    match symbol_table.find_symbol(constant_str) {
+                        Some(_) => (),
+                        None => return Err(CompilerError::UndefinedSymbol(constant_str.clone())),
+                    }
                 }
                 _ => (),
             }
         }
-    })
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -199,7 +217,8 @@ mod tests {
 
         resolve_labels(&ast, &mut symbol_table);
         resolve_constants(&ast, &mut symbol_table);
-        verify_symbols(&ast, &mut symbol_table);
+        let res = verify_symbols(&ast, &mut symbol_table);
+        assert!(res.is_ok());
         assert_eq!(symbol_table.symbols.len(), 4);
         assert_eq!(symbol_table.symbols[0].name, "firstloop");
         assert_eq!(symbol_table.symbols[0].symbol, SymbolType::Label(0x04));
@@ -220,7 +239,6 @@ mod tests {
     // ** Error cases **
     // Undefined symbols
     #[test]
-    #[should_panic]
     fn test_undefined_label() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![ASTNode::new_instruction(
@@ -230,11 +248,14 @@ mod tests {
         )];
 
         resolve_labels(&ast, &mut symbol_table);
-        verify_symbols(&ast, &mut symbol_table);
+        let res = verify_symbols(&ast, &mut symbol_table);
+        assert_eq!(
+            res,
+            Err(CompilerError::UndefinedSymbol("undefined".to_string()))
+        );
     }
 
     #[test]
-    #[should_panic]
     fn test_undefined_constant() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![ASTNode::new_instruction(
@@ -244,31 +265,40 @@ mod tests {
         )];
 
         resolve_constants(&ast, &mut symbol_table);
-        verify_symbols(&ast, &mut symbol_table);
+        let res = verify_symbols(&ast, &mut symbol_table);
+        assert_eq!(res, Err(CompilerError::UndefinedSymbol("zero".to_string())));
     }
 
     // Double definitions
     #[test]
-    #[should_panic]
     fn test_double_label_definition() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
             ASTNode::Label("label".to_string()),
             ASTNode::Label("label".to_string()),
         ];
+
         resolve_labels(&ast, &mut symbol_table);
-        verify_symbols(&ast, &mut symbol_table);
+        let res = verify_symbols(&ast, &mut symbol_table);
+        assert_eq!(
+            res,
+            Err(CompilerError::SymbolAlreadyDefined("label".to_string()))
+        );
     }
 
     #[test]
-    #[should_panic]
     fn test_double_constant_definition() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
             ASTNode::Constant(ASTConstantNode::new_byte("my_byte".to_string(), 0x12)),
             ASTNode::Constant(ASTConstantNode::new_byte("my_byte".to_string(), 0x12)),
         ];
+
         resolve_constants(&ast, &mut symbol_table);
-        verify_symbols(&ast, &mut symbol_table);
+        let res = verify_symbols(&ast, &mut symbol_table);
+        assert_eq!(
+            res,
+            Err(CompilerError::SymbolAlreadyDefined("my_byte".to_string()))
+        );
     }
 }

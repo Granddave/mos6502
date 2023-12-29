@@ -803,10 +803,8 @@ mod tests {
             // Arrange
             let mut cpu = Cpu::new();
             let mut memory = Memory::new();
-            memory.load(
-                PROGRAM_START,
-                &compile_code(self.code).expect("Failed to compile code"),
-            );
+            let bytes = compile_code(self.code).expect("Failed to compile code");
+            memory.load(PROGRAM_START, &bytes);
             if let Some(init_memory_fn) = self.init_memory_fn {
                 init_memory_fn(&mut memory);
             }

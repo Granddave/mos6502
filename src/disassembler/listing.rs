@@ -27,7 +27,8 @@ impl Listing {
 
     #[tracing::instrument]
     fn generate_line(&self, ins: &ASTInstructionNode) -> String {
-        let bytes = Compiler::instruction_to_bytes(ins);
+        let bytes =
+            Compiler::instruction_to_bytes(ins).expect("Failed to convert instruction to bytes");
         let bytes_str = bytes
             .iter()
             .map(|b| format!("{:02X}", b))
