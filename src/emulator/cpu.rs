@@ -765,11 +765,24 @@ mod tests {
 
     const PROGRAM_START: u16 = 0x0600;
 
+    /// A test case for the CPU.
+    ///
+    /// The test case consists of a code snippet, the expected CPU state after
+    /// executing the code snippet, and the expected number of cycles.
+    ///
+    /// Optionally, the test case can also specify an initialization function
+    /// for the memory and an assertion function for the memory after executing
+    /// the code snippet.
     struct TestCase {
+        /// Code to run on a reset CPU.
         code: &'static str,
+        /// Expected CPU state after executing the code snippet.
         expected_cpu: Cpu,
+        /// Expected number of cpu cycles to run.
         expected_cycles: usize,
+        /// Optional function to initialize the memory before running the test.
         init_memory_fn: Option<fn(&mut Memory)>,
+        /// Optional function to assert the memory after running the test.
         expected_memory_fn: Option<fn(&Memory)>,
     }
 
