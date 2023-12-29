@@ -90,6 +90,44 @@ impl Cpu {
         cycles: &mut usize,
     ) {
         match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
+            (ASTMnemonic::ADC, _, ASTOperand::Immediate(value)) => {
+                self.add_with_carry(*value);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.add_with_carry(memory.read_byte(*addr as u16));
+                *cycles -= 3;
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.add_with_carry(memory.read_byte((*addr + self.x) as u16));
+                *cycles -= 4;
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.add_with_carry(memory.read_byte(*addr));
+                *cycles -= 4;
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::X, *addr);
+                self.add_with_carry(memory.read_byte(indexed_addr));
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::Y, *addr);
+                self.add_with_carry(memory.read_byte(indexed_addr));
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.add_with_carry(memory.read_byte(indirect_addr));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ADC, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.add_with_carry(memory.read_byte(indexed_addr & 0xff));
+                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+            }
             // AND
             (ASTMnemonic::AND, _, ASTOperand::Immediate(value)) => {
                 self.a &= *value;
@@ -145,6 +183,11 @@ impl Cpu {
             // CLC
             (ASTMnemonic::CLC, _, ASTOperand::Implied) => {
                 self.status.carry = false;
+                *cycles -= 2;
+            }
+            // CLV
+            (ASTMnemonic::CLV, _, ASTOperand::Implied) => {
+                self.status.overflow = false;
                 *cycles -= 2;
             }
             // CMP
@@ -475,6 +518,45 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.a);
                 *cycles -= if page_boundary_crossed { 6 } else { 5 };
             }
+            // SBC
+            (ASTMnemonic::SBC, _, ASTOperand::Immediate(value)) => {
+                self.subtract_with_carry(*value);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                self.subtract_with_carry(memory.read_byte(*addr as u16));
+                *cycles -= 3;
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                self.subtract_with_carry(memory.read_byte((*addr + self.x) as u16));
+                *cycles -= 4;
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.subtract_with_carry(memory.read_byte(*addr));
+                *cycles -= 4;
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::X, *addr);
+                self.subtract_with_carry(memory.read_byte(indexed_addr));
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
+                let (page_boundary_crossed, indexed_addr) =
+                    self.indexed_indirect(Register::Y, *addr);
+                self.subtract_with_carry(memory.read_byte(indexed_addr));
+                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
+                let indirect_addr = self.indexed_indirect_x(memory, *addr);
+                self.subtract_with_carry(memory.read_byte(indirect_addr));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::SBC, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
+                self.subtract_with_carry(memory.read_byte(indexed_addr & 0xff));
+                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+            }
             // SEC
             (ASTMnemonic::SEC, _, ASTOperand::Implied) => {
                 self.status.carry = true;
@@ -561,7 +643,7 @@ impl Cpu {
                 self.load_register(Register::A, self.y);
                 *cycles -= 2;
             }
-            _ => panic!("Invalid instruction: '{:#?}'", &ins),
+            _ => todo!("Invalid instruction: '{:#?}'", &ins),
         }
     }
 
@@ -583,6 +665,33 @@ impl Cpu {
     fn indexed_indirect_y(&self, memory: &mut dyn Bus, zp_addr: u8) -> (bool, u16) {
         let indirect_addr = memory.read_word(zp_addr as u16);
         self.indexed_indirect(Register::Y, indirect_addr)
+    }
+
+    fn add_with_carry(&mut self, value: u8) {
+        // TODO: Handle BCD mode
+
+        let result: u16 = value as u16 + self.a as u16 + self.status.carry as u16;
+        self.status.zero = result & 0xff == 0;
+        self.status.negative = result & 0x80 != 0;
+        self.status.overflow = (self.a ^ result as u8) & (value ^ result as u8) & 0x80 != 0;
+        self.status.carry = result > 0xff;
+        self.a = result as u8;
+    }
+
+    fn subtract_with_carry(&mut self, value: u8) {
+        // TODO: Handle BCD mode
+
+        let borrow = if self.status.carry { 0 } else { 1 };
+        let result: u16 = (self.a as u16)
+            .wrapping_sub(value as u16)
+            .wrapping_sub(borrow as u16);
+
+        self.status.negative = result & 0x80 != 0;
+        self.status.zero = result & 0xff == 0;
+        self.status.overflow =
+            ((self.a ^ value) & 0x80) != 0 && ((self.a ^ result as u8) & 0x80) != 0;
+        self.status.carry = result < 0x100;
+        self.a = result as u8;
     }
 
     fn compare(&mut self, register: Register, value: u8) {
@@ -686,9 +795,202 @@ mod tests {
     }
 
     #[test]
+    fn test_arithmetic() {
+        vec![
+            // ADC
+            TestCase {
+                // Simple addition
+                code: "LDA #$10\nADC #$10",
+                expected_cpu: Cpu {
+                    a: 0x20,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: false,
+                        overflow: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Addition with carry
+                code: "LDA #$ff\nADC #$01",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        overflow: false,
+                        zero: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Overflow
+                code: "LDA #$7f\nADC #$01",
+                expected_cpu: Cpu {
+                    a: 0x80,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: false,
+                        overflow: true,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$ff\nADC #$ff",
+                expected_cpu: Cpu {
+                    a: 0xfe,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        overflow: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$ff\nADC #$ff\nADC #$ff",
+                expected_cpu: Cpu {
+                    a: 0xfe,
+                    pc: PROGRAM_START + 2 + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        overflow: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$ff\nADC #$ff\nADC #$ff\nADC #$ff",
+                expected_cpu: Cpu {
+                    a: 0xfe,
+                    pc: PROGRAM_START + 2 + 2 + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        overflow: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "ADC #$80\nADC #$80",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    pc: PROGRAM_START + 2 + 2,
+                    status: Status {
+                        carry: true,
+                        overflow: true,
+                        zero: true,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // SBC
+            TestCase {
+                code: "SEC\nSBC #$01",
+                expected_cpu: Cpu {
+                    a: 0xff,
+                    pc: PROGRAM_START + 1 + 2,
+                    status: Status {
+                        carry: false,
+                        overflow: false,
+                        zero: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$10\nSEC\nSBC #$10",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    pc: PROGRAM_START + 2 + 1 + 2,
+                    status: Status {
+                        carry: true,
+                        overflow: false,
+                        zero: true,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$10\nSEC\nSBC #$11",
+                expected_cpu: Cpu {
+                    a: 0xff,
+                    pc: PROGRAM_START + 2 + 1 + 2,
+                    status: Status {
+                        carry: false,
+                        overflow: false,
+                        zero: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                code: "LDA #$10\nSEC\nSBC #$ff",
+                expected_cpu: Cpu {
+                    a: 0x11,
+                    pc: PROGRAM_START + 2 + 1 + 2,
+                    status: Status {
+                        carry: false,
+                        overflow: false,
+                        zero: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
     fn test_set_and_clear() {
         vec![
-            // CLC
+            // CLC (clear carry flag)
             TestCase {
                 // First set carry flag and then clear it
                 code: "SEC\nCLC",
@@ -703,7 +1005,7 @@ mod tests {
                 expected_cycles: 2 + 2,
                 ..Default::default()
             },
-            // SEC
+            // SEC (set carry flag)
             TestCase {
                 code: "SEC",
                 expected_cpu: Cpu {
@@ -715,6 +1017,25 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2,
+                ..Default::default()
+            },
+            // CLV (clear overflow flag)
+            TestCase {
+                // First cause an overflow with ADC and then clear it
+                code: "LDA #$7f\nADC #$01\nCLV",
+                expected_cpu: Cpu {
+                    a: 0x80,
+                    status: Status {
+                        overflow: false,
+                        zero: false,
+                        carry: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
                 ..Default::default()
             },
         ]
