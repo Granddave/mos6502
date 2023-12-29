@@ -175,6 +175,17 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.a);
                 *cycles -= if page_boundary_crossed { 6 } else { 5 };
             }
+            // BIT
+            (ASTMnemonic::BIT, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let value = memory.read_byte(*addr as u16);
+                self.bit_test(value);
+                *cycles -= 3;
+            }
+            (ASTMnemonic::BIT, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr);
+                self.bit_test(value);
+                *cycles -= 4;
+            }
             // BRK
             (ASTMnemonic::BRK, _, ASTOperand::Implied) => {
                 self.pc += 1;
@@ -694,6 +705,11 @@ impl Cpu {
         self.a = result as u8;
     }
 
+    fn bit_test(&mut self, value: u8) {
+        self.set_zero_and_negative_flags(value);
+        self.status.overflow = value & 0x40 != 0;
+    }
+
     fn compare(&mut self, register: Register, value: u8) {
         let register_value = match register {
             Register::A => self.a,
@@ -1036,6 +1052,84 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_bit_test() {
+        vec![
+            TestCase {
+                // Test BIT with zero
+                code: "BIT $00",
+                expected_cpu: Cpu {
+                    status: Status {
+                        zero: true,
+                        overflow: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 3,
+                ..Default::default()
+            },
+            TestCase {
+                // Test BIT with negative
+                code: "LDA #$80\nBIT $00",
+                init_memory_fn: Some(|memory| memory.write(0x00, 0x80)),
+                expected_cpu: Cpu {
+                    a: 0x80,
+                    status: Status {
+                        zero: false,
+                        overflow: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 3,
+                ..Default::default()
+            },
+            TestCase {
+                // Test BIT with overflow
+                code: "LDA #$40\nBIT $00",
+                init_memory_fn: Some(|memory| memory.write(0x00, 0x40)),
+                expected_cpu: Cpu {
+                    a: 0x40,
+                    status: Status {
+                        zero: false,
+                        overflow: true,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 3,
+                ..Default::default()
+            },
+            TestCase {
+                // Test BIT with overflow and negative
+                code: "LDA #%11000000\nBIT $00",
+                init_memory_fn: Some(|memory| memory.write(0x00, 0b11000000)),
+                expected_cpu: Cpu {
+                    a: 0b11000000,
+                    status: Status {
+                        zero: false,
+                        overflow: true,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 3,
                 ..Default::default()
             },
         ]
