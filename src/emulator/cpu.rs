@@ -137,11 +137,13 @@ impl Default for Cpu {
 }
 
 impl Cpu {
+    #[tracing::instrument]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Fetches and decodes the next instruction from memory.
+    #[tracing::instrument]
     fn fetch_and_decode(&mut self, memory: &mut Memory) -> ASTInstructionNode {
         let opcode = memory.read_byte(self.pc);
         let ins = OPCODE_MAPPING
@@ -171,6 +173,7 @@ impl Cpu {
         ASTInstructionNode { ins, operand }
     }
 
+    #[tracing::instrument]
     fn execute_instruction(&mut self, ins: ASTInstructionNode, memory: &mut Memory) -> usize {
         match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
             (ASTMnemonic::ADC, _, ASTOperand::Immediate(value)) => {
@@ -1048,6 +1051,7 @@ impl Cpu {
         }
     }
 
+    #[tracing::instrument]
     fn indexed_indirect(&self, register: Register, addr: u16) -> (bool, u16) {
         let indexed_addr = addr.wrapping_add(match register {
             Register::X => self.x,
@@ -1059,10 +1063,12 @@ impl Cpu {
         (page_boundary_crossed, indexed_addr)
     }
 
+    #[tracing::instrument]
     fn indexed_indirect_x(&self, memory: &mut Memory, zp_addr: u8) -> u16 {
         memory.read_word((zp_addr + self.x) as u16) & 0xff
     }
 
+    #[tracing::instrument]
     fn indexed_indirect_y(&self, memory: &mut Memory, zp_addr: u8) -> (bool, u16) {
         let indirect_addr = memory.read_word(zp_addr as u16);
         self.indexed_indirect(Register::Y, indirect_addr)
@@ -1070,6 +1076,7 @@ impl Cpu {
 
     /// Branch on condition.
     /// Returns the number of cycles taken.
+    #[tracing::instrument]
     fn branch_on_condition(&mut self, should_branch: bool, offset: i8) -> usize {
         if should_branch {
             let old_pc = self.pc;
@@ -1086,6 +1093,7 @@ impl Cpu {
         }
     }
 
+    #[tracing::instrument]
     fn shift_left(&mut self, value: u8) -> u8 {
         self.status.carry = value & 0x80 != 0;
         let result = value << 1;
@@ -1093,6 +1101,7 @@ impl Cpu {
         result
     }
 
+    #[tracing::instrument]
     fn shift_right(&mut self, value: u8) -> u8 {
         self.status.carry = value & 0x01 != 0;
         let result = value >> 1;
@@ -1100,6 +1109,7 @@ impl Cpu {
         result
     }
 
+    #[tracing::instrument]
     fn rotate_left(&mut self, value: u8) -> u8 {
         let carry = self.status.carry as u8;
         self.status.carry = value & 0x80 != 0;
@@ -1108,6 +1118,7 @@ impl Cpu {
         result
     }
 
+    #[tracing::instrument]
     fn rotate_right(&mut self, value: u8) -> u8 {
         let carry = self.status.carry as u8;
         self.status.carry = value & 0x01 != 0;
@@ -1116,6 +1127,7 @@ impl Cpu {
         result
     }
 
+    #[tracing::instrument]
     fn add_with_carry(&mut self, value: u8) {
         // TODO: Handle BCD mode
 
@@ -1127,6 +1139,7 @@ impl Cpu {
         self.a = result as u8;
     }
 
+    #[tracing::instrument]
     fn subtract_with_carry(&mut self, value: u8) {
         // TODO: Handle BCD mode
 
@@ -1143,11 +1156,13 @@ impl Cpu {
         self.a = result as u8;
     }
 
+    #[tracing::instrument]
     fn bit_test(&mut self, value: u8) {
         self.set_zero_and_negative_flags(value);
         self.status.overflow = value & 0x40 != 0;
     }
 
+    #[tracing::instrument]
     fn compare(&mut self, register: Register, value: u8) {
         let register_value = match register {
             Register::A => self.a,
@@ -1158,11 +1173,13 @@ impl Cpu {
         self.status.carry = register_value >= value;
     }
 
+    #[tracing::instrument]
     fn set_zero_and_negative_flags(&mut self, value: u8) {
         self.status.zero = value == 0;
         self.status.negative = value & 0x80 != 0;
     }
 
+    #[tracing::instrument]
     fn load_register(&mut self, register: Register, value: u8) {
         match register {
             Register::A => self.a = value,
@@ -1172,6 +1189,7 @@ impl Cpu {
         self.set_zero_and_negative_flags(value);
     }
 
+    #[tracing::instrument]
     fn store_register(&mut self, register: Register, addr: u16, memory: &mut Memory) {
         let value = match register {
             Register::A => self.a,
@@ -1181,20 +1199,24 @@ impl Cpu {
         memory.write_byte(addr, value);
     }
 
+    #[tracing::instrument]
     fn push_to_stack(&mut self, memory: &mut Memory, value: u8) {
         memory.write_byte(STACK_BASE + self.sp as u16, value);
         self.sp = self.sp.wrapping_sub(1);
     }
 
+    #[tracing::instrument]
     fn pop_from_stack(&mut self, memory: &mut Memory) -> u8 {
         self.sp = self.sp.wrapping_add(1);
         memory.read_byte(STACK_BASE + self.sp as u16)
     }
 
+    #[tracing::instrument]
     fn set_program_counter(&mut self, addr: u16) {
         self.pc = addr;
     }
 
+    #[tracing::instrument]
     fn handle_interrupt(&mut self, memory: &mut Memory, vector: u16) -> usize {
         let return_addr = self.pc;
         self.push_to_stack(memory, (return_addr >> 8) as u8);
@@ -1206,6 +1228,7 @@ impl Cpu {
         7
     }
 
+    #[tracing::instrument]
     fn handle_reset(&mut self, memory: &mut Memory) -> usize {
         self.a = 0;
         self.x = 0;
@@ -1220,6 +1243,7 @@ impl Cpu {
         8
     }
 
+    #[tracing::instrument]
     fn handle_interrupt_request(&mut self, memory: &mut Memory) {
         if self.reset_interrupt_pending {
             self.reset_interrupt_pending = false;
@@ -1236,21 +1260,25 @@ impl Cpu {
     }
 
     /// Reset interrupt request
+    #[tracing::instrument]
     pub fn reset(&mut self) {
         self.reset_interrupt_pending = true;
     }
 
     /// IRQ - Hardware interrupt request
+    #[tracing::instrument]
     pub fn irq(&mut self) {
         self.irq_interrupt_pending = true;
     }
 
     /// NMI - Non-maskable hardware interrupt request
+    #[tracing::instrument]
     pub fn nmi(&mut self) {
         self.nmi_interrupt_pending = true;
     }
 
     /// Ticks the clock of the CPU.
+    #[tracing::instrument]
     pub fn clock(&mut self, memory: &mut Memory) {
         // If the break flag is set, we're stopping the CPU.
 
@@ -1275,6 +1303,7 @@ impl Cpu {
     }
 
     /// Steps the CPU by one instruction.
+    #[tracing::instrument]
     pub fn step(&mut self, memory: &mut Memory) {
         for _ in 0..self.cycle {
             self.clock(memory);
@@ -1282,6 +1311,7 @@ impl Cpu {
     }
 
     /// Runs the CPU until the given number of cycles has been reached.
+    #[tracing::instrument]
     pub fn run(&mut self, memory: &mut Memory, cycles_to_run: usize) {
         for _ in 0..cycles_to_run {
             self.clock(memory);
