@@ -44,7 +44,7 @@ fn main() -> Result<()> {
 
     let bytes = compile_code(&input_source).with_context(|| "Compilation failed")?;
 
-    const PROGRAM_START: u16 = 0x0800;
+    const PROGRAM_START: u16 = 0x0600;
     let mut memory = Memory::new();
     memory.write_word(cpu::RESET_VECTOR, PROGRAM_START);
     memory.load(PROGRAM_START, &bytes);
