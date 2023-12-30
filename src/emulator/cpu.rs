@@ -813,12 +813,20 @@ impl Cpu {
                 return 2;
             }
             // TSX
+            (ASTMnemonic::TSX, _, ASTOperand::Implied) => {
+                self.load_register(Register::X, self.sp);
+                return 2;
+            }
             // TXA
             (ASTMnemonic::TXA, _, ASTOperand::Implied) => {
                 self.load_register(Register::A, self.x);
                 return 2;
             }
             // TXS
+            (ASTMnemonic::TXS, _, ASTOperand::Implied) => {
+                self.sp = self.x;
+                return 2;
+            }
             // TYA
             (ASTMnemonic::TYA, _, ASTOperand::Implied) => {
                 self.load_register(Register::A, self.y);
@@ -2321,6 +2329,38 @@ mod tests {
                     a: 0x34,
                     y: 0x34,
                     pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // TSX
+            TestCase {
+                code: "TSX",
+                expected_cpu: Cpu {
+                    x: 0xff,
+                    sp: 0xff,
+                    pc: PROGRAM_START + 1,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 2,
+                ..Default::default()
+            },
+            // TXS
+            TestCase {
+                code: "LDX #$fc\nTXS",
+                expected_cpu: Cpu {
+                    x: 0xfc,
+                    sp: 0xfc,
+                    pc: PROGRAM_START + 2 + 1,
+                    status: Status {
+                        negative: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
