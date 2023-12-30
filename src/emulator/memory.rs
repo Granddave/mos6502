@@ -1,7 +1,8 @@
 pub trait Bus {
     fn read_byte(&self, address: u16) -> u8;
     fn read_word(&self, address: u16) -> u16;
-    fn write(&mut self, address: u16, data: u8);
+    fn write_byte(&mut self, address: u16, data: u8);
+    fn write_word(&mut self, address: u16, data: u16);
 }
 
 pub struct Memory {
@@ -26,7 +27,7 @@ impl Memory {
     pub fn load(&mut self, start_address: u16, data: &[u8]) {
         let mut address = start_address;
         for byte in data {
-            self.write(address, *byte);
+            self.write_byte(address, *byte);
             address += 1;
         }
     }
@@ -51,7 +52,12 @@ impl Bus for Memory {
     }
 
     /// Writes a byte to memory.
-    fn write(&mut self, address: u16, data: u8) {
+    fn write_byte(&mut self, address: u16, data: u8) {
         self.data[address as usize] = data;
+    }
+
+    fn write_word(&mut self, address: u16, data: u16) {
+        self.data[address as usize] = (data & 0xff) as u8;
+        self.data[(address + 1) as usize] = ((data >> 8) & 0xff) as u8;
     }
 }

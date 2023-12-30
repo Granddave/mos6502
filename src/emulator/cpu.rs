@@ -179,24 +179,24 @@ impl Cpu {
             (ASTMnemonic::ASL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.shift_left(value));
+                memory.write_byte(addr, self.shift_left(value));
                 return 5;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.shift_left(value));
+                memory.write_byte(addr, self.shift_left(value));
                 return 6;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
-                memory.write(*addr, self.shift_left(value));
+                memory.write_byte(*addr, self.shift_left(value));
                 return 6;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.shift_left(value));
+                memory.write_byte(addr, self.shift_left(value));
                 return 7;
             }
             // Branch instructions
@@ -319,27 +319,27 @@ impl Cpu {
             (ASTMnemonic::DEC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write(addr, value);
+                memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 5;
             }
             (ASTMnemonic::DEC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write(addr, value);
+                memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 6;
             }
             (ASTMnemonic::DEC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr).wrapping_sub(1);
-                memory.write(*addr, value);
+                memory.write_byte(*addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 6;
             }
             (ASTMnemonic::DEC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write(addr, value);
+                memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 7;
             }
@@ -406,27 +406,27 @@ impl Cpu {
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write(addr, value);
+                memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 5;
             }
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write(addr, value);
+                memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 6;
             }
             (ASTMnemonic::INC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr).wrapping_add(1);
-                memory.write(*addr, value);
+                memory.write_byte(*addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 6;
             }
             (ASTMnemonic::INC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write(addr, value);
+                memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 return 7;
             }
@@ -535,24 +535,24 @@ impl Cpu {
             (ASTMnemonic::LSR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.shift_right(value));
+                memory.write_byte(addr, self.shift_right(value));
                 return 5;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.shift_right(value));
+                memory.write_byte(addr, self.shift_right(value));
                 return 6;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
-                memory.write(*addr, self.shift_right(value));
+                memory.write_byte(*addr, self.shift_right(value));
                 return 6;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.shift_right(value));
+                memory.write_byte(addr, self.shift_right(value));
                 return 7;
             }
             // NOP
@@ -614,24 +614,24 @@ impl Cpu {
             (ASTMnemonic::ROL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.rotate_left(value));
+                memory.write_byte(addr, self.rotate_left(value));
                 return 5;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.rotate_left(value));
+                memory.write_byte(addr, self.rotate_left(value));
                 return 6;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
-                memory.write(*addr, self.rotate_left(value));
+                memory.write_byte(*addr, self.rotate_left(value));
                 return 6;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.rotate_left(value));
+                memory.write_byte(addr, self.rotate_left(value));
                 return 7;
             }
             // ROR
@@ -642,24 +642,24 @@ impl Cpu {
             (ASTMnemonic::ROR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.rotate_right(value));
+                memory.write_byte(addr, self.rotate_right(value));
                 return 5;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.rotate_right(value));
+                memory.write_byte(addr, self.rotate_right(value));
                 return 6;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
-                memory.write(*addr, self.rotate_right(value));
+                memory.write_byte(*addr, self.rotate_right(value));
                 return 6;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
-                memory.write(addr, self.rotate_right(value));
+                memory.write_byte(addr, self.rotate_right(value));
                 return 7;
             }
             // SBC
@@ -921,7 +921,7 @@ impl Cpu {
             Register::X => self.x,
             Register::Y => self.y,
         };
-        memory.write(addr, value);
+        memory.write_byte(addr, value);
     }
 
     fn set_program_counter(&mut self, addr: u16) {
@@ -1449,7 +1449,7 @@ mod tests {
             TestCase {
                 // Test BIT with negative
                 code: "LDA #$80\nBIT $00",
-                init_memory_fn: Some(|memory| memory.write(0x00, 0x80)),
+                init_memory_fn: Some(|memory| memory.write_byte(0x00, 0x80)),
                 expected_cpu: Cpu {
                     a: 0x80,
                     status: Status {
@@ -1467,7 +1467,7 @@ mod tests {
             TestCase {
                 // Test BIT with overflow
                 code: "LDA #$40\nBIT $00",
-                init_memory_fn: Some(|memory| memory.write(0x00, 0x40)),
+                init_memory_fn: Some(|memory| memory.write_byte(0x00, 0x40)),
                 expected_cpu: Cpu {
                     a: 0x40,
                     status: Status {
@@ -1485,7 +1485,7 @@ mod tests {
             TestCase {
                 // Test BIT with overflow and negative
                 code: "LDA #%11000000\nBIT $00",
-                init_memory_fn: Some(|memory| memory.write(0x00, 0b11000000)),
+                init_memory_fn: Some(|memory| memory.write_byte(0x00, 0b11000000)),
                 expected_cpu: Cpu {
                     a: 0b11000000,
                     status: Status {
@@ -1781,7 +1781,7 @@ mod tests {
                 },
                 expected_cycles: 5,
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x10);
+                    memory.write_byte(0x10, 0x10);
                 }),
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x0f);
@@ -1799,7 +1799,7 @@ mod tests {
                 },
                 expected_cycles: 5,
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x01);
+                    memory.write_byte(0x10, 0x01);
                 }),
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x00);
@@ -1813,7 +1813,7 @@ mod tests {
                 },
                 expected_cycles: 5,
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x80);
+                    memory.write_byte(0x10, 0x80);
                 }),
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x10), 0x7f);
@@ -1866,7 +1866,7 @@ mod tests {
                 },
                 expected_cycles: 5,
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x01);
+                    memory.write_byte(0x10, 0x01);
                 }),
                 ..Default::default()
             },
@@ -1882,7 +1882,7 @@ mod tests {
                 },
                 expected_cycles: 5,
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0xff);
+                    memory.write_byte(0x10, 0xff);
                 }),
                 ..Default::default()
             },
@@ -1899,7 +1899,7 @@ mod tests {
                 },
                 expected_cycles: 5,
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x7f);
+                    memory.write_byte(0x10, 0x7f);
                 }),
                 ..Default::default()
             },
@@ -1983,7 +1983,7 @@ mod tests {
             TestCase {
                 code: "LDA $10",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x10);
+                    memory.write_byte(0x10, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -1997,7 +1997,7 @@ mod tests {
             TestCase {
                 code: "LDX #$01\nLDA $10,X",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x11, 0x10);
+                    memory.write_byte(0x11, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2012,7 +2012,7 @@ mod tests {
             TestCase {
                 code: "LDA $1234",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x1234, 0x10);
+                    memory.write_byte(0x1234, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2026,7 +2026,7 @@ mod tests {
             TestCase {
                 code: "LDX #$01\nLDA $1234,X",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x1235, 0x10);
+                    memory.write_byte(0x1235, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2041,7 +2041,7 @@ mod tests {
             TestCase {
                 code: "LDX #$01\nLDA $12ff,X",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x1300, 0x10);
+                    memory.write_byte(0x1300, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2056,7 +2056,7 @@ mod tests {
             TestCase {
                 code: "LDY #$01\nLDA $1234,Y",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x1235, 0x10);
+                    memory.write_byte(0x1235, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2071,7 +2071,7 @@ mod tests {
             TestCase {
                 code: "LDY #$01\nLDA $12ff,Y",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x1300, 0x10);
+                    memory.write_byte(0x1300, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2086,8 +2086,8 @@ mod tests {
             TestCase {
                 code: "LDX #$01\nLDA ($10,X)",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x11, 0x34);
-                    memory.write(0x34, 0x10);
+                    memory.write_byte(0x11, 0x34);
+                    memory.write_byte(0x34, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2102,8 +2102,8 @@ mod tests {
             TestCase {
                 code: "LDY #$01\nLDA ($10),Y",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x10, 0x34);
-                    memory.write(0x35, 0x10);
+                    memory.write_byte(0x10, 0x34);
+                    memory.write_byte(0x35, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
@@ -2118,8 +2118,8 @@ mod tests {
             TestCase {
                 code: "LDY #$01\nLDA ($34),Y",
                 init_memory_fn: Some(|memory| {
-                    memory.write(0x0034, 0xff);
-                    memory.write(0x0000, 0x10);
+                    memory.write_byte(0x0034, 0xff);
+                    memory.write_byte(0x0000, 0x10);
                 }),
                 expected_cpu: Cpu {
                     a: 0x10,
