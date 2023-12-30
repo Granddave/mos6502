@@ -175,6 +175,34 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.a);
                 *cycles -= if page_boundary_crossed { 6 } else { 5 };
             }
+            // ASL
+            (ASTMnemonic::ASL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
+                self.a = self.shift_left(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::ASL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let addr = *addr as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.shift_left(value));
+                *cycles -= 5;
+            }
+            (ASTMnemonic::ASL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                let addr = (*addr + self.x) as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.shift_left(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ASL, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr);
+                memory.write(*addr, self.shift_left(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ASL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let addr = addr.wrapping_add(self.x as u16);
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.shift_left(value));
+                *cycles -= 7;
+            }
             // BIT
             (ASTMnemonic::BIT, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let value = memory.read_byte(*addr as u16);
@@ -478,6 +506,34 @@ impl Cpu {
                 self.load_register(Register::Y, memory.read_byte(indexed_addr));
                 *cycles -= if page_boundary_crossed { 5 } else { 4 };
             }
+            // LSR
+            (ASTMnemonic::LSR, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
+                self.a = self.shift_right(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::LSR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let addr = *addr as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.shift_right(value));
+                *cycles -= 5;
+            }
+            (ASTMnemonic::LSR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                let addr = (*addr + self.x) as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.shift_right(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::LSR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr);
+                memory.write(*addr, self.shift_right(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::LSR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let addr = addr.wrapping_add(self.x as u16);
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.shift_right(value));
+                *cycles -= 7;
+            }
             // NOP
             (ASTMnemonic::NOP, _, ASTOperand::Implied) => {
                 *cycles -= 2;
@@ -676,6 +732,20 @@ impl Cpu {
     fn indexed_indirect_y(&self, memory: &mut dyn Bus, zp_addr: u8) -> (bool, u16) {
         let indirect_addr = memory.read_word(zp_addr as u16);
         self.indexed_indirect(Register::Y, indirect_addr)
+    }
+
+    fn shift_left(&mut self, value: u8) -> u8 {
+        self.status.carry = value & 0x80 != 0;
+        let result = value << 1;
+        self.set_zero_and_negative_flags(result);
+        result
+    }
+
+    fn shift_right(&mut self, value: u8) -> u8 {
+        self.status.carry = value & 0x01 != 0;
+        let result = value >> 1;
+        self.set_zero_and_negative_flags(result);
+        result
     }
 
     fn add_with_carry(&mut self, value: u8) {
@@ -1063,6 +1133,84 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_bit_shifts() {
+        vec![
+            // ASL
+            TestCase {
+                // Simple shift
+                code: "LDA #$08\nASL",
+                expected_cpu: Cpu {
+                    a: 0x10,
+                    status: Status {
+                        zero: false,
+                        carry: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Shift with carry
+                code: "LDA #$80\nASL",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    status: Status {
+                        zero: true,
+                        carry: true,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // LSR
+            TestCase {
+                // Simple shift
+                code: "LDA #$10\nLSR",
+                expected_cpu: Cpu {
+                    a: 0x08,
+                    status: Status {
+                        zero: false,
+                        carry: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            TestCase {
+                // Shift with carry
+                code: "LDA #$01\nLSR",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    status: Status {
+                        zero: true,
+                        carry: true,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2,
                 ..Default::default()
             },
         ]
