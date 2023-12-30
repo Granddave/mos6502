@@ -884,6 +884,13 @@ impl Cpu {
         self.pc = addr;
     }
 
+    pub fn step(&mut self, memory: &mut dyn Bus) -> usize {
+        let instruction = self.fetch_and_decode(memory);
+        self.pc += instruction.size() as u16;
+        let cycles = self.execute_instruction(instruction, memory);
+        cycles
+    }
+
     pub fn run(&mut self, memory: &mut dyn Bus, cycles_to_run: usize) {
         let mut cycles = 0;
         while cycles < cycles_to_run {
