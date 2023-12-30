@@ -510,6 +510,14 @@ impl Cpu {
                 self.pc = indirect_addr;
                 return 5;
             }
+            // JSR
+            (ASTMnemonic::JSR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let return_addr = self.pc - 1;
+                self.push_to_stack(memory, (return_addr >> 8) as u8);
+                self.push_to_stack(memory, return_addr as u8);
+                self.pc = *addr;
+                return 6;
+            }
             // LDA
             (ASTMnemonic::LDA, _, ASTOperand::Immediate(value)) => {
                 self.load_register(Register::A, *value);
@@ -750,6 +758,13 @@ impl Cpu {
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.rotate_right(value));
                 return 7;
+            }
+            // RTS
+            (ASTMnemonic::RTS, _, ASTOperand::Implied) => {
+                self.pc = self.pop_from_stack(memory) as u16;
+                self.pc |= (self.pop_from_stack(memory) as u16) << 8;
+                self.pc += 1;
+                return 6;
             }
             // SBC
             (ASTMnemonic::SBC, _, ASTOperand::Immediate(value)) => {
@@ -1443,6 +1458,38 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
+                ..Default::default()
+            },
+            // JSR
+            TestCase {
+                // Jump to subroutine
+                code: "JSR $ff00",
+                expected_cpu: Cpu {
+                    pc: 0xff00,
+                    sp: 0xfd,
+                    ..Default::default()
+                },
+                expected_cycles: 6,
+                expected_memory_fn: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x01fe), 0x02);
+                    assert_eq!(memory.read_byte(0x01ff), 0x06);
+                }),
+                ..Default::default()
+            },
+            // RTS
+            TestCase {
+                // Return from subroutine
+                code: "JSR $ff00\nLDA #$01",
+                init_memory_fn: Some(|memory| {
+                    memory.write_byte(0xff00, 0x60); // RTS
+                }),
+                expected_cpu: Cpu {
+                    a: 0x01,
+                    pc: PROGRAM_START + 3 + 2, // JSR + LDA
+                    sp: 0xff,
+                    ..Default::default()
+                },
+                expected_cycles: 6 + 6 + 2,
                 ..Default::default()
             },
         ]
