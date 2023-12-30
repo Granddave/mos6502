@@ -5,8 +5,17 @@ use crate::{
     emulator::memory::Bus,
 };
 
+// Stack offsets
 const STACK_BASE: u16 = 0x0100;
 const STACK_POINTER_START: u8 = 0xff;
+
+// Interrupt vectors
+/// NMI (Non-maskable interrupt) vector
+const NMI_VECTOR: u16 = 0xfffa;
+/// Reset vector (power-on and hardware reset)
+const RESET_VECTOR: u16 = 0xfffc;
+/// IRQ (Interrupt request) maskable interrupt
+const INTERRUPT_VECTOR: u16 = 0xfffe;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Status {
@@ -15,7 +24,8 @@ struct Status {
     carry: bool,
     /// (Z) Zero flag, set if the result of the last operation was zero.
     zero: bool,
-    /// (I) Interrupt disable flag, set if the CPU is not to respond to interrupts.
+    /// (I) Interrupt disable flag, set if the CPU is not to respond to maskable
+    /// interrupts (IRQ).
     interrupt_disable: bool,
     /// (D) Decimal mode flag, set if the CPU is in decimal mode.
     decimal: bool,
@@ -80,6 +90,7 @@ enum Register {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cpu {
+    // CPU registers
     /// Accumulator
     a: u8,
     /// X register
@@ -92,6 +103,14 @@ pub struct Cpu {
     sp: u8,
     /// Status register
     status: Status,
+
+    // Emulation flags
+    /// If a reset interrupt is pending
+    reset_interrupt_pending: bool,
+    /// If an NMI interrupt is pending
+    nmi_interrupt_pending: bool,
+    /// If an IRQ interrupt is pending
+    irq_interrupt_pending: bool,
 }
 
 impl Default for Cpu {
@@ -103,6 +122,10 @@ impl Default for Cpu {
             pc: 0,
             sp: STACK_POINTER_START,
             status: Status::default(),
+
+            reset_interrupt_pending: false,
+            nmi_interrupt_pending: false,
+            irq_interrupt_pending: false,
         }
     }
 }
@@ -295,12 +318,24 @@ impl Cpu {
             }
             // BRK
             (ASTMnemonic::BRK, _, ASTOperand::Implied) => {
-                self.pc += 1;
-                panic!("BRK");
+                // Causes a non-maskable interrupt
+                self.pc += 2;
+                self.push_to_stack(memory, (self.pc >> 8) as u8);
+                self.push_to_stack(memory, self.pc as u8);
+                self.status.break_command = true;
+                self.push_to_stack(memory, self.status.into());
+                self.status.interrupt_disable = true;
+                self.pc = memory.read_word(INTERRUPT_VECTOR);
+                return 7;
             }
             // CLC
             (ASTMnemonic::CLC, _, ASTOperand::Implied) => {
                 self.status.carry = false;
+                return 2;
+            }
+            // CLI
+            (ASTMnemonic::CLI, _, ASTOperand::Implied) => {
+                self.status.interrupt_disable = false;
                 return 2;
             }
             // CLV
@@ -759,6 +794,15 @@ impl Cpu {
                 memory.write_byte(addr, self.rotate_right(value));
                 return 7;
             }
+            // RTI
+            (ASTMnemonic::RTI, _, ASTOperand::Implied) => {
+                self.status = self.pop_from_stack(memory).into();
+                self.status.break_command = false;
+                self.status.interrupt_disable = false;
+                self.pc = self.pop_from_stack(memory) as u16;
+                self.pc |= (self.pop_from_stack(memory) as u16) << 8;
+                return 6;
+            }
             // RTS
             (ASTMnemonic::RTS, _, ASTOperand::Implied) => {
                 self.pc = self.pop_from_stack(memory) as u16;
@@ -808,6 +852,11 @@ impl Cpu {
             // SEC
             (ASTMnemonic::SEC, _, ASTOperand::Implied) => {
                 self.status.carry = true;
+                return 2;
+            }
+            // SEI
+            (ASTMnemonic::SEI, _, ASTOperand::Implied) => {
+                self.status.interrupt_disable = true;
                 return 2;
             }
             // STA
@@ -1050,19 +1099,85 @@ impl Cpu {
         self.pc = addr;
     }
 
-    pub fn step(&mut self, memory: &mut Memory) -> usize {
-        let instruction = self.fetch_and_decode(memory);
-        self.pc += instruction.size() as u16;
-        let cycles = self.execute_instruction(instruction, memory);
-        cycles
+    fn handle_interrupt(&mut self, memory: &mut Memory, vector: u16) -> usize {
+        let return_addr = self.pc;
+        self.push_to_stack(memory, (return_addr >> 8) as u8);
+        self.push_to_stack(memory, return_addr as u8);
+        self.push_to_stack(memory, self.status.into());
+        self.status.interrupt_disable = true;
+        self.pc = memory.read_word(vector);
+
+        7
     }
 
+    fn handle_reset(&mut self, _memory: &mut Memory) -> usize {
+        self.a = 0;
+        self.x = 0;
+        self.y = 0;
+        self.sp = 0xFD;
+        self.status = Status {
+            interrupt_disable: true,
+            ..Default::default()
+        };
+        self.pc = RESET_VECTOR;
+
+        8
+    }
+
+    fn handle_interrupt_request(&mut self, memory: &mut Memory) -> usize {
+        if self.reset_interrupt_pending {
+            self.reset_interrupt_pending = false;
+            return self.handle_reset(memory);
+        }
+
+        if self.nmi_interrupt_pending {
+            self.nmi_interrupt_pending = false;
+            return self.handle_interrupt(memory, NMI_VECTOR);
+        }
+
+        if self.irq_interrupt_pending {
+            self.irq_interrupt_pending = false;
+            if !self.status.interrupt_disable {
+                return self.handle_interrupt(memory, INTERRUPT_VECTOR);
+            }
+        }
+
+        0
+    }
+
+    /// Reset interrupt request
+    pub fn reset(&mut self) {
+        self.reset_interrupt_pending = true;
+    }
+
+    /// IRQ - Hardware interrupt request
+    pub fn irq(&mut self) {
+        self.irq_interrupt_pending = true;
+    }
+
+    /// NMI - Non-maskable hardware interrupt request
+    pub fn nmi(&mut self) {
+        self.nmi_interrupt_pending = true;
+    }
+
+    /// Executes a single instruction or handles an interrupt.
+    /// Returns the number of cycles taken.
+    pub fn step(&mut self, memory: &mut Memory) -> usize {
+        let interrupt_cycles = self.handle_interrupt_request(memory);
+        if interrupt_cycles > 0 {
+            return interrupt_cycles;
+        }
+
+        let instruction = self.fetch_and_decode(memory);
+        self.pc += instruction.size() as u16;
+        return self.execute_instruction(instruction, memory);
+    }
+
+    /// Runs the CPU until the given number of cycles has been reached.
     pub fn run(&mut self, memory: &mut Memory, cycles_to_run: usize) {
         let mut cycles = 0;
         while cycles < cycles_to_run {
-            let instruction = self.fetch_and_decode(memory);
-            self.pc += instruction.size() as u16;
-            cycles += self.execute_instruction(instruction, memory);
+            cycles += self.step(memory);
         }
     }
 }
@@ -2536,6 +2651,56 @@ mod tests {
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x01ff), 0b1000_0000); // Old stack value
                 }),
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_interrupts() {
+        vec![
+            // BRK
+            TestCase {
+                code: "BRK",
+                init_memory_fn: Some(|memory| {
+                    memory.write_word(INTERRUPT_VECTOR, 0x1200);
+                }),
+                expected_cpu: Cpu {
+                    pc: 0x1200,
+                    sp: 0xff - 3,
+                    status: Status {
+                        break_command: true,
+                        interrupt_disable: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                expected_cycles: 7,
+                expected_memory_fn: Some(|memory| {
+                    assert_eq!(memory.read_word(0x01fe), PROGRAM_START + 1 + 2);
+                }),
+                ..Default::default()
+            },
+            // RTI
+            TestCase {
+                code: "BRK",
+                init_memory_fn: Some(|memory| {
+                    memory.write_word(INTERRUPT_VECTOR, 0x1200);
+                    // LDA #$01
+                    memory.write_byte(0x1200, 0xa9);
+                    memory.write_byte(0x1201, 0x01);
+                    // RTI
+                    memory.write_byte(0x1202, 0x40);
+                }),
+                expected_cpu: Cpu {
+                    a: 0x01,
+                    pc: PROGRAM_START + 1 + 2,
+                    sp: 0xff,
+                    ..Default::default()
+                },
+                expected_cycles: 7 + 6,
                 ..Default::default()
             },
         ]
