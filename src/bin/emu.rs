@@ -36,13 +36,20 @@ fn main() -> Result<()> {
     let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
     tracing_subscriber::registry().with(chrome_layer).init();
 
-    let input_source = if let Some(filename) = std::env::args().nth(1) {
-        std::fs::read_to_string(filename).unwrap()
+    let bytes = if let Some(filename) = std::env::args().nth(1) {
+        if filename.ends_with(".bin") {
+            // Read binary file
+            std::fs::read(filename).with_context(|| "Unable to read file")?
+        } else if filename.ends_with(".asm") {
+            // Read assembly file
+            let input_source = std::fs::read_to_string(filename).unwrap();
+            compile_code(&input_source).with_context(|| "Compilation failed")?
+        } else {
+            return Err(anyhow::anyhow!("Unknown file type. Allowed: .bin, .asm"));
+        }
     } else {
-        demo().to_string()
+        compile_code(demo()).with_context(|| "Compilation failed")?
     };
-
-    let bytes = compile_code(&input_source).with_context(|| "Compilation failed")?;
 
     const PROGRAM_START: u16 = 0x0600;
     let mut memory = Memory::new();
