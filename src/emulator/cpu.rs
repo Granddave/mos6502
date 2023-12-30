@@ -5,6 +5,9 @@ use crate::{
     emulator::memory::Bus,
 };
 
+const STACK_BASE: u16 = 0x0100;
+const STACK_POINTER_START: u8 = 0xff;
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Status {
     /// (C) Carry flag, set if the last operation caused an overflow from bit 7 or an
@@ -33,7 +36,7 @@ enum Register {
     Y,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cpu {
     /// Accumulator
     a: u8,
@@ -47,6 +50,19 @@ pub struct Cpu {
     sp: u8,
     /// Status register
     status: Status,
+}
+
+impl Default for Cpu {
+    fn default() -> Self {
+        Self {
+            a: 0,
+            x: 0,
+            y: 0,
+            pc: 0,
+            sp: STACK_POINTER_START,
+            status: Status::default(),
+        }
+    }
 }
 
 impl Cpu {
@@ -616,6 +632,17 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.a);
                 return if page_boundary_crossed { 6 } else { 5 };
             }
+            // PHA
+            (ASTMnemonic::PHA, _, ASTOperand::Implied) => {
+                self.push_to_stack(memory, self.a);
+                return 3;
+            }
+            // PLA
+            (ASTMnemonic::PLA, _, ASTOperand::Implied) => {
+                self.a = self.pop_from_stack(memory);
+                self.set_zero_and_negative_flags(self.a);
+                return 4;
+            }
             // ROL
             (ASTMnemonic::ROL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
                 self.a = self.rotate_left(self.a);
@@ -932,6 +959,16 @@ impl Cpu {
             Register::Y => self.y,
         };
         memory.write_byte(addr, value);
+    }
+
+    fn push_to_stack(&mut self, memory: &mut Memory, value: u8) {
+        memory.write_byte(STACK_BASE + self.sp as u16, value);
+        self.sp = self.sp.wrapping_sub(1);
+    }
+
+    fn pop_from_stack(&mut self, memory: &mut Memory) -> u8 {
+        self.sp = self.sp.wrapping_add(1);
+        memory.read_byte(STACK_BASE + self.sp as u16)
     }
 
     fn set_program_counter(&mut self, addr: u16) {
@@ -2287,6 +2324,41 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_stack_operations() {
+        vec![
+            // PHA
+            TestCase {
+                code: "LDA #$34\nPHA",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    pc: PROGRAM_START + 2 + 1,
+                    sp: 0xff - 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 3,
+                expected_memory_fn: Some(|memory| {
+                    assert_eq!(memory.read_byte(0x01ff), 0x34);
+                }),
+                ..Default::default()
+            },
+            // PLA
+            TestCase {
+                code: "LDA #$34\nPHA\nLDA #$00\nPLA",
+                expected_cpu: Cpu {
+                    a: 0x34,
+                    pc: PROGRAM_START + 2 + 1 + 2 + 1,
+                    sp: 0xff,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 3 + 2 + 4,
                 ..Default::default()
             },
         ]
