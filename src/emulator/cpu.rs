@@ -199,6 +199,31 @@ impl Cpu {
                 memory.write(addr, self.shift_left(value));
                 return 7;
             }
+            // Branch instructions
+            (ASTMnemonic::BCC, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(!self.status.carry, *offset);
+            }
+            (ASTMnemonic::BCS, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(self.status.carry, *offset);
+            }
+            (ASTMnemonic::BEQ, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(self.status.zero, *offset);
+            }
+            (ASTMnemonic::BMI, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(self.status.negative, *offset);
+            }
+            (ASTMnemonic::BNE, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(!self.status.zero, *offset);
+            }
+            (ASTMnemonic::BPL, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(!self.status.negative, *offset);
+            }
+            (ASTMnemonic::BVC, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(!self.status.overflow, *offset);
+            }
+            (ASTMnemonic::BVS, _, ASTOperand::Relative(offset)) => {
+                return self.branch_on_condition(self.status.overflow, *offset);
+            }
             // BIT
             (ASTMnemonic::BIT, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let value = memory.read_byte(*addr as u16);
@@ -786,6 +811,24 @@ impl Cpu {
         self.indexed_indirect(Register::Y, indirect_addr)
     }
 
+    /// Branch on condition.
+    /// Returns the number of cycles taken.
+    fn branch_on_condition(&mut self, should_branch: bool, offset: i8) -> usize {
+        if should_branch {
+            let old_pc = self.pc;
+            self.pc = self.pc.wrapping_add_signed(offset as i16);
+
+            let boundery_crossed = (self.pc & 0xFF00) != (old_pc & 0xFF00);
+            if boundery_crossed {
+                4
+            } else {
+                3
+            }
+        } else {
+            2
+        }
+    }
+
     fn shift_left(&mut self, value: u8) -> u8 {
         self.status.carry = value & 0x80 != 0;
         let result = value << 1;
@@ -1211,6 +1254,60 @@ mod tests {
                 expected_cycles: 2 + 2 + 2,
                 ..Default::default()
             },
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_branches() {
+        vec![
+            // BCC
+            TestCase {
+                // Branch taken forward 0x10 bytes
+                code: "BCC $10\nLDA #$01",
+                expected_cpu: Cpu {
+                    a: 0x00,
+                    status: Status {
+                        carry: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 0x10,
+                    ..Default::default()
+                },
+                expected_cycles: 3, // LDA is not executed
+                ..Default::default()
+            },
+            TestCase {
+                // Branch taken, backwards on other page
+                code: "BCC $80",
+                expected_cpu: Cpu {
+                    status: Status {
+                        carry: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START - 126,
+                    ..Default::default()
+                },
+                expected_cycles: 4,
+                ..Default::default()
+            },
+            TestCase {
+                // Branch not taken
+                code: "SEC\nBCC $01\nLDA #$01",
+                expected_cpu: Cpu {
+                    a: 0x01,
+                    status: Status {
+                        carry: true,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 1 + 2 + 2,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+            // TODO: Test other branching instructions
         ]
         .into_iter()
         .for_each(|tc| tc.run_test());
