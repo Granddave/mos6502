@@ -442,6 +442,16 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.y);
                 return 2;
             }
+            // JMP
+            (ASTMnemonic::JMP, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                self.pc = *addr;
+                return 3;
+            }
+            (ASTMnemonic::JMP, ASTAddressingMode::Indirect, ASTOperand::Absolute(addr)) => {
+                let indirect_addr = memory.read_word(*addr);
+                self.pc = indirect_addr;
+                return 5;
+            }
             // LDA
             (ASTMnemonic::LDA, _, ASTOperand::Immediate(value)) => {
                 self.load_register(Register::A, *value);
@@ -1308,6 +1318,36 @@ mod tests {
                 ..Default::default()
             },
             // TODO: Test other branching instructions
+        ]
+        .into_iter()
+        .for_each(|tc| tc.run_test());
+    }
+
+    #[test]
+    fn test_jump() {
+        vec![
+            // JMP
+            TestCase {
+                // Absolute jump
+                code: "JMP $ff00",
+                expected_cpu: Cpu {
+                    pc: 0xff00,
+                    ..Default::default()
+                },
+                expected_cycles: 3,
+                ..Default::default()
+            },
+            TestCase {
+                // Indirect jump
+                code: "JMP ($ff00)",
+                init_memory_fn: Some(|memory| memory.write_word(0xff00, 0x1234)),
+                expected_cpu: Cpu {
+                    pc: 0x1234,
+                    ..Default::default()
+                },
+                expected_cycles: 5,
+                ..Default::default()
+            },
         ]
         .into_iter()
         .for_each(|tc| tc.run_test());
