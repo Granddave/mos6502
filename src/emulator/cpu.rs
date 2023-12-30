@@ -104,13 +104,18 @@ pub struct Cpu {
     /// Status register
     status: Status,
 
-    // Emulation flags
+    // Emulation variables
     /// If a reset interrupt is pending
     reset_interrupt_pending: bool,
     /// If an NMI interrupt is pending
     nmi_interrupt_pending: bool,
     /// If an IRQ interrupt is pending
     irq_interrupt_pending: bool,
+
+    /// Current cycle
+    /// This is used to keep track of the current cycle in the current instruction.
+    /// A new instruction is fetched and decoded once the current cycle reaches zero.
+    cycle: usize,
 }
 
 impl Default for Cpu {
@@ -126,6 +131,7 @@ impl Default for Cpu {
             reset_interrupt_pending: false,
             nmi_interrupt_pending: false,
             irq_interrupt_pending: false,
+            cycle: 0,
         }
     }
 }
@@ -1124,25 +1130,19 @@ impl Cpu {
         8
     }
 
-    fn handle_interrupt_request(&mut self, memory: &mut Memory) -> usize {
+    fn handle_interrupt_request(&mut self, memory: &mut Memory) {
         if self.reset_interrupt_pending {
             self.reset_interrupt_pending = false;
-            return self.handle_reset(memory);
-        }
-
-        if self.nmi_interrupt_pending {
+            self.cycle = self.handle_reset(memory);
+        } else if self.nmi_interrupt_pending {
             self.nmi_interrupt_pending = false;
-            return self.handle_interrupt(memory, NMI_VECTOR);
-        }
-
-        if self.irq_interrupt_pending {
+            self.cycle = self.handle_interrupt(memory, NMI_VECTOR);
+        } else if self.irq_interrupt_pending {
             self.irq_interrupt_pending = false;
             if !self.status.interrupt_disable {
-                return self.handle_interrupt(memory, INTERRUPT_VECTOR);
+                self.cycle = self.handle_interrupt(memory, INTERRUPT_VECTOR);
             }
         }
-
-        0
     }
 
     /// Reset interrupt request
@@ -1160,24 +1160,39 @@ impl Cpu {
         self.nmi_interrupt_pending = true;
     }
 
-    /// Executes a single instruction or handles an interrupt.
-    /// Returns the number of cycles taken.
-    pub fn step(&mut self, memory: &mut Memory) -> usize {
-        let interrupt_cycles = self.handle_interrupt_request(memory);
-        if interrupt_cycles > 0 {
-            return interrupt_cycles;
+    /// Ticks the clock of the CPU.
+    pub fn clock(&mut self, memory: &mut Memory) {
+        if self.cycle > 0 {
+            // Processing current instruction
+            self.cycle -= 1;
+            return;
         }
 
+        self.handle_interrupt_request(memory);
+        if self.cycle > 0 {
+            // Processing interrupt
+            self.cycle -= 1;
+            return;
+        }
+
+        // Ok, we're ready to process the next instruction
         let instruction = self.fetch_and_decode(memory);
         self.pc += instruction.size() as u16;
-        return self.execute_instruction(instruction, memory);
+        self.cycle = self.execute_instruction(instruction, memory);
+        self.cycle -= 1;
+    }
+
+    /// Steps the CPU by one instruction.
+    pub fn step(&mut self, memory: &mut Memory) {
+        for _ in 0..self.cycle {
+            self.clock(memory);
+        }
     }
 
     /// Runs the CPU until the given number of cycles has been reached.
     pub fn run(&mut self, memory: &mut Memory, cycles_to_run: usize) {
-        let mut cycles = 0;
-        while cycles < cycles_to_run {
-            cycles += self.step(memory);
+        for _ in 0..cycles_to_run {
+            self.clock(memory);
         }
     }
 }
@@ -2700,7 +2715,7 @@ mod tests {
                     sp: 0xff,
                     ..Default::default()
                 },
-                expected_cycles: 7 + 6,
+                expected_cycles: 7 + 2 + 6,
                 ..Default::default()
             },
         ]
