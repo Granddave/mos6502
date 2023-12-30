@@ -585,6 +585,62 @@ impl Cpu {
                 self.set_zero_and_negative_flags(self.a);
                 *cycles -= if page_boundary_crossed { 6 } else { 5 };
             }
+            // ROL
+            (ASTMnemonic::ROL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
+                self.a = self.rotate_left(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::ROL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let addr = *addr as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.rotate_left(value));
+                *cycles -= 5;
+            }
+            (ASTMnemonic::ROL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                let addr = (*addr + self.x) as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.rotate_left(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ROL, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr);
+                memory.write(*addr, self.rotate_left(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ROL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let addr = addr.wrapping_add(self.x as u16);
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.rotate_left(value));
+                *cycles -= 7;
+            }
+            // ROR
+            (ASTMnemonic::ROR, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
+                self.a = self.rotate_right(self.a);
+                *cycles -= 2;
+            }
+            (ASTMnemonic::ROR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
+                let addr = *addr as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.rotate_right(value));
+                *cycles -= 5;
+            }
+            (ASTMnemonic::ROR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
+                let addr = (*addr + self.x) as u16;
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.rotate_right(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ROR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
+                let value = memory.read_byte(*addr);
+                memory.write(*addr, self.rotate_right(value));
+                *cycles -= 6;
+            }
+            (ASTMnemonic::ROR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
+                let addr = addr.wrapping_add(self.x as u16);
+                let value = memory.read_byte(addr);
+                memory.write(addr, self.rotate_right(value));
+                *cycles -= 7;
+            }
             // SBC
             (ASTMnemonic::SBC, _, ASTOperand::Immediate(value)) => {
                 self.subtract_with_carry(*value);
@@ -744,6 +800,22 @@ impl Cpu {
     fn shift_right(&mut self, value: u8) -> u8 {
         self.status.carry = value & 0x01 != 0;
         let result = value >> 1;
+        self.set_zero_and_negative_flags(result);
+        result
+    }
+
+    fn rotate_left(&mut self, value: u8) -> u8 {
+        let carry = self.status.carry as u8;
+        self.status.carry = value & 0x80 != 0;
+        let result = value << 1 | carry;
+        self.set_zero_and_negative_flags(result);
+        result
+    }
+
+    fn rotate_right(&mut self, value: u8) -> u8 {
+        let carry = self.status.carry as u8;
+        self.status.carry = value & 0x01 != 0;
+        let result = value >> 1 | carry << 7;
         self.set_zero_and_negative_flags(result);
         result
     }
@@ -1141,7 +1213,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bit_shifts() {
+    fn test_bit_shifts_and_rotates() {
         vec![
             // ASL
             TestCase {
@@ -1211,6 +1283,42 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
+                ..Default::default()
+            },
+            // ROL
+            TestCase {
+                // Simple rotate
+                code: "LDA #$80\nROL\nROL",
+                expected_cpu: Cpu {
+                    a: 0x01,
+                    status: Status {
+                        zero: false,
+                        carry: false,
+                        negative: false,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 1 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
+                ..Default::default()
+            },
+            // ROR
+            TestCase {
+                // Simple rotate
+                code: "LDA #$01\nROR\nROR",
+                expected_cpu: Cpu {
+                    a: 0x80,
+                    status: Status {
+                        zero: false,
+                        carry: false,
+                        negative: true,
+                        ..Default::default()
+                    },
+                    pc: PROGRAM_START + 2 + 1 + 1,
+                    ..Default::default()
+                },
+                expected_cycles: 2 + 2 + 2,
                 ..Default::default()
             },
         ]
