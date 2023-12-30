@@ -185,7 +185,7 @@ impl Compiler {
 
         bytes.push(match OPCODE_MAPPING.find_opcode(ins.ins) {
             Some(bytes) => bytes,
-            None => return Err(CompilerError::InvalidOpcode(ins.ins.clone())),
+            None => return Err(CompilerError::InvalidOpcode(ins.ins)),
         });
 
         bytes.extend(match ins.operand {
