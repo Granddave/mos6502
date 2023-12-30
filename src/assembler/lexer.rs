@@ -181,7 +181,6 @@ mod tests {
     use anyhow::Ok;
     use pretty_assertions::assert_eq;
 
-
     use super::*;
 
     #[test]
