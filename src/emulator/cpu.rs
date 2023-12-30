@@ -83,136 +83,131 @@ impl Cpu {
         ASTInstructionNode { ins, operand }
     }
 
-    fn execute_instruction(
-        &mut self,
-        ins: ASTInstructionNode,
-        memory: &mut dyn Bus,
-        cycles: &mut usize,
-    ) {
+    fn execute_instruction(&mut self, ins: ASTInstructionNode, memory: &mut dyn Bus) -> usize {
         match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
             (ASTMnemonic::ADC, _, ASTOperand::Immediate(value)) => {
                 self.add_with_carry(*value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::ADC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.add_with_carry(memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::ADC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.add_with_carry(memory.read_byte((*addr + self.x) as u16));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::ADC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.add_with_carry(memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::ADC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.add_with_carry(memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::ADC, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.add_with_carry(memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::ADC, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.add_with_carry(memory.read_byte(indirect_addr));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ADC, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.add_with_carry(memory.read_byte(indexed_addr & 0xff));
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // AND
             (ASTMnemonic::AND, _, ASTOperand::Immediate(value)) => {
                 self.a &= *value;
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::AND, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.a &= memory.read_byte(*addr as u16);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::AND, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.a &= memory.read_byte((*addr + self.x) as u16);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::AND, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.a &= memory.read_byte(*addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::AND, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.a &= memory.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::AND, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.a &= memory.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::AND, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.a &= memory.read_byte(indirect_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::AND, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.a &= memory.read_byte(indexed_addr & 0xff);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // ASL
             (ASTMnemonic::ASL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
                 self.a = self.shift_left(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.shift_left(value));
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.shift_left(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
                 memory.write(*addr, self.shift_left(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ASL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.shift_left(value));
-                *cycles -= 7;
+                return 7;
             }
             // BIT
             (ASTMnemonic::BIT, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let value = memory.read_byte(*addr as u16);
                 self.bit_test(value);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::BIT, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
                 self.bit_test(value);
-                *cycles -= 4;
+                return 4;
             }
             // BRK
             (ASTMnemonic::BRK, _, ASTOperand::Implied) => {
@@ -222,77 +217,77 @@ impl Cpu {
             // CLC
             (ASTMnemonic::CLC, _, ASTOperand::Implied) => {
                 self.status.carry = false;
-                *cycles -= 2;
+                return 2;
             }
             // CLV
             (ASTMnemonic::CLV, _, ASTOperand::Implied) => {
                 self.status.overflow = false;
-                *cycles -= 2;
+                return 2;
             }
             // CMP
             (ASTMnemonic::CMP, _, ASTOperand::Immediate(value)) => {
                 self.compare(Register::A, *value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::CMP, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.compare(Register::A, memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::CMP, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.compare(Register::A, memory.read_byte((*addr + self.x) as u16));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::CMP, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.compare(Register::A, memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::CMP, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.compare(Register::A, memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::CMP, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.compare(Register::A, memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::CMP, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.compare(Register::A, memory.read_byte(indirect_addr));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::CMP, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.compare(Register::A, memory.read_byte(indexed_addr & 0xff));
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // CPX
             (ASTMnemonic::CPX, _, ASTOperand::Immediate(value)) => {
                 self.compare(Register::X, *value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::CPX, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.compare(Register::X, memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::CPX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.compare(Register::X, memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             // CPY
             (ASTMnemonic::CPY, _, ASTOperand::Immediate(value)) => {
                 self.compare(Register::Y, *value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::CPY, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.compare(Register::Y, memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::CPY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.compare(Register::Y, memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             // DEC
             (ASTMnemonic::DEC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -300,86 +295,86 @@ impl Cpu {
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write(addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::DEC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write(addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::DEC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr).wrapping_sub(1);
                 memory.write(*addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::DEC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write(addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 7;
+                return 7;
             }
             // DEX
             (ASTMnemonic::DEX, _, ASTOperand::Implied) => {
                 self.x = self.x.wrapping_sub(1);
                 self.set_zero_and_negative_flags(self.x);
-                *cycles -= 2;
+                return 2;
             }
             // DEY
             (ASTMnemonic::DEY, _, ASTOperand::Implied) => {
                 self.y = self.y.wrapping_sub(1);
                 self.set_zero_and_negative_flags(self.y);
-                *cycles -= 2;
+                return 2;
             }
             // EOR
             (ASTMnemonic::EOR, _, ASTOperand::Immediate(value)) => {
                 self.a ^= *value;
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::EOR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.a ^= memory.read_byte(*addr as u16);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::EOR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.a ^= memory.read_byte((*addr + self.x) as u16);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::EOR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.a ^= memory.read_byte(*addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::EOR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.a ^= memory.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::EOR, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.a ^= memory.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::EOR, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.a ^= memory.read_byte(indirect_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::EOR, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.a ^= memory.read_byte(indexed_addr & 0xff);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // INC
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -387,384 +382,384 @@ impl Cpu {
                 let value = memory.read_byte(addr).wrapping_add(1);
                 memory.write(addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr).wrapping_add(1);
                 memory.write(addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::INC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr).wrapping_add(1);
                 memory.write(*addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::INC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr).wrapping_add(1);
                 memory.write(addr, value);
                 self.set_zero_and_negative_flags(value);
-                *cycles -= 7;
+                return 7;
             }
             // INX
             (ASTMnemonic::INX, _, ASTOperand::Implied) => {
                 self.x = self.x.wrapping_add(1);
                 self.set_zero_and_negative_flags(self.x);
-                *cycles -= 2;
+                return 2;
             }
             // INY
             (ASTMnemonic::INY, _, ASTOperand::Implied) => {
                 self.y = self.y.wrapping_add(1);
                 self.set_zero_and_negative_flags(self.y);
-                *cycles -= 2;
+                return 2;
             }
             // LDA
             (ASTMnemonic::LDA, _, ASTOperand::Immediate(value)) => {
                 self.load_register(Register::A, *value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::LDA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.load_register(Register::A, memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::LDA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.load_register(Register::A, memory.read_byte((*addr + self.x) as u16));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::LDA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.load_register(Register::A, memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::LDA, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.load_register(Register::A, memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::LDA, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.load_register(Register::A, memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::LDA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.load_register(Register::A, memory.read_byte(indirect_addr));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::LDA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.load_register(Register::A, memory.read_byte(indexed_addr & 0xff));
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // LDX
             (ASTMnemonic::LDX, _, ASTOperand::Immediate(value)) => {
                 self.load_register(Register::X, *value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::LDX, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.load_register(Register::X, memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::LDX, ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(addr)) => {
                 self.load_register(Register::X, memory.read_byte((*addr + self.y) as u16));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::LDX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.load_register(Register::X, memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::LDX, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.load_register(Register::X, memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             // LDY
             (ASTMnemonic::LDY, _, ASTOperand::Immediate(value)) => {
                 self.load_register(Register::Y, *value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::LDY, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.load_register(Register::Y, memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::LDY, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.load_register(Register::Y, memory.read_byte((*addr + self.x) as u16));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::LDY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.load_register(Register::Y, memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::LDY, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.load_register(Register::Y, memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             // LSR
             (ASTMnemonic::LSR, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
                 self.a = self.shift_right(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.shift_right(value));
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.shift_right(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
                 memory.write(*addr, self.shift_right(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::LSR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.shift_right(value));
-                *cycles -= 7;
+                return 7;
             }
             // NOP
             (ASTMnemonic::NOP, _, ASTOperand::Implied) => {
-                *cycles -= 2;
+                return 2;
             }
             // ORA
             (ASTMnemonic::ORA, _, ASTOperand::Immediate(value)) => {
                 self.a |= *value;
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::ORA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.a |= memory.read_byte(*addr as u16);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::ORA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.a |= memory.read_byte((*addr + self.x) as u16);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::ORA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.a |= memory.read_byte(*addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::ORA, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.a |= memory.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::ORA, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.a |= memory.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::ORA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.a |= memory.read_byte(indirect_addr);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ORA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.a |= memory.read_byte(indexed_addr & 0xff);
                 self.set_zero_and_negative_flags(self.a);
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // ROL
             (ASTMnemonic::ROL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
                 self.a = self.rotate_left(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.rotate_left(value));
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.rotate_left(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
                 memory.write(*addr, self.rotate_left(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ROL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.rotate_left(value));
-                *cycles -= 7;
+                return 7;
             }
             // ROR
             (ASTMnemonic::ROR, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
                 self.a = self.rotate_right(self.a);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.rotate_right(value));
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 let addr = (*addr + self.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.rotate_right(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 let value = memory.read_byte(*addr);
                 memory.write(*addr, self.rotate_right(value));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::ROR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write(addr, self.rotate_right(value));
-                *cycles -= 7;
+                return 7;
             }
             // SBC
             (ASTMnemonic::SBC, _, ASTOperand::Immediate(value)) => {
                 self.subtract_with_carry(*value);
-                *cycles -= 2;
+                return 2;
             }
             (ASTMnemonic::SBC, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.subtract_with_carry(memory.read_byte(*addr as u16));
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::SBC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.subtract_with_carry(memory.read_byte((*addr + self.x) as u16));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::SBC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.subtract_with_carry(memory.read_byte(*addr));
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::SBC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
                 self.subtract_with_carry(memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::SBC, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
                 self.subtract_with_carry(memory.read_byte(indexed_addr));
-                *cycles -= if page_boundary_crossed { 5 } else { 4 };
+                return if page_boundary_crossed { 5 } else { 4 };
             }
             (ASTMnemonic::SBC, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.subtract_with_carry(memory.read_byte(indirect_addr));
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::SBC, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.subtract_with_carry(memory.read_byte(indexed_addr & 0xff));
-                *cycles -= if page_boundary_crossed { 6 } else { 5 };
+                return if page_boundary_crossed { 6 } else { 5 };
             }
             // SEC
             (ASTMnemonic::SEC, _, ASTOperand::Implied) => {
                 self.status.carry = true;
-                *cycles -= 2;
+                return 2;
             }
             // STA
             (ASTMnemonic::STA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::A, *addr as u16, memory);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::STA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::A, (*addr + self.x) as u16, memory);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::STA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.store_register(Register::A, *addr, memory);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::STA, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (_, indexed_addr) = self.indexed_indirect(Register::X, *addr);
                 self.store_register(Register::A, indexed_addr, memory);
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::STA, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (_, indexed_addr) = self.indexed_indirect(Register::Y, *addr);
                 self.store_register(Register::A, indexed_addr, memory);
-                *cycles -= 5;
+                return 5;
             }
             (ASTMnemonic::STA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
                 self.store_register(Register::A, indirect_addr, memory);
-                *cycles -= 6;
+                return 6;
             }
             (ASTMnemonic::STA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (_, indexed_addr) = self.indexed_indirect_y(memory, *addr);
                 self.store_register(Register::A, indexed_addr, memory);
-                *cycles -= 6;
+                return 6;
             }
             // STX
             (ASTMnemonic::STX, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::X, *addr as u16, memory);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::STX, ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::X, (*addr + self.y) as u16, memory);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::STX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.store_register(Register::X, *addr, memory);
-                *cycles -= 4;
+                return 4;
             }
             // STY
             (ASTMnemonic::STY, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::Y, *addr as u16, memory);
-                *cycles -= 3;
+                return 3;
             }
             (ASTMnemonic::STY, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
                 self.store_register(Register::Y, (*addr + self.x) as u16, memory);
-                *cycles -= 4;
+                return 4;
             }
             (ASTMnemonic::STY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
                 self.store_register(Register::Y, *addr, memory);
-                *cycles -= 4;
+                return 4;
             }
             // TAX
             (ASTMnemonic::TAX, _, ASTOperand::Implied) => {
                 self.load_register(Register::X, self.a);
-                *cycles -= 2;
+                return 2;
             }
             // TAY
             (ASTMnemonic::TAY, _, ASTOperand::Implied) => {
                 self.load_register(Register::Y, self.a);
-                *cycles -= 2;
+                return 2;
             }
             // TSX
             // TXA
             (ASTMnemonic::TXA, _, ASTOperand::Implied) => {
                 self.load_register(Register::A, self.x);
-                *cycles -= 2;
+                return 2;
             }
             // TXS
             // TYA
             (ASTMnemonic::TYA, _, ASTOperand::Implied) => {
                 self.load_register(Register::A, self.y);
-                *cycles -= 2;
+                return 2;
             }
             _ => todo!("Invalid instruction: '{:#?}'", &ins),
         }
@@ -889,11 +884,12 @@ impl Cpu {
         self.pc = addr;
     }
 
-    pub fn run(&mut self, memory: &mut dyn Bus, mut cycles: usize) {
-        while cycles > 0 {
+    pub fn run(&mut self, memory: &mut dyn Bus, cycles_to_run: usize) {
+        let mut cycles = 0;
+        while cycles < cycles_to_run {
             let instruction = self.fetch_and_decode(memory);
             self.pc += instruction.size() as u16;
-            self.execute_instruction(instruction, memory, &mut cycles);
+            cycles += self.execute_instruction(instruction, memory);
         }
     }
 }
