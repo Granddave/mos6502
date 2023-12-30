@@ -11,11 +11,11 @@ const STACK_POINTER_START: u8 = 0xff;
 
 // Interrupt vectors
 /// NMI (Non-maskable interrupt) vector
-const NMI_VECTOR: u16 = 0xfffa;
+pub const NMI_VECTOR: u16 = 0xfffa;
 /// Reset vector (power-on and hardware reset)
-const RESET_VECTOR: u16 = 0xfffc;
+pub const RESET_VECTOR: u16 = 0xfffc;
 /// IRQ (Interrupt request) maskable interrupt
-const INTERRUPT_VECTOR: u16 = 0xfffe;
+pub const INTERRUPT_VECTOR: u16 = 0xfffe;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Status {
@@ -1206,7 +1206,7 @@ impl Cpu {
         7
     }
 
-    fn handle_reset(&mut self, _memory: &mut Memory) -> usize {
+    fn handle_reset(&mut self, memory: &mut Memory) -> usize {
         self.a = 0;
         self.x = 0;
         self.y = 0;
@@ -1215,7 +1215,7 @@ impl Cpu {
             interrupt_disable: true,
             ..Default::default()
         };
-        self.pc = RESET_VECTOR;
+        self.pc = memory.read_word(RESET_VECTOR);
 
         8
     }
@@ -1252,6 +1252,8 @@ impl Cpu {
 
     /// Ticks the clock of the CPU.
     pub fn clock(&mut self, memory: &mut Memory) {
+        // If the break flag is set, we're stopping the CPU.
+
         if self.cycle > 0 {
             // Processing current instruction
             self.cycle -= 1;
