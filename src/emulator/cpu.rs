@@ -1,3 +1,4 @@
+use super::memory::Memory;
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
     ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTOperand},
@@ -54,7 +55,7 @@ impl Cpu {
     }
 
     /// Fetches and decodes the next instruction from memory.
-    fn fetch_and_decode(&mut self, memory: &mut dyn Bus) -> ASTInstructionNode {
+    fn fetch_and_decode(&mut self, memory: &mut Memory) -> ASTInstructionNode {
         let opcode = memory.read_byte(self.pc);
         let ins = OPCODE_MAPPING
             .find_instruction(opcode)
@@ -83,7 +84,7 @@ impl Cpu {
         ASTInstructionNode { ins, operand }
     }
 
-    fn execute_instruction(&mut self, ins: ASTInstructionNode, memory: &mut dyn Bus) -> usize {
+    fn execute_instruction(&mut self, ins: ASTInstructionNode, memory: &mut Memory) -> usize {
         match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
             (ASTMnemonic::ADC, _, ASTOperand::Immediate(value)) => {
                 self.add_with_carry(*value);
@@ -776,11 +777,11 @@ impl Cpu {
         (page_boundary_crossed, indexed_addr)
     }
 
-    fn indexed_indirect_x(&self, memory: &mut dyn Bus, zp_addr: u8) -> u16 {
+    fn indexed_indirect_x(&self, memory: &mut Memory, zp_addr: u8) -> u16 {
         memory.read_word((zp_addr + self.x) as u16) & 0xff
     }
 
-    fn indexed_indirect_y(&self, memory: &mut dyn Bus, zp_addr: u8) -> (bool, u16) {
+    fn indexed_indirect_y(&self, memory: &mut Memory, zp_addr: u8) -> (bool, u16) {
         let indirect_addr = memory.read_word(zp_addr as u16);
         self.indexed_indirect(Register::Y, indirect_addr)
     }
@@ -871,7 +872,7 @@ impl Cpu {
         self.set_zero_and_negative_flags(value);
     }
 
-    fn store_register(&mut self, register: Register, addr: u16, memory: &mut dyn Bus) {
+    fn store_register(&mut self, register: Register, addr: u16, memory: &mut Memory) {
         let value = match register {
             Register::A => self.a,
             Register::X => self.x,
@@ -884,14 +885,14 @@ impl Cpu {
         self.pc = addr;
     }
 
-    pub fn step(&mut self, memory: &mut dyn Bus) -> usize {
+    pub fn step(&mut self, memory: &mut Memory) -> usize {
         let instruction = self.fetch_and_decode(memory);
         self.pc += instruction.size() as u16;
         let cycles = self.execute_instruction(instruction, memory);
         cycles
     }
 
-    pub fn run(&mut self, memory: &mut dyn Bus, cycles_to_run: usize) {
+    pub fn run(&mut self, memory: &mut Memory, cycles_to_run: usize) {
         let mut cycles = 0;
         while cycles < cycles_to_run {
             let instruction = self.fetch_and_decode(memory);
