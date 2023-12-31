@@ -92,7 +92,7 @@ Running this program with a modified emulator that in the end prints the content
 at address `0x0000` (Zero page address `0x00`):
 
 ```bash
-~/Dev/mos6502(master ✗) cargo run -r --bin emu -- a.bin
+$ cargo run -r --bin emu -- a.bin
     Finished release [optimized] target(s) in 0.01s
      Running `target/release/emu a.bin`
 Memory address 0x0000: 0x0a
