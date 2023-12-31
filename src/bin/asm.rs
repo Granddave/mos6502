@@ -24,7 +24,7 @@ secondloop:
 "
 }
 
-const PROGRAM_START: u16 = 0x0800;
+const PROGRAM_START: u16 = 0x8000;
 
 #[tracing::instrument]
 fn main() -> Result<()> {

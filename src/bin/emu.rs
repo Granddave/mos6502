@@ -32,7 +32,7 @@ secondloop:
 "
 }
 
-const PROGRAM_START: u16 = 0x0800;
+const PROGRAM_START: u16 = 0x8000;
 
 fn main() -> Result<()> {
     let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();

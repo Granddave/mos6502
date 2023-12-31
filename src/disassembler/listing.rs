@@ -41,7 +41,7 @@ impl Listing {
     pub fn generate(&mut self) -> String {
         self.str.push_str(" Addr  Hexdump   Instructions\n");
         self.str.push_str("-----------------------------\n");
-        //                 $8000  20 06 06  JSR $0606
+        //                 $8000  20 06 80  JSR $8006
 
         for node in &self.ast {
             // TODO: Add support for other AST nodes
@@ -69,7 +69,7 @@ mod tests {
             ASTNode::new_instruction(
                 ASTMnemonic::JSR,
                 ASTAddressingMode::Absolute,
-                ASTOperand::Absolute(0x0606),
+                ASTOperand::Absolute(0x8006),
             ),
             ASTNode::new_instruction(
                 ASTMnemonic::LDA,
@@ -90,7 +90,7 @@ mod tests {
         let mut listing = Listing::default(ast);
         let expected = " Addr  Hexdump   Instructions
 -----------------------------
-$8000  20 06 06  JSR $0606
+$8000  20 06 80  JSR $8006
 $8003  A9 01     LDA #$01
 $8005  AD 00 02  LDA $0200
 $8008  BD 00 02  LDA $0200,X
