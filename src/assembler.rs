@@ -22,11 +22,11 @@ pub mod compiler;
 ///
 /// TODO: Pass in a target address.
 #[tracing::instrument]
-pub fn compile_code(input: &str) -> anyhow::Result<Vec<u8>> {
+pub fn compile_code(input: &str, program_start: u16) -> anyhow::Result<Vec<u8>> {
     let mut lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(&mut lexer)?;
     let ast = parser.parse_program()?;
-    let mut compiler = compiler::Compiler::new(0x0600);
+    let mut compiler = compiler::Compiler::new(program_start);
 
     Ok(compiler.compile(ast)?)
 }

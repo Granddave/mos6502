@@ -24,6 +24,8 @@ secondloop:
 "
 }
 
+const PROGRAM_START: u16 = 0x0800;
+
 #[tracing::instrument]
 fn main() -> Result<()> {
     let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
@@ -35,10 +37,10 @@ fn main() -> Result<()> {
         demo().to_string()
     };
 
-    let bytes =
-        mos6502::assembler::compile_code(&input_source).with_context(|| "Compilation failed")?;
+    let bytes = mos6502::assembler::compile_code(&input_source, PROGRAM_START)
+        .with_context(|| "Compilation failed")?;
 
-    println!("{}", mos6502::hexdump::hexdump_2(&bytes, 0x0600, 4, 16));
+    println!("{}", mos6502::hexdump::hexdump_2(&bytes, 0x8000, 4, 16));
     std::fs::write("a.bin", &bytes).with_context(|| "Unable to write file")?;
 
     Ok(())

@@ -1326,7 +1326,7 @@ mod tests {
 
     use pretty_assertions::assert_eq;
 
-    const PROGRAM_START: u16 = 0x0600;
+    const PROGRAM_START: u16 = 0x8000;
 
     /// A test case for the CPU.
     ///
@@ -1366,7 +1366,7 @@ mod tests {
             // Arrange
             let mut cpu = Cpu::new();
             let mut memory = Memory::new();
-            let bytes = compile_code(self.code).expect("Failed to compile code");
+            let bytes = compile_code(self.code, PROGRAM_START).expect("Failed to compile code");
             memory.load(PROGRAM_START, &bytes);
             if let Some(init_memory_fn) = self.init_memory_fn {
                 init_memory_fn(&mut memory);
@@ -1724,7 +1724,7 @@ mod tests {
                 expected_cycles: 6,
                 expected_memory_fn: Some(|memory| {
                     assert_eq!(memory.read_byte(0x01fe), 0x02);
-                    assert_eq!(memory.read_byte(0x01ff), 0x06);
+                    assert_eq!(memory.read_byte(0x01ff), 0x80);
                 }),
                 ..Default::default()
             },

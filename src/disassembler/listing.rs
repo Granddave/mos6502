@@ -22,7 +22,7 @@ impl Listing {
 
     #[tracing::instrument]
     pub fn default(ast: Vec<ASTNode>) -> Self {
-        Self::new(ast, 0x0600)
+        Self::new(ast, 0x8000)
     }
 
     #[tracing::instrument]
@@ -41,7 +41,7 @@ impl Listing {
     pub fn generate(&mut self) -> String {
         self.str.push_str(" Addr  Hexdump   Instructions\n");
         self.str.push_str("-----------------------------\n");
-        //                 $0600  20 06 06  JSR $0606
+        //                 $8000  20 06 06  JSR $0606
 
         for node in &self.ast {
             // TODO: Add support for other AST nodes
@@ -90,10 +90,10 @@ mod tests {
         let mut listing = Listing::default(ast);
         let expected = " Addr  Hexdump   Instructions
 -----------------------------
-$0600  20 06 06  JSR $0606
-$0603  A9 01     LDA #$01
-$0605  AD 00 02  LDA $0200
-$0608  BD 00 02  LDA $0200,X
+$8000  20 06 06  JSR $0606
+$8003  A9 01     LDA #$01
+$8005  AD 00 02  LDA $0200
+$8008  BD 00 02  LDA $0200,X
 ";
 
         assert_eq!(listing.generate(), expected);
