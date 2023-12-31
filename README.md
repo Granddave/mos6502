@@ -4,13 +4,14 @@
 
 This is a toy project where I've created an emulator, assembler and a dissasembler for the 1975 8-bit MOS 6502 CPU.
 
-The emulator takes either assembly code that the assembler transforms to machine code or native machine code directly which then the emulator executes.
 
+## Assembling
 
-## Example program
+### Example program
 
-The assembler supports the syntax found at Nick Morgan's [Easy6502](https://skilldrick.github.io/easy6502/) which looks something like this:
+The assembler supports the syntax found at Nick Morgan's [Easy6502](https://skilldrick.github.io/easy6502/) which looks something like the program below.
 
+Here's a program which increments memory address 0x00 ten times.
 
 ```asm
 define counter $00  ; Address of counter
@@ -38,18 +39,7 @@ done:
 exit:
 ```
 
-
-#### Supported syntax
-
-- Values (8 bit bytes and 16 bit words)
-    - Hex: `$ff`
-    - Binary: `%1101`
-    - Decimal `42`
-- Labels: `main:`
-- Constants: `define max $ff`
-
-
-### Assembling
+To assemble the program into machine code we can run it through the `asm` binary:
 
 ```bash
 $ cargo run -r --bin asm -- examples/loop.asm
@@ -57,13 +47,16 @@ $ cargo run -r --bin asm -- examples/loop.asm
     Finished release [optimized] target(s) in 0.37s
      Running `target/release/asm examples/loop.asm`
 
-8000: 20 09 08 20 0e 08 4c 1a 08 a9 00 85 00 60 a5 00
-8010: c9 0a f0 05 e6 00 4c 0e 08 60
+8000: 20 09 80 20 0e 80 4c 1a 80 a9 00 85 00 60 a5 00
+8010: c9 0a f0 05 e6 00 4c 0e 80 60
 ```
+
+The program is assembled to a binary (`a.bin`) and its contents are shown.
 
 
 ### Disassembling
 
+The disassembler `dism` can parse the assembled binary and list the instructions in the program.
 
 ```bash
 $ cargo run -r --bin dism -- a.bin
@@ -71,9 +64,9 @@ $ cargo run -r --bin dism -- a.bin
      Running `target/release/dism a.bin`
  Addr  Hexdump   Instructions
 -----------------------------
-$8000  20 09 08  JSR $0809
-$8003  20 0E 08  JSR $080E
-$8006  4C 1A 08  JMP $081A
+$8000  20 09 80  JSR $8009
+$8003  20 0E 80  JSR $800E
+$8006  4C 1A 80  JMP $801A
 $8009  A9 00     LDA #$00
 $800B  85 00     STA $00
 $800D  60        RTS
@@ -81,15 +74,16 @@ $800E  A5 00     LDA $00
 $8010  C9 0A     CMP #$0A
 $8012  F0 05     BEQ $05
 $8014  E6 00     INC $00
-$8016  4C 0E 08  JMP $080E
+$8016  4C 0E 80  JMP $800E
 $8019  60        RTS
 ```
 
 
 ### Emulating
 
-Running this program with a modified emulator that in the end prints the contents of the memory
-at address `0x0000` (Zero page address `0x00`):
+To run the assembled program we can invoke the emulator, `emu`.
+
+With a modified emulator that at the end of execution outputs the contents of the memory at address `0x0000` to the terminal, we can verify that the progam executed correctly.
 
 ```bash
 $ cargo run -r --bin emu -- a.bin
@@ -101,20 +95,32 @@ Memory address 0x0000: 0x0a
 Here we see `0x0a`, which in decimal is `10` just we intended!
 
 
+## Supported assembler syntax
+
+- Literals (8 bit bytes and 16 bit words)
+    - Hex: `$ff`
+    - Binary: `%1101`
+    - Decimal `42`
+- Labels: `main:`
+- Constants: `define max $ff`
+
+
 ## Future development
 
-- dot directives
-    - `.org $8000`
-    - `.byte 42`
-    - `.word $8000`
-- `#"A"`
-- Graphical state for the emulator
-- Peripherals - I/O would be fun to have...
+- **Assembler**
+    - dot directives
+        - `.org $8000`
+        - `.byte 42`
+        - `.word $8000`
+    - `#"A"`
+- **Emulator**
+    - Graphical state for the emulator
+    - Peripherals - I/O would be fun to have...
 
 
 ## References
 
-I've found many great resources and project which helped this project.
+I've found many great resources and project which helped this project, here are a few
 
 - https://skilldrick.github.io/easy6502/
 - http://www.6502.org/tutorials/6502opcodes.html
