@@ -1300,6 +1300,12 @@ impl Cpu {
         self.pc += instruction.size() as u16;
         self.cycle = self.execute_instruction(instruction, memory);
         self.cycle -= 1;
+
+        // if break command
+        if self.status.break_command {
+            println!("Memory address 0x0000: {:#04x}", memory.read_byte(0x0000));
+            std::process::exit(0);
+        }
     }
 
     /// Steps the CPU by one instruction.
