@@ -18,15 +18,23 @@ pub mod parser;
 /// Generates machine code from an AST.
 pub mod compiler;
 
-/// Utility functions for generating machine code.
-///
-/// TODO: Pass in a target address.
+#[derive(Debug, thiserror::Error)]
+pub enum AssemblerError {
+    #[error("Parser error: {0}")]
+    Parse(#[from] parser::ParseError),
+    #[error("Compiler error: {0}")]
+    Compile(#[from] compiler::CompilerError),
+}
+
+/// Utility function for generating machine code from an assembly program.
 #[tracing::instrument]
-pub fn compile_code(input: &str, program_start: u16) -> anyhow::Result<Vec<u8>> {
+pub fn compile_code(input: &str, program_start: u16) -> Result<Vec<u8>, AssemblerError> {
     let mut lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(&mut lexer)?;
     let ast = parser.parse_program()?;
-    let mut compiler = compiler::Compiler::new(program_start);
 
-    Ok(compiler.compile(ast)?)
+    let mut compiler = compiler::Compiler::new(program_start);
+    let program = compiler.compile(ast)?;
+
+    Ok(program)
 }

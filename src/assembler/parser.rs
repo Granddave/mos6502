@@ -3,7 +3,7 @@ use std::{collections::VecDeque, str::FromStr};
 use thiserror::Error;
 
 use crate::{
-    assembler::lexer::{token::Token, token::TokenType, Lexer, LexingError},
+    assembler::lexer::{token::Token, token::TokenType, Lexer, LexerError},
     ast::{
         ASTAddressingMode, ASTConstantNode, ASTInstructionNode, ASTMnemonic, ASTNode, ASTOperand,
         AST,
@@ -15,15 +15,17 @@ pub enum ParseError {
     #[error("Invalid token - {0}:\n{1:#?}")]
     InvalidToken(String, Token),
     #[error(transparent)]
-    LexingError(#[from] LexingError),
+    LexingError(#[from] LexerError),
 }
 
 // ParseError helpers.
 // Takes a reference to a `Parser` and a format string with optional arguments.
 macro_rules! invalid_token {
+    // No format arguments
     ($parser:ident, $fmt:expr) => {
         ParseError::InvalidToken(format!($fmt), $parser.current_token.clone())
     };
+    // With format arguments
     ($parser:ident, $fmt:expr, $($arg:tt)+) => {
         ParseError::InvalidToken(format!($fmt, $($arg)+), $parser.current_token.clone())
     };
@@ -113,8 +115,13 @@ impl<'a> Parser<'a> {
 
     #[tracing::instrument]
     fn parse_mnemonic(&mut self) -> Result<ASTMnemonic, ParseError> {
-        ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str())
-            .map_err(|err| invalid_token!(self, "invalid mnemonic: {}", err))
+        ASTMnemonic::from_str(self.current_token.literal.to_uppercase().as_str()).map_err(|_| {
+            invalid_token!(
+                self,
+                "Invalid instruction mnemonic '{}'",
+                self.current_token.literal
+            )
+        })
     }
 
     #[tracing::instrument]

@@ -5,7 +5,7 @@ use self::token::{Token, TokenType};
 pub mod token;
 
 #[derive(Error, Debug)]
-pub enum LexingError {
+pub enum LexerError {
     #[error("Unexpected character on line {0}: '{1}'")]
     UnexpectedCharacter(usize, char),
 }
@@ -116,7 +116,7 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
-    pub fn next_token(&mut self) -> Result<Option<Token>, LexingError> {
+    pub fn next_token(&mut self) -> Result<Option<Token>, LexerError> {
         self.skip_whitespace();
         let token = match self.ch {
             Some(ch) => match ch {
@@ -167,7 +167,7 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 _ => {
-                    return Err(LexingError::UnexpectedCharacter(self.line_number, ch));
+                    return Err(LexerError::UnexpectedCharacter(self.line_number, ch));
                 }
             },
             None => Some(self.create_token(TokenType::Eof, "")),
