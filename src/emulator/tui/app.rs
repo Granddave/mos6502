@@ -1,5 +1,5 @@
 use crate::emulator::{
-    cpu::{self, Cpu, Register, RunOption},
+    cpu::{self, Cpu, RunOption},
     memory::{Bus, Memory},
 };
 
@@ -63,13 +63,15 @@ impl App {
     pub fn status(&self) -> String {
         let mut output = String::new();
 
+        let regs = self.cpu.registers();
+
         output.push_str("Registers:\n");
-        output.push_str(&format!("A:  0x{:02x}\n", self.cpu.register(Register::A)));
-        output.push_str(&format!("X:  0x{:02x}\n", self.cpu.register(Register::X)));
-        output.push_str(&format!("Y:  0x{:02x}\n", self.cpu.register(Register::Y)));
-        output.push_str(&format!("PC: 0x{:04x}\n", self.cpu.program_counter()));
-        output.push_str(&format!("SP: 0x{:02x}\n", self.cpu.stack_pointer()));
-        output.push_str(&format!("S:  {:08b}\n", u8::from(self.cpu.status())));
+        output.push_str(&format!("A:  0x{:02x}\n", regs.a));
+        output.push_str(&format!("X:  0x{:02x}\n", regs.x));
+        output.push_str(&format!("Y:  0x{:02x}\n", regs.y));
+        output.push_str(&format!("PC: 0x{:04x}\n", regs.pc));
+        output.push_str(&format!("SP: 0x{:02x}\n", regs.sp));
+        output.push_str(&format!("S:  {:08b}\n", u8::from(regs.status)));
         output.push_str("    NV-BDIZC\n");
 
         // output.push_str("------------");

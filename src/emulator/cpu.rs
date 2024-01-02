@@ -1,3 +1,4 @@
+use self::registers::{Register, Registers, Status};
 use super::memory::Memory;
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
@@ -5,8 +6,12 @@ use crate::{
     emulator::memory::Bus,
 };
 
+pub mod registers;
+
 // Stack offsets
-pub const STACK_BASE: u16 = 0x0100;
+/// The stack is located at the end of the page address.
+pub const STACK_PAGE: u16 = 0x0100;
+/// Where on the stack page the stack pointer starts.
 pub const STACK_POINTER_START: u8 = 0xff;
 
 // Interrupt vectors
@@ -25,92 +30,10 @@ pub enum RunOption {
     StopOnBreakInstruction,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Status {
-    /// (C) Carry flag, set if the last operation caused an overflow from bit 7 or an
-    /// underflow from bit 0.
-    carry: bool,
-    /// (Z) Zero flag, set if the result of the last operation was zero.
-    zero: bool,
-    /// (I) Interrupt disable flag, set if the CPU is not to respond to maskable
-    /// interrupts (IRQ).
-    interrupt_disable: bool,
-    /// (D) Decimal mode flag, set if the CPU is in decimal mode.
-    decimal: bool,
-    /// (B) Break command flag, set if a software interrupt (BRK) instruction has
-    /// been executed.
-    break_command: bool,
-    /// (V) Overflow flag, set if the last operation caused an overflow from bit 6 or an
-    /// underflow from bit 1.
-    overflow: bool,
-    /// (S) Negative/Sign flag, set if the result of the last operation had bit 7 set.
-    negative: bool,
-}
-
-impl From<Status> for u8 {
-    fn from(status: Status) -> Self {
-        let mut status_byte = 0;
-        if status.carry {
-            status_byte |= 0b0000_0001;
-        }
-        if status.zero {
-            status_byte |= 0b0000_0010;
-        }
-        if status.interrupt_disable {
-            status_byte |= 0b0000_0100;
-        }
-        if status.decimal {
-            status_byte |= 0b0000_1000;
-        }
-        if status.break_command {
-            status_byte |= 0b0001_0000;
-        }
-        if status.overflow {
-            status_byte |= 0b0100_0000;
-        }
-        if status.negative {
-            status_byte |= 0b1000_0000;
-        }
-        status_byte
-    }
-}
-
-impl From<u8> for Status {
-    fn from(status_byte: u8) -> Self {
-        Self {
-            carry: status_byte & 0b0000_0001 != 0,
-            zero: status_byte & 0b0000_0010 != 0,
-            interrupt_disable: status_byte & 0b0000_0100 != 0,
-            decimal: status_byte & 0b0000_1000 != 0,
-            break_command: status_byte & 0b0001_0000 != 0,
-            overflow: status_byte & 0b0100_0000 != 0,
-            negative: status_byte & 0b1000_0000 != 0,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum Register {
-    A,
-    X,
-    Y,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cpu {
-    // CPU registers
-    /// Accumulator
-    a: u8,
-    /// X register
-    x: u8,
-    /// Y register
-    y: u8,
-    /// Program counter
-    pc: u16,
-    /// Stack pointer
-    sp: u8,
-    /// Status register
-    status: Status,
+    /// CPU registers
+    regs: Registers,
 
     // Emulation variables
     /// If a reset interrupt is pending
@@ -130,13 +53,7 @@ pub struct Cpu {
 impl Default for Cpu {
     fn default() -> Self {
         Self {
-            a: 0,
-            x: 0,
-            y: 0,
-            pc: 0,
-            sp: STACK_POINTER_START,
-            status: Status::default(),
-
+            regs: Registers::default(),
             reset_interrupt_pending: false,
             nmi_interrupt_pending: false,
             irq_interrupt_pending: false,
@@ -146,36 +63,17 @@ impl Default for Cpu {
     }
 }
 
+// CPU implementation
 impl Cpu {
     #[tracing::instrument]
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn register(&self, register: Register) -> u8 {
-        match register {
-            Register::A => self.a,
-            Register::X => self.x,
-            Register::Y => self.y,
-        }
-    }
-
-    pub fn status(&self) -> Status {
-        self.status
-    }
-
-    pub fn program_counter(&self) -> u16 {
-        self.pc
-    }
-
-    pub fn stack_pointer(&self) -> u8 {
-        self.sp
-    }
-
     /// Fetches and decodes the next instruction from memory.
     #[tracing::instrument]
     fn fetch_and_decode(&mut self, memory: &mut Memory) -> ASTInstructionNode {
-        let opcode = memory.read_byte(self.pc);
+        let opcode = memory.read_byte(self.regs.pc);
         let ins = OPCODE_MAPPING
             .find_instruction(opcode)
             .unwrap_or_else(|| panic!("Invalid opcode: '{:#02x}'", opcode));
@@ -184,18 +82,22 @@ impl Cpu {
             ASTAddressingMode::Absolute
             | ASTAddressingMode::AbsoluteX
             | ASTAddressingMode::AbsoluteY
-            | ASTAddressingMode::Indirect => ASTOperand::Absolute(memory.read_word(self.pc + 1)),
+            | ASTAddressingMode::Indirect => {
+                ASTOperand::Absolute(memory.read_word(self.regs.pc + 1))
+            }
             ASTAddressingMode::ZeroPage
             | ASTAddressingMode::ZeroPageX
             | ASTAddressingMode::ZeroPageY
             | ASTAddressingMode::IndirectIndexedX
             | ASTAddressingMode::IndirectIndexedY => {
-                ASTOperand::ZeroPage(memory.read_byte(self.pc + 1))
+                ASTOperand::ZeroPage(memory.read_byte(self.regs.pc + 1))
             }
             ASTAddressingMode::Relative => {
-                ASTOperand::Relative(memory.read_byte(self.pc + 1) as i8)
+                ASTOperand::Relative(memory.read_byte(self.regs.pc + 1) as i8)
             }
-            ASTAddressingMode::Immediate => ASTOperand::Immediate(memory.read_byte(self.pc + 1)),
+            ASTAddressingMode::Immediate => {
+                ASTOperand::Immediate(memory.read_byte(self.regs.pc + 1))
+            }
             ASTAddressingMode::Accumulator | ASTAddressingMode::Implied => ASTOperand::Implied,
             _ => panic!("Invalid addressing mode: '{:#?}'", ins.addr_mode),
         };
@@ -215,7 +117,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::ADC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.add_with_carry(memory.read_byte((*addr + self.x) as u16));
+                self.add_with_carry(memory.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (ASTMnemonic::ADC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -258,30 +160,30 @@ impl Cpu {
             }
             // AND
             (ASTMnemonic::AND, _, ASTOperand::Immediate(value)) => {
-                self.a &= *value;
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= *value;
+                self.set_zero_and_negative_flags(self.regs.a);
                 2
             }
             (ASTMnemonic::AND, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
-                self.a &= memory.read_byte(*addr as u16);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte(*addr as u16);
+                self.set_zero_and_negative_flags(self.regs.a);
                 3
             }
             (ASTMnemonic::AND, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.a &= memory.read_byte((*addr + self.x) as u16);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte((*addr + self.regs.x) as u16);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (ASTMnemonic::AND, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
-                self.a &= memory.read_byte(*addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte(*addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (ASTMnemonic::AND, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.a &= memory.read_byte(indexed_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
                 } else {
@@ -291,8 +193,8 @@ impl Cpu {
             (ASTMnemonic::AND, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.a &= memory.read_byte(indexed_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
                 } else {
@@ -301,14 +203,14 @@ impl Cpu {
             }
             (ASTMnemonic::AND, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.a &= memory.read_byte(indirect_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte(indirect_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 6
             }
             (ASTMnemonic::AND, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.a &= memory.read_byte(indexed_addr & 0xff);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a &= memory.read_byte(indexed_addr & 0xff);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     6
                 } else {
@@ -317,7 +219,7 @@ impl Cpu {
             }
             // ASL
             (ASTMnemonic::ASL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
-                self.a = self.shift_left(self.a);
+                self.regs.a = self.shift_left(self.regs.a);
                 2
             }
             (ASTMnemonic::ASL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -327,7 +229,7 @@ impl Cpu {
                 5
             }
             (ASTMnemonic::ASL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                let addr = (*addr + self.x) as u16;
+                let addr = (*addr + self.regs.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.shift_left(value));
                 6
@@ -338,35 +240,35 @@ impl Cpu {
                 6
             }
             (ASTMnemonic::ASL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
-                let addr = addr.wrapping_add(self.x as u16);
+                let addr = addr.wrapping_add(self.regs.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.shift_left(value));
                 7
             }
             // Branch instructions
             (ASTMnemonic::BCC, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(!self.status.carry, *offset)
+                self.branch_on_condition(!self.regs.status.carry, *offset)
             }
             (ASTMnemonic::BCS, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(self.status.carry, *offset)
+                self.branch_on_condition(self.regs.status.carry, *offset)
             }
             (ASTMnemonic::BEQ, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(self.status.zero, *offset)
+                self.branch_on_condition(self.regs.status.zero, *offset)
             }
             (ASTMnemonic::BMI, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(self.status.negative, *offset)
+                self.branch_on_condition(self.regs.status.negative, *offset)
             }
             (ASTMnemonic::BNE, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(!self.status.zero, *offset)
+                self.branch_on_condition(!self.regs.status.zero, *offset)
             }
             (ASTMnemonic::BPL, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(!self.status.negative, *offset)
+                self.branch_on_condition(!self.regs.status.negative, *offset)
             }
             (ASTMnemonic::BVC, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(!self.status.overflow, *offset)
+                self.branch_on_condition(!self.regs.status.overflow, *offset)
             }
             (ASTMnemonic::BVS, _, ASTOperand::Relative(offset)) => {
-                self.branch_on_condition(self.status.overflow, *offset)
+                self.branch_on_condition(self.regs.status.overflow, *offset)
             }
             // BIT
             (ASTMnemonic::BIT, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -382,28 +284,28 @@ impl Cpu {
             // BRK
             (ASTMnemonic::BRK, _, ASTOperand::Implied) => {
                 // Causes a non-maskable interrupt
-                self.pc += 2;
-                self.push_to_stack(memory, (self.pc >> 8) as u8);
-                self.push_to_stack(memory, self.pc as u8);
-                self.status.break_command = true;
-                self.push_to_stack(memory, self.status.into());
-                self.status.interrupt_disable = true;
-                self.pc = memory.read_word(INTERRUPT_VECTOR);
+                self.regs.pc += 2;
+                self.push_to_stack(memory, (self.regs.pc >> 8) as u8);
+                self.push_to_stack(memory, self.regs.pc as u8);
+                self.regs.status.break_command = true;
+                self.push_to_stack(memory, self.regs.status.into());
+                self.regs.status.interrupt_disable = true;
+                self.regs.pc = memory.read_word(INTERRUPT_VECTOR);
                 7
             }
             // CLC
             (ASTMnemonic::CLC, _, ASTOperand::Implied) => {
-                self.status.carry = false;
+                self.regs.status.carry = false;
                 2
             }
             // CLI
             (ASTMnemonic::CLI, _, ASTOperand::Implied) => {
-                self.status.interrupt_disable = false;
+                self.regs.status.interrupt_disable = false;
                 2
             }
             // CLV
             (ASTMnemonic::CLV, _, ASTOperand::Implied) => {
-                self.status.overflow = false;
+                self.regs.status.overflow = false;
                 2
             }
             // CMP
@@ -416,7 +318,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::CMP, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.compare(Register::A, memory.read_byte((*addr + self.x) as u16));
+                self.compare(Register::A, memory.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (ASTMnemonic::CMP, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -492,7 +394,7 @@ impl Cpu {
                 5
             }
             (ASTMnemonic::DEC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                let addr = (*addr + self.x) as u16;
+                let addr = (*addr + self.regs.x) as u16;
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
@@ -505,7 +407,7 @@ impl Cpu {
                 6
             }
             (ASTMnemonic::DEC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
-                let addr = addr.wrapping_add(self.x as u16);
+                let addr = addr.wrapping_add(self.regs.x as u16);
                 let value = memory.read_byte(addr).wrapping_sub(1);
                 memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
@@ -513,42 +415,42 @@ impl Cpu {
             }
             // DEX
             (ASTMnemonic::DEX, _, ASTOperand::Implied) => {
-                self.x = self.x.wrapping_sub(1);
-                self.set_zero_and_negative_flags(self.x);
+                self.regs.x = self.regs.x.wrapping_sub(1);
+                self.set_zero_and_negative_flags(self.regs.x);
                 2
             }
             // DEY
             (ASTMnemonic::DEY, _, ASTOperand::Implied) => {
-                self.y = self.y.wrapping_sub(1);
-                self.set_zero_and_negative_flags(self.y);
+                self.regs.y = self.regs.y.wrapping_sub(1);
+                self.set_zero_and_negative_flags(self.regs.y);
                 2
             }
             // EOR
             (ASTMnemonic::EOR, _, ASTOperand::Immediate(value)) => {
-                self.a ^= *value;
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= *value;
+                self.set_zero_and_negative_flags(self.regs.a);
                 2
             }
             (ASTMnemonic::EOR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
-                self.a ^= memory.read_byte(*addr as u16);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte(*addr as u16);
+                self.set_zero_and_negative_flags(self.regs.a);
                 3
             }
             (ASTMnemonic::EOR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.a ^= memory.read_byte((*addr + self.x) as u16);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte((*addr + self.regs.x) as u16);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (ASTMnemonic::EOR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
-                self.a ^= memory.read_byte(*addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte(*addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (ASTMnemonic::EOR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.a ^= memory.read_byte(indexed_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
                 } else {
@@ -558,8 +460,8 @@ impl Cpu {
             (ASTMnemonic::EOR, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.a ^= memory.read_byte(indexed_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
                 } else {
@@ -568,14 +470,14 @@ impl Cpu {
             }
             (ASTMnemonic::EOR, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.a ^= memory.read_byte(indirect_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte(indirect_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 6
             }
             (ASTMnemonic::EOR, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.a ^= memory.read_byte(indexed_addr & 0xff);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a ^= memory.read_byte(indexed_addr & 0xff);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     6
                 } else {
@@ -591,7 +493,7 @@ impl Cpu {
                 5
             }
             (ASTMnemonic::INC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                let addr = (*addr + self.x) as u16;
+                let addr = (*addr + self.regs.x) as u16;
                 let value = memory.read_byte(addr).wrapping_add(1);
                 memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
@@ -604,7 +506,7 @@ impl Cpu {
                 6
             }
             (ASTMnemonic::INC, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
-                let addr = addr.wrapping_add(self.x as u16);
+                let addr = addr.wrapping_add(self.regs.x as u16);
                 let value = memory.read_byte(addr).wrapping_add(1);
                 memory.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
@@ -612,32 +514,32 @@ impl Cpu {
             }
             // INX
             (ASTMnemonic::INX, _, ASTOperand::Implied) => {
-                self.x = self.x.wrapping_add(1);
-                self.set_zero_and_negative_flags(self.x);
+                self.regs.x = self.regs.x.wrapping_add(1);
+                self.set_zero_and_negative_flags(self.regs.x);
                 2
             }
             // INY
             (ASTMnemonic::INY, _, ASTOperand::Implied) => {
-                self.y = self.y.wrapping_add(1);
-                self.set_zero_and_negative_flags(self.y);
+                self.regs.y = self.regs.y.wrapping_add(1);
+                self.set_zero_and_negative_flags(self.regs.y);
                 2
             }
             // JMP
             (ASTMnemonic::JMP, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
-                self.pc = *addr;
+                self.regs.pc = *addr;
                 3
             }
             (ASTMnemonic::JMP, ASTAddressingMode::Indirect, ASTOperand::Absolute(addr)) => {
                 let indirect_addr = memory.read_word(*addr);
-                self.pc = indirect_addr;
+                self.regs.pc = indirect_addr;
                 5
             }
             // JSR
             (ASTMnemonic::JSR, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
-                let return_addr = self.pc - 1;
+                let return_addr = self.regs.pc - 1;
                 self.push_to_stack(memory, (return_addr >> 8) as u8);
                 self.push_to_stack(memory, return_addr as u8);
-                self.pc = *addr;
+                self.regs.pc = *addr;
                 6
             }
             // LDA
@@ -650,7 +552,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::LDA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.load_register(Register::A, memory.read_byte((*addr + self.x) as u16));
+                self.load_register(Register::A, memory.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (ASTMnemonic::LDA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -701,7 +603,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::LDX, ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(addr)) => {
-                self.load_register(Register::X, memory.read_byte((*addr + self.y) as u16));
+                self.load_register(Register::X, memory.read_byte((*addr + self.regs.y) as u16));
                 4
             }
             (ASTMnemonic::LDX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -728,7 +630,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::LDY, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.load_register(Register::Y, memory.read_byte((*addr + self.x) as u16));
+                self.load_register(Register::Y, memory.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (ASTMnemonic::LDY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -747,7 +649,7 @@ impl Cpu {
             }
             // LSR
             (ASTMnemonic::LSR, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
-                self.a = self.shift_right(self.a);
+                self.regs.a = self.shift_right(self.regs.a);
                 2
             }
             (ASTMnemonic::LSR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -757,7 +659,7 @@ impl Cpu {
                 5
             }
             (ASTMnemonic::LSR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                let addr = (*addr + self.x) as u16;
+                let addr = (*addr + self.regs.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.shift_right(value));
                 6
@@ -768,7 +670,7 @@ impl Cpu {
                 6
             }
             (ASTMnemonic::LSR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
-                let addr = addr.wrapping_add(self.x as u16);
+                let addr = addr.wrapping_add(self.regs.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.shift_right(value));
                 7
@@ -777,30 +679,30 @@ impl Cpu {
             (ASTMnemonic::NOP, _, ASTOperand::Implied) => 2,
             // ORA
             (ASTMnemonic::ORA, _, ASTOperand::Immediate(value)) => {
-                self.a |= *value;
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= *value;
+                self.set_zero_and_negative_flags(self.regs.a);
                 2
             }
             (ASTMnemonic::ORA, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
-                self.a |= memory.read_byte(*addr as u16);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte(*addr as u16);
+                self.set_zero_and_negative_flags(self.regs.a);
                 3
             }
             (ASTMnemonic::ORA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.a |= memory.read_byte((*addr + self.x) as u16);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte((*addr + self.regs.x) as u16);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (ASTMnemonic::ORA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
-                self.a |= memory.read_byte(*addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte(*addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (ASTMnemonic::ORA, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.a |= memory.read_byte(indexed_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
                 } else {
@@ -810,8 +712,8 @@ impl Cpu {
             (ASTMnemonic::ORA, ASTAddressingMode::AbsoluteY, ASTOperand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.a |= memory.read_byte(indexed_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte(indexed_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
                 } else {
@@ -820,14 +722,14 @@ impl Cpu {
             }
             (ASTMnemonic::ORA, ASTAddressingMode::IndirectIndexedX, ASTOperand::ZeroPage(addr)) => {
                 let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.a |= memory.read_byte(indirect_addr);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte(indirect_addr);
+                self.set_zero_and_negative_flags(self.regs.a);
                 6
             }
             (ASTMnemonic::ORA, ASTAddressingMode::IndirectIndexedY, ASTOperand::ZeroPage(addr)) => {
                 let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.a |= memory.read_byte(indexed_addr & 0xff);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a |= memory.read_byte(indexed_addr & 0xff);
+                self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     6
                 } else {
@@ -836,28 +738,28 @@ impl Cpu {
             }
             // PHA
             (ASTMnemonic::PHA, _, ASTOperand::Implied) => {
-                self.push_to_stack(memory, self.a);
+                self.push_to_stack(memory, self.regs.a);
                 3
             }
             // PHP
             (ASTMnemonic::PHP, _, ASTOperand::Implied) => {
-                self.push_to_stack(memory, self.status.into());
+                self.push_to_stack(memory, self.regs.status.into());
                 3
             }
             // PLA
             (ASTMnemonic::PLA, _, ASTOperand::Implied) => {
-                self.a = self.pop_from_stack(memory);
-                self.set_zero_and_negative_flags(self.a);
+                self.regs.a = self.pop_from_stack(memory);
+                self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             // PLP
             (ASTMnemonic::PLP, _, ASTOperand::Implied) => {
-                self.status = self.pop_from_stack(memory).into();
+                self.regs.status = self.pop_from_stack(memory).into();
                 4
             }
             // ROL
             (ASTMnemonic::ROL, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
-                self.a = self.rotate_left(self.a);
+                self.regs.a = self.rotate_left(self.regs.a);
                 2
             }
             (ASTMnemonic::ROL, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -867,7 +769,7 @@ impl Cpu {
                 5
             }
             (ASTMnemonic::ROL, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                let addr = (*addr + self.x) as u16;
+                let addr = (*addr + self.regs.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.rotate_left(value));
                 6
@@ -878,14 +780,14 @@ impl Cpu {
                 6
             }
             (ASTMnemonic::ROL, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
-                let addr = addr.wrapping_add(self.x as u16);
+                let addr = addr.wrapping_add(self.regs.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.rotate_left(value));
                 7
             }
             // ROR
             (ASTMnemonic::ROR, ASTAddressingMode::Accumulator, ASTOperand::Implied) => {
-                self.a = self.rotate_right(self.a);
+                self.regs.a = self.rotate_right(self.regs.a);
                 2
             }
             (ASTMnemonic::ROR, ASTAddressingMode::ZeroPage, ASTOperand::ZeroPage(addr)) => {
@@ -895,7 +797,7 @@ impl Cpu {
                 5
             }
             (ASTMnemonic::ROR, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                let addr = (*addr + self.x) as u16;
+                let addr = (*addr + self.regs.x) as u16;
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.rotate_right(value));
                 6
@@ -906,25 +808,25 @@ impl Cpu {
                 6
             }
             (ASTMnemonic::ROR, ASTAddressingMode::AbsoluteX, ASTOperand::Absolute(addr)) => {
-                let addr = addr.wrapping_add(self.x as u16);
+                let addr = addr.wrapping_add(self.regs.x as u16);
                 let value = memory.read_byte(addr);
                 memory.write_byte(addr, self.rotate_right(value));
                 7
             }
             // RTI
             (ASTMnemonic::RTI, _, ASTOperand::Implied) => {
-                self.status = self.pop_from_stack(memory).into();
-                self.status.break_command = false;
-                self.status.interrupt_disable = false;
-                self.pc = self.pop_from_stack(memory) as u16;
-                self.pc |= (self.pop_from_stack(memory) as u16) << 8;
+                self.regs.status = self.pop_from_stack(memory).into();
+                self.regs.status.break_command = false;
+                self.regs.status.interrupt_disable = false;
+                self.regs.pc = self.pop_from_stack(memory) as u16;
+                self.regs.pc |= (self.pop_from_stack(memory) as u16) << 8;
                 6
             }
             // RTS
             (ASTMnemonic::RTS, _, ASTOperand::Implied) => {
-                self.pc = self.pop_from_stack(memory) as u16;
-                self.pc |= (self.pop_from_stack(memory) as u16) << 8;
-                self.pc += 1;
+                self.regs.pc = self.pop_from_stack(memory) as u16;
+                self.regs.pc |= (self.pop_from_stack(memory) as u16) << 8;
+                self.regs.pc += 1;
                 6
             }
             // SBC
@@ -937,7 +839,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::SBC, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.subtract_with_carry(memory.read_byte((*addr + self.x) as u16));
+                self.subtract_with_carry(memory.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (ASTMnemonic::SBC, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -980,12 +882,12 @@ impl Cpu {
             }
             // SEC
             (ASTMnemonic::SEC, _, ASTOperand::Implied) => {
-                self.status.carry = true;
+                self.regs.status.carry = true;
                 2
             }
             // SEI
             (ASTMnemonic::SEI, _, ASTOperand::Implied) => {
-                self.status.interrupt_disable = true;
+                self.regs.status.interrupt_disable = true;
                 2
             }
             // STA
@@ -994,7 +896,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::STA, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.store_register(Register::A, (*addr + self.x) as u16, memory);
+                self.store_register(Register::A, (*addr + self.regs.x) as u16, memory);
                 4
             }
             (ASTMnemonic::STA, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -1027,7 +929,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::STX, ASTAddressingMode::ZeroPageY, ASTOperand::ZeroPage(addr)) => {
-                self.store_register(Register::X, (*addr + self.y) as u16, memory);
+                self.store_register(Register::X, (*addr + self.regs.y) as u16, memory);
                 4
             }
             (ASTMnemonic::STX, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -1040,7 +942,7 @@ impl Cpu {
                 3
             }
             (ASTMnemonic::STY, ASTAddressingMode::ZeroPageX, ASTOperand::ZeroPage(addr)) => {
-                self.store_register(Register::Y, (*addr + self.x) as u16, memory);
+                self.store_register(Register::Y, (*addr + self.regs.x) as u16, memory);
                 4
             }
             (ASTMnemonic::STY, ASTAddressingMode::Absolute, ASTOperand::Absolute(addr)) => {
@@ -1049,32 +951,32 @@ impl Cpu {
             }
             // TAX
             (ASTMnemonic::TAX, _, ASTOperand::Implied) => {
-                self.load_register(Register::X, self.a);
+                self.load_register(Register::X, self.regs.a);
                 2
             }
             // TAY
             (ASTMnemonic::TAY, _, ASTOperand::Implied) => {
-                self.load_register(Register::Y, self.a);
+                self.load_register(Register::Y, self.regs.a);
                 2
             }
             // TSX
             (ASTMnemonic::TSX, _, ASTOperand::Implied) => {
-                self.load_register(Register::X, self.sp);
+                self.load_register(Register::X, self.regs.sp);
                 2
             }
             // TXA
             (ASTMnemonic::TXA, _, ASTOperand::Implied) => {
-                self.load_register(Register::A, self.x);
+                self.load_register(Register::A, self.regs.x);
                 2
             }
             // TXS
             (ASTMnemonic::TXS, _, ASTOperand::Implied) => {
-                self.sp = self.x;
+                self.regs.sp = self.regs.x;
                 2
             }
             // TYA
             (ASTMnemonic::TYA, _, ASTOperand::Implied) => {
-                self.load_register(Register::A, self.y);
+                self.load_register(Register::A, self.regs.y);
                 2
             }
             _ => todo!("Invalid instruction: '{:#?}'", &ins),
@@ -1084,8 +986,8 @@ impl Cpu {
     #[tracing::instrument]
     fn indexed_indirect(&self, register: Register, addr: u16) -> (bool, u16) {
         let indexed_addr = addr.wrapping_add(match register {
-            Register::X => self.x,
-            Register::Y => self.y,
+            Register::X => self.regs.x,
+            Register::Y => self.regs.y,
             _ => panic!("Invalid register: '{:#?}'", register),
         } as u16);
         let page_boundary_crossed = (addr & 0xFF00) != (indexed_addr & 0xFF00);
@@ -1095,7 +997,7 @@ impl Cpu {
 
     #[tracing::instrument]
     fn indexed_indirect_x(&self, memory: &mut Memory, zp_addr: u8) -> u16 {
-        memory.read_word((zp_addr + self.x) as u16) & 0xff
+        memory.read_word((zp_addr + self.regs.x) as u16) & 0xff
     }
 
     #[tracing::instrument]
@@ -1109,10 +1011,10 @@ impl Cpu {
     #[tracing::instrument]
     fn branch_on_condition(&mut self, should_branch: bool, offset: i8) -> usize {
         if should_branch {
-            let old_pc = self.pc;
-            self.pc = self.pc.wrapping_add_signed(offset as i16);
+            let old_pc = self.regs.pc;
+            self.regs.pc = self.regs.pc.wrapping_add_signed(offset as i16);
 
-            let boundery_crossed = (self.pc & 0xFF00) != (old_pc & 0xFF00);
+            let boundery_crossed = (self.regs.pc & 0xFF00) != (old_pc & 0xFF00);
             if boundery_crossed {
                 4
             } else {
@@ -1125,7 +1027,7 @@ impl Cpu {
 
     #[tracing::instrument]
     fn shift_left(&mut self, value: u8) -> u8 {
-        self.status.carry = value & 0x80 != 0;
+        self.regs.status.carry = value & 0x80 != 0;
         let result = value << 1;
         self.set_zero_and_negative_flags(result);
         result
@@ -1133,7 +1035,7 @@ impl Cpu {
 
     #[tracing::instrument]
     fn shift_right(&mut self, value: u8) -> u8 {
-        self.status.carry = value & 0x01 != 0;
+        self.regs.status.carry = value & 0x01 != 0;
         let result = value >> 1;
         self.set_zero_and_negative_flags(result);
         result
@@ -1141,8 +1043,8 @@ impl Cpu {
 
     #[tracing::instrument]
     fn rotate_left(&mut self, value: u8) -> u8 {
-        let carry = self.status.carry as u8;
-        self.status.carry = value & 0x80 != 0;
+        let carry = self.regs.status.carry as u8;
+        self.regs.status.carry = value & 0x80 != 0;
         let result = value << 1 | carry;
         self.set_zero_and_negative_flags(result);
         result
@@ -1150,8 +1052,8 @@ impl Cpu {
 
     #[tracing::instrument]
     fn rotate_right(&mut self, value: u8) -> u8 {
-        let carry = self.status.carry as u8;
-        self.status.carry = value & 0x01 != 0;
+        let carry = self.regs.status.carry as u8;
+        self.regs.status.carry = value & 0x01 != 0;
         let result = value >> 1 | carry << 7;
         self.set_zero_and_negative_flags(result);
         result
@@ -1161,60 +1063,61 @@ impl Cpu {
     fn add_with_carry(&mut self, value: u8) {
         // TODO: Handle BCD mode
 
-        let result: u16 = value as u16 + self.a as u16 + self.status.carry as u16;
-        self.status.zero = result & 0xff == 0;
-        self.status.negative = result & 0x80 != 0;
-        self.status.overflow = (self.a ^ result as u8) & (value ^ result as u8) & 0x80 != 0;
-        self.status.carry = result > 0xff;
-        self.a = result as u8;
+        let result: u16 = value as u16 + self.regs.a as u16 + self.regs.status.carry as u16;
+        self.regs.status.zero = result & 0xff == 0;
+        self.regs.status.negative = result & 0x80 != 0;
+        self.regs.status.overflow =
+            (self.regs.a ^ result as u8) & (value ^ result as u8) & 0x80 != 0;
+        self.regs.status.carry = result > 0xff;
+        self.regs.a = result as u8;
     }
 
     #[tracing::instrument]
     fn subtract_with_carry(&mut self, value: u8) {
         // TODO: Handle BCD mode
 
-        let borrow = if self.status.carry { 0 } else { 1 };
-        let result: u16 = (self.a as u16)
+        let borrow = if self.regs.status.carry { 0 } else { 1 };
+        let result: u16 = (self.regs.a as u16)
             .wrapping_sub(value as u16)
             .wrapping_sub(borrow as u16);
 
-        self.status.negative = result & 0x80 != 0;
-        self.status.zero = result & 0xff == 0;
-        self.status.overflow =
-            ((self.a ^ value) & 0x80) != 0 && ((self.a ^ result as u8) & 0x80) != 0;
-        self.status.carry = result < 0x100;
-        self.a = result as u8;
+        self.regs.status.negative = result & 0x80 != 0;
+        self.regs.status.zero = result & 0xff == 0;
+        self.regs.status.overflow =
+            ((self.regs.a ^ value) & 0x80) != 0 && ((self.regs.a ^ result as u8) & 0x80) != 0;
+        self.regs.status.carry = result < 0x100;
+        self.regs.a = result as u8;
     }
 
     #[tracing::instrument]
     fn bit_test(&mut self, value: u8) {
         self.set_zero_and_negative_flags(value);
-        self.status.overflow = value & 0x40 != 0;
+        self.regs.status.overflow = value & 0x40 != 0;
     }
 
     #[tracing::instrument]
     fn compare(&mut self, register: Register, value: u8) {
         let register_value = match register {
-            Register::A => self.a,
-            Register::X => self.x,
-            Register::Y => self.y,
+            Register::A => self.regs.a,
+            Register::X => self.regs.x,
+            Register::Y => self.regs.y,
         };
         self.set_zero_and_negative_flags(register_value.wrapping_sub(value));
-        self.status.carry = register_value >= value;
+        self.regs.status.carry = register_value >= value;
     }
 
     #[tracing::instrument]
     fn set_zero_and_negative_flags(&mut self, value: u8) {
-        self.status.zero = value == 0;
-        self.status.negative = value & 0x80 != 0;
+        self.regs.status.zero = value == 0;
+        self.regs.status.negative = value & 0x80 != 0;
     }
 
     #[tracing::instrument]
     fn load_register(&mut self, register: Register, value: u8) {
         match register {
-            Register::A => self.a = value,
-            Register::X => self.x = value,
-            Register::Y => self.y = value,
+            Register::A => self.regs.a = value,
+            Register::X => self.regs.x = value,
+            Register::Y => self.regs.y = value,
         }
         self.set_zero_and_negative_flags(value);
     }
@@ -1222,53 +1125,53 @@ impl Cpu {
     #[tracing::instrument]
     fn store_register(&mut self, register: Register, addr: u16, memory: &mut Memory) {
         let value = match register {
-            Register::A => self.a,
-            Register::X => self.x,
-            Register::Y => self.y,
+            Register::A => self.regs.a,
+            Register::X => self.regs.x,
+            Register::Y => self.regs.y,
         };
         memory.write_byte(addr, value);
     }
 
     #[tracing::instrument]
     fn push_to_stack(&mut self, memory: &mut Memory, value: u8) {
-        memory.write_byte(STACK_BASE + self.sp as u16, value);
-        self.sp = self.sp.wrapping_sub(1);
+        memory.write_byte(STACK_PAGE + self.regs.sp as u16, value);
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
     }
 
     #[tracing::instrument]
     fn pop_from_stack(&mut self, memory: &mut Memory) -> u8 {
-        self.sp = self.sp.wrapping_add(1);
-        memory.read_byte(STACK_BASE + self.sp as u16)
+        self.regs.sp = self.regs.sp.wrapping_add(1);
+        memory.read_byte(STACK_PAGE + self.regs.sp as u16)
     }
 
     #[tracing::instrument]
     fn set_program_counter(&mut self, addr: u16) {
-        self.pc = addr;
+        self.regs.pc = addr;
     }
 
     #[tracing::instrument]
     fn handle_interrupt(&mut self, memory: &mut Memory, vector: u16) -> usize {
-        let return_addr = self.pc;
+        let return_addr = self.regs.pc;
         self.push_to_stack(memory, (return_addr >> 8) as u8);
         self.push_to_stack(memory, return_addr as u8);
-        self.push_to_stack(memory, self.status.into());
-        self.status.interrupt_disable = true;
-        self.pc = memory.read_word(vector);
+        self.push_to_stack(memory, self.regs.status.into());
+        self.regs.status.interrupt_disable = true;
+        self.regs.pc = memory.read_word(vector);
 
         7
     }
 
     #[tracing::instrument]
     fn handle_reset(&mut self, memory: &mut Memory) -> usize {
-        self.a = 0;
-        self.x = 0;
-        self.y = 0;
-        self.sp = 0xFD;
-        self.status = Status {
+        self.regs.a = 0;
+        self.regs.x = 0;
+        self.regs.y = 0;
+        self.regs.sp = 0xFD;
+        self.regs.status = Status {
             interrupt_disable: true,
             ..Default::default()
         };
-        self.pc = memory.read_word(RESET_VECTOR);
+        self.regs.pc = memory.read_word(RESET_VECTOR);
 
         8
     }
@@ -1283,12 +1186,15 @@ impl Cpu {
             self.cycles_left_for_instruction = self.handle_interrupt(memory, NMI_VECTOR);
         } else if self.irq_interrupt_pending {
             self.irq_interrupt_pending = false;
-            if !self.status.interrupt_disable {
+            if !self.regs.status.interrupt_disable {
                 self.cycles_left_for_instruction = self.handle_interrupt(memory, INTERRUPT_VECTOR);
             }
         }
     }
+}
 
+// Control functions
+impl Cpu {
     /// Reset interrupt request
     #[tracing::instrument]
     pub fn reset(&mut self) {
@@ -1325,7 +1231,7 @@ impl Cpu {
 
         // Ok, we're ready to process the next instruction
         let instruction = self.fetch_and_decode(memory);
-        self.pc += instruction.size() as u16;
+        self.regs.pc += instruction.size() as u16;
         self.cycles_left_for_instruction = self.execute_instruction(&instruction, memory);
         self.last_instruction = Some(instruction);
         self.cycles_left_for_instruction -= 1;
@@ -1361,6 +1267,10 @@ impl Cpu {
                 self.clock(memory);
             },
         }
+    }
+
+    pub fn registers(&self) -> Registers {
+        self.regs.clone()
     }
 }
 
@@ -1422,12 +1332,12 @@ mod tests {
             cpu.run(&mut memory, RunOption::UntilCycles(self.expected_cycles));
 
             // Assert
-            assert_eq!(cpu.a, self.expected_cpu.a);
-            assert_eq!(cpu.x, self.expected_cpu.x);
-            assert_eq!(cpu.y, self.expected_cpu.y);
-            assert_eq!(cpu.pc, self.expected_cpu.pc);
-            assert_eq!(cpu.sp, self.expected_cpu.sp);
-            assert_eq!(cpu.status, self.expected_cpu.status);
+            assert_eq!(cpu.regs.a, self.expected_cpu.regs.a);
+            assert_eq!(cpu.regs.x, self.expected_cpu.regs.x);
+            assert_eq!(cpu.regs.y, self.expected_cpu.regs.y);
+            assert_eq!(cpu.regs.pc, self.expected_cpu.regs.pc);
+            assert_eq!(cpu.regs.sp, self.expected_cpu.regs.sp);
+            assert_eq!(cpu.regs.status, self.expected_cpu.regs.status);
 
             if let Some(expected_memory_fn) = self.expected_memory_fn {
                 expected_memory_fn(&memory);
@@ -1443,11 +1353,14 @@ mod tests {
                 // Simple addition
                 code: "LDA #$10\nADC #$10",
                 expected_cpu: Cpu {
-                    a: 0x20,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: false,
-                        overflow: false,
+                    regs: Registers {
+                        a: 0x20,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: false,
+                            overflow: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1459,12 +1372,15 @@ mod tests {
                 // Addition with carry
                 code: "LDA #$ff\nADC #$01",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        overflow: false,
-                        zero: true,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            overflow: false,
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1476,12 +1392,15 @@ mod tests {
                 // Overflow
                 code: "LDA #$7f\nADC #$01",
                 expected_cpu: Cpu {
-                    a: 0x80,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: false,
-                        overflow: true,
-                        negative: true,
+                    regs: Registers {
+                        a: 0x80,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: false,
+                            overflow: true,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1492,12 +1411,15 @@ mod tests {
             TestCase {
                 code: "LDA #$ff\nADC #$ff",
                 expected_cpu: Cpu {
-                    a: 0xfe,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        overflow: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xfe,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            overflow: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1508,12 +1430,15 @@ mod tests {
             TestCase {
                 code: "LDA #$ff\nADC #$ff\nADC #$ff",
                 expected_cpu: Cpu {
-                    a: 0xfe,
-                    pc: PROGRAM_START + 2 + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        overflow: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xfe,
+                        pc: PROGRAM_START + 2 + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            overflow: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1524,12 +1449,15 @@ mod tests {
             TestCase {
                 code: "LDA #$ff\nADC #$ff\nADC #$ff\nADC #$ff",
                 expected_cpu: Cpu {
-                    a: 0xfe,
-                    pc: PROGRAM_START + 2 + 2 + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        overflow: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xfe,
+                        pc: PROGRAM_START + 2 + 2 + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            overflow: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1540,13 +1468,16 @@ mod tests {
             TestCase {
                 code: "ADC #$80\nADC #$80",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        overflow: true,
-                        zero: true,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            overflow: true,
+                            zero: true,
+                            negative: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1558,13 +1489,16 @@ mod tests {
             TestCase {
                 code: "SEC\nSBC #$01",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 1 + 2,
-                    status: Status {
-                        carry: false,
-                        overflow: false,
-                        zero: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 1 + 2,
+                        status: Status {
+                            carry: false,
+                            overflow: false,
+                            zero: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1575,13 +1509,16 @@ mod tests {
             TestCase {
                 code: "LDA #$10\nSEC\nSBC #$10",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2 + 1 + 2,
-                    status: Status {
-                        carry: true,
-                        overflow: false,
-                        zero: true,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2 + 1 + 2,
+                        status: Status {
+                            carry: true,
+                            overflow: false,
+                            zero: true,
+                            negative: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1592,13 +1529,16 @@ mod tests {
             TestCase {
                 code: "LDA #$10\nSEC\nSBC #$11",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 2 + 1 + 2,
-                    status: Status {
-                        carry: false,
-                        overflow: false,
-                        zero: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 2 + 1 + 2,
+                        status: Status {
+                            carry: false,
+                            overflow: false,
+                            zero: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1609,13 +1549,16 @@ mod tests {
             TestCase {
                 code: "LDA #$10\nSEC\nSBC #$ff",
                 expected_cpu: Cpu {
-                    a: 0x11,
-                    pc: PROGRAM_START + 2 + 1 + 2,
-                    status: Status {
-                        carry: false,
-                        overflow: false,
-                        zero: false,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x11,
+                        pc: PROGRAM_START + 2 + 1 + 2,
+                        status: Status {
+                            carry: false,
+                            overflow: false,
+                            zero: false,
+                            negative: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1636,11 +1579,14 @@ mod tests {
                 // First set carry flag and then clear it
                 code: "SEC\nCLC",
                 expected_cpu: Cpu {
-                    status: Status {
-                        carry: false,
+                    regs: Registers {
+                        status: Status {
+                            carry: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 1 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 1 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -1650,11 +1596,14 @@ mod tests {
             TestCase {
                 code: "SEC",
                 expected_cpu: Cpu {
-                    status: Status {
-                        carry: true,
+                    regs: Registers {
+                        status: Status {
+                            carry: true,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2,
@@ -1665,15 +1614,18 @@ mod tests {
                 // First cause an overflow with ADC and then clear it
                 code: "LDA #$7f\nADC #$01\nCLV",
                 expected_cpu: Cpu {
-                    a: 0x80,
-                    status: Status {
-                        overflow: false,
-                        zero: false,
-                        carry: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0x80,
+                        status: Status {
+                            overflow: false,
+                            zero: false,
+                            carry: false,
+                            negative: true,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 2 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 2 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2 + 2,
@@ -1692,12 +1644,15 @@ mod tests {
                 // Branch taken forward 0x10 bytes
                 code: "BCC $10\nLDA #$01",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    status: Status {
-                        carry: false,
+                    regs: Registers {
+                        a: 0x00,
+                        status: Status {
+                            carry: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 0x10,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 0x10,
                     ..Default::default()
                 },
                 expected_cycles: 3, // LDA is not executed
@@ -1707,11 +1662,14 @@ mod tests {
                 // Branch taken, backwards on other page
                 code: "BCC $80",
                 expected_cpu: Cpu {
-                    status: Status {
-                        carry: false,
+                    regs: Registers {
+                        status: Status {
+                            carry: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START - 126,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START - 126,
                     ..Default::default()
                 },
                 expected_cycles: 4,
@@ -1721,12 +1679,15 @@ mod tests {
                 // Branch not taken
                 code: "SEC\nBCC $01\nLDA #$01",
                 expected_cpu: Cpu {
-                    a: 0x01,
-                    status: Status {
-                        carry: true,
+                    regs: Registers {
+                        a: 0x01,
+                        status: Status {
+                            carry: true,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 1 + 2 + 2,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 1 + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2 + 2,
@@ -1746,7 +1707,10 @@ mod tests {
                 // Absolute jump
                 code: "JMP $ff00",
                 expected_cpu: Cpu {
-                    pc: 0xff00,
+                    regs: Registers {
+                        pc: 0xff00,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 3,
@@ -1757,7 +1721,10 @@ mod tests {
                 code: "JMP ($ff00)",
                 init_memory_fn: Some(|memory| memory.write_word(0xff00, 0x1234)),
                 expected_cpu: Cpu {
-                    pc: 0x1234,
+                    regs: Registers {
+                        pc: 0x1234,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 5,
@@ -1768,8 +1735,11 @@ mod tests {
                 // Jump to subroutine
                 code: "JSR $ff00",
                 expected_cpu: Cpu {
-                    pc: 0xff00,
-                    sp: 0xfd,
+                    regs: Registers {
+                        pc: 0xff00,
+                        sp: 0xfd,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -1787,9 +1757,12 @@ mod tests {
                     memory.write_byte(0xff00, 0x60); // RTS
                 }),
                 expected_cpu: Cpu {
-                    a: 0x01,
-                    pc: PROGRAM_START + 3 + 2, // JSR + LDA
-                    sp: 0xff,
+                    regs: Registers {
+                        a: 0x01,
+                        pc: PROGRAM_START + 3 + 2, // JSR + LDA
+                        sp: 0xff,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 6 + 6 + 2,
@@ -1808,14 +1781,17 @@ mod tests {
                 // Simple shift
                 code: "LDA #$08\nASL",
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    status: Status {
-                        zero: false,
-                        carry: false,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x10,
+                        status: Status {
+                            zero: false,
+                            carry: false,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -1825,14 +1801,17 @@ mod tests {
                 // Shift with carry
                 code: "LDA #$80\nASL",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    status: Status {
-                        zero: true,
-                        carry: true,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x00,
+                        status: Status {
+                            zero: true,
+                            carry: true,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -1843,14 +1822,17 @@ mod tests {
                 // Simple shift
                 code: "LDA #$10\nLSR",
                 expected_cpu: Cpu {
-                    a: 0x08,
-                    status: Status {
-                        zero: false,
-                        carry: false,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x08,
+                        status: Status {
+                            zero: false,
+                            carry: false,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -1860,14 +1842,17 @@ mod tests {
                 // Shift with carry
                 code: "LDA #$01\nLSR",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    status: Status {
-                        zero: true,
-                        carry: true,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x00,
+                        status: Status {
+                            zero: true,
+                            carry: true,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -1878,14 +1863,17 @@ mod tests {
                 // Simple rotate
                 code: "LDA #$80\nROL\nROL",
                 expected_cpu: Cpu {
-                    a: 0x01,
-                    status: Status {
-                        zero: false,
-                        carry: false,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x01,
+                        status: Status {
+                            zero: false,
+                            carry: false,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 1 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 1 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2 + 2,
@@ -1896,14 +1884,17 @@ mod tests {
                 // Simple rotate
                 code: "LDA #$01\nROR\nROR",
                 expected_cpu: Cpu {
-                    a: 0x80,
-                    status: Status {
-                        zero: false,
-                        carry: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0x80,
+                        status: Status {
+                            zero: false,
+                            carry: false,
+                            negative: true,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 1 + 1,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 1 + 1,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2 + 2,
@@ -1921,13 +1912,16 @@ mod tests {
                 // Test BIT with zero
                 code: "BIT $00",
                 expected_cpu: Cpu {
-                    status: Status {
-                        zero: true,
-                        overflow: false,
-                        negative: false,
+                    regs: Registers {
+                        status: Status {
+                            zero: true,
+                            overflow: false,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2,
                     ..Default::default()
                 },
                 expected_cycles: 3,
@@ -1938,14 +1932,17 @@ mod tests {
                 code: "LDA #$80\nBIT $00",
                 init_memory_fn: Some(|memory| memory.write_byte(0x00, 0x80)),
                 expected_cpu: Cpu {
-                    a: 0x80,
-                    status: Status {
-                        zero: false,
-                        overflow: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0x80,
+                        status: Status {
+                            zero: false,
+                            overflow: false,
+                            negative: true,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 2,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
@@ -1956,14 +1953,17 @@ mod tests {
                 code: "LDA #$40\nBIT $00",
                 init_memory_fn: Some(|memory| memory.write_byte(0x00, 0x40)),
                 expected_cpu: Cpu {
-                    a: 0x40,
-                    status: Status {
-                        zero: false,
-                        overflow: true,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x40,
+                        status: Status {
+                            zero: false,
+                            overflow: true,
+                            negative: false,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 2,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
@@ -1974,14 +1974,17 @@ mod tests {
                 code: "LDA #%11000000\nBIT $00",
                 init_memory_fn: Some(|memory| memory.write_byte(0x00, 0b11000000)),
                 expected_cpu: Cpu {
-                    a: 0b11000000,
-                    status: Status {
-                        zero: false,
-                        overflow: true,
-                        negative: true,
+                    regs: Registers {
+                        a: 0b11000000,
+                        status: Status {
+                            zero: false,
+                            overflow: true,
+                            negative: true,
+                            ..Default::default()
+                        },
+                        pc: PROGRAM_START + 2 + 2,
                         ..Default::default()
                     },
-                    pc: PROGRAM_START + 2 + 2,
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
@@ -1999,8 +2002,11 @@ mod tests {
             TestCase {
                 code: "LDA #$10\nAND #$10",
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -2009,9 +2015,12 @@ mod tests {
             TestCase {
                 code: "LDA #%10101010\nAND #$0f",
                 expected_cpu: Cpu {
-                    a: 0b1010,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
+                    regs: Registers {
+                        a: 0b1010,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2022,10 +2031,13 @@ mod tests {
             TestCase {
                 code: "AND #$ff",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        zero: true,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2036,10 +2048,13 @@ mod tests {
             TestCase {
                 code: "LDA #$ff\nAND #$00",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        zero: true,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2051,10 +2066,13 @@ mod tests {
             TestCase {
                 code: "LDA #$10\nEOR #$10",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        zero: true,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2065,10 +2083,13 @@ mod tests {
             TestCase {
                 code: "LDA #$f0\nEOR #$0f",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2079,10 +2100,13 @@ mod tests {
             TestCase {
                 code: "LDA #$0f\nEOR #$ff",
                 expected_cpu: Cpu {
-                    a: 0xf0,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0xf0,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2094,8 +2118,11 @@ mod tests {
             TestCase {
                 code: "LDA #$10\nORA #$10",
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -2104,10 +2131,13 @@ mod tests {
             TestCase {
                 code: "LDA #$f0\nORA #$0f",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2118,9 +2148,12 @@ mod tests {
             TestCase {
                 code: "LDA #%01010101\nORA #$0f",
                 expected_cpu: Cpu {
-                    a: 0b01011111,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
+                    regs: Registers {
+                        a: 0b01011111,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2131,10 +2164,13 @@ mod tests {
             TestCase {
                 code: "ORA #$ff",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2155,12 +2191,15 @@ mod tests {
                 // Register = Operand
                 code: "LDA #$30\nCMP #$30",
                 expected_cpu: Cpu {
-                    a: 0x30,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        zero: true,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x30,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            zero: true,
+                            negative: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2172,12 +2211,15 @@ mod tests {
                 // Register > Operand
                 code: "LDA #$80\nCMP #$40",
                 expected_cpu: Cpu {
-                    a: 0x80,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        zero: false,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x80,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            zero: false,
+                            negative: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2189,12 +2231,15 @@ mod tests {
                 // Register < Operand
                 code: "LDA #$20\nCMP #$40",
                 expected_cpu: Cpu {
-                    a: 0x20,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: false,
-                        zero: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0x20,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: false,
+                            zero: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2206,12 +2251,15 @@ mod tests {
                 // Register < Operand
                 code: "LDA #$f0\nCMP #$30",
                 expected_cpu: Cpu {
-                    a: 0xf0,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        zero: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xf0,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            zero: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2222,12 +2270,15 @@ mod tests {
             TestCase {
                 code: "LDA #$30\nCMP #$f0",
                 expected_cpu: Cpu {
-                    a: 0x30,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: false,
-                        zero: false,
-                        negative: false,
+                    regs: Registers {
+                        a: 0x30,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: false,
+                            zero: false,
+                            negative: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2238,12 +2289,15 @@ mod tests {
             TestCase {
                 code: "LDA #$ff\nCMP #$00",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 2 + 2,
-                    status: Status {
-                        carry: true,
-                        zero: false,
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 2 + 2,
+                        status: Status {
+                            carry: true,
+                            zero: false,
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2263,7 +2317,10 @@ mod tests {
             TestCase {
                 code: "DEC $10",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 5,
@@ -2277,9 +2334,12 @@ mod tests {
             TestCase {
                 code: "DEC $10",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        zero: true,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2295,7 +2355,10 @@ mod tests {
             TestCase {
                 code: "DEC $10",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 5,
@@ -2310,10 +2373,13 @@ mod tests {
             TestCase {
                 code: "DEX",
                 expected_cpu: Cpu {
-                    x: 0xff,
-                    pc: PROGRAM_START + 1,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        x: 0xff,
+                        pc: PROGRAM_START + 1,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2325,10 +2391,13 @@ mod tests {
             TestCase {
                 code: "DEY",
                 expected_cpu: Cpu {
-                    y: 0xff,
-                    pc: PROGRAM_START + 1,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        y: 0xff,
+                        pc: PROGRAM_START + 1,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2348,7 +2417,10 @@ mod tests {
             TestCase {
                 code: "INC $10",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 5,
@@ -2360,9 +2432,12 @@ mod tests {
             TestCase {
                 code: "INC $10",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        zero: true,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2377,9 +2452,12 @@ mod tests {
             TestCase {
                 code: "INC $10",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2394,8 +2472,11 @@ mod tests {
             TestCase {
                 code: "INX",
                 expected_cpu: Cpu {
-                    x: 0x01,
-                    pc: PROGRAM_START + 1,
+                    regs: Registers {
+                        x: 0x01,
+                        pc: PROGRAM_START + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2,
@@ -2405,8 +2486,11 @@ mod tests {
             TestCase {
                 code: "INY",
                 expected_cpu: Cpu {
-                    y: 0x01,
-                    pc: PROGRAM_START + 1,
+                    regs: Registers {
+                        y: 0x01,
+                        pc: PROGRAM_START + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2,
@@ -2423,8 +2507,11 @@ mod tests {
             TestCase {
                 code: "LDA #$10",
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    pc: PROGRAM_START + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        pc: PROGRAM_START + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2,
@@ -2433,10 +2520,13 @@ mod tests {
             TestCase {
                 code: "LDA #$ff",
                 expected_cpu: Cpu {
-                    a: 0xff,
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0xff,
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2447,10 +2537,13 @@ mod tests {
             TestCase {
                 code: "LDA #$00",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2,
-                    status: Status {
-                        zero: true,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2,
+                        status: Status {
+                            zero: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2473,8 +2566,11 @@ mod tests {
                     memory.write_byte(0x10, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    pc: PROGRAM_START + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        pc: PROGRAM_START + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 3,
@@ -2487,9 +2583,12 @@ mod tests {
                     memory.write_byte(0x11, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    x: 0x01,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        x: 0x01,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -2502,8 +2601,11 @@ mod tests {
                     memory.write_byte(0x1234, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    pc: PROGRAM_START + 3,
+                    regs: Registers {
+                        a: 0x10,
+                        pc: PROGRAM_START + 3,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 4,
@@ -2516,9 +2618,12 @@ mod tests {
                     memory.write_byte(0x1235, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    x: 0x01,
-                    pc: PROGRAM_START + 2 + 3,
+                    regs: Registers {
+                        a: 0x10,
+                        x: 0x01,
+                        pc: PROGRAM_START + 2 + 3,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -2531,9 +2636,12 @@ mod tests {
                     memory.write_byte(0x1300, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    x: 0x01,
-                    pc: PROGRAM_START + 2 + 3,
+                    regs: Registers {
+                        a: 0x10,
+                        x: 0x01,
+                        pc: PROGRAM_START + 2 + 3,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 7, // An extra cycle
@@ -2546,9 +2654,12 @@ mod tests {
                     memory.write_byte(0x1235, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    y: 0x01,
-                    pc: PROGRAM_START + 2 + 3,
+                    regs: Registers {
+                        a: 0x10,
+                        y: 0x01,
+                        pc: PROGRAM_START + 2 + 3,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 6,
@@ -2561,9 +2672,12 @@ mod tests {
                     memory.write_byte(0x1300, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    y: 0x01,
-                    pc: PROGRAM_START + 2 + 3,
+                    regs: Registers {
+                        a: 0x10,
+                        y: 0x01,
+                        pc: PROGRAM_START + 2 + 3,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 7, // An extra cycle due to page boundary crossing
@@ -2577,9 +2691,12 @@ mod tests {
                     memory.write_byte(0x34, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    x: 0x01,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        x: 0x01,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 8,
@@ -2593,9 +2710,12 @@ mod tests {
                     memory.write_byte(0x35, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    y: 0x01,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        y: 0x01,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 7,
@@ -2609,9 +2729,12 @@ mod tests {
                     memory.write_byte(0x0000, 0x10);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x10,
-                    y: 0x01,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x10,
+                        y: 0x01,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 8, // An extra cycle due to page boundary crossing
@@ -2628,7 +2751,10 @@ mod tests {
             TestCase {
                 code: "NOP",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 1,
+                    regs: Registers {
+                        pc: PROGRAM_START + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2,
@@ -2637,7 +2763,10 @@ mod tests {
             TestCase {
                 code: "NOP\nNOP",
                 expected_cpu: Cpu {
-                    pc: PROGRAM_START + 2,
+                    regs: Registers {
+                        pc: PROGRAM_START + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
 
@@ -2656,8 +2785,11 @@ mod tests {
             TestCase {
                 code: "LDA #$34\nSTA $10",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    pc: PROGRAM_START + 2 + 2,
+                    regs: Registers {
+                        a: 0x34,
+                        pc: PROGRAM_START + 2 + 2,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
@@ -2670,8 +2802,11 @@ mod tests {
             TestCase {
                 code: "LDA #$34\nSTA $1234",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    pc: PROGRAM_START + 2 + 3,
+                    regs: Registers {
+                        a: 0x34,
+                        pc: PROGRAM_START + 2 + 3,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 4,
@@ -2692,9 +2827,12 @@ mod tests {
             TestCase {
                 code: "LDA #$34\nTAX",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    x: 0x34,
-                    pc: PROGRAM_START + 2 + 1,
+                    regs: Registers {
+                        a: 0x34,
+                        x: 0x34,
+                        pc: PROGRAM_START + 2 + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -2704,9 +2842,12 @@ mod tests {
             TestCase {
                 code: "LDA #$34\nTAY",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    y: 0x34,
-                    pc: PROGRAM_START + 2 + 1,
+                    regs: Registers {
+                        a: 0x34,
+                        y: 0x34,
+                        pc: PROGRAM_START + 2 + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -2716,9 +2857,12 @@ mod tests {
             TestCase {
                 code: "LDX #$34\nTXA",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    x: 0x34,
-                    pc: PROGRAM_START + 2 + 1,
+                    regs: Registers {
+                        a: 0x34,
+                        x: 0x34,
+                        pc: PROGRAM_START + 2 + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -2728,9 +2872,12 @@ mod tests {
             TestCase {
                 code: "LDY #$34\nTYA",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    y: 0x34,
-                    pc: PROGRAM_START + 2 + 1,
+                    regs: Registers {
+                        a: 0x34,
+                        y: 0x34,
+                        pc: PROGRAM_START + 2 + 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 2,
@@ -2740,11 +2887,14 @@ mod tests {
             TestCase {
                 code: "TSX",
                 expected_cpu: Cpu {
-                    x: 0xff,
-                    sp: 0xff,
-                    pc: PROGRAM_START + 1,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        x: 0xff,
+                        sp: 0xff,
+                        pc: PROGRAM_START + 1,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2756,11 +2906,14 @@ mod tests {
             TestCase {
                 code: "LDX #$fc\nTXS",
                 expected_cpu: Cpu {
-                    x: 0xfc,
-                    sp: 0xfc,
-                    pc: PROGRAM_START + 2 + 1,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        x: 0xfc,
+                        sp: 0xfc,
+                        pc: PROGRAM_START + 2 + 1,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2780,9 +2933,12 @@ mod tests {
             TestCase {
                 code: "LDA #$34\nPHA",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    pc: PROGRAM_START + 2 + 1,
-                    sp: 0xff - 1,
+                    regs: Registers {
+                        a: 0x34,
+                        pc: PROGRAM_START + 2 + 1,
+                        sp: 0xff - 1,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
@@ -2795,9 +2951,12 @@ mod tests {
             TestCase {
                 code: "LDA #$34\nPHA\nLDA #$00\nPLA",
                 expected_cpu: Cpu {
-                    a: 0x34,
-                    pc: PROGRAM_START + 2 + 1 + 2 + 1,
-                    sp: 0xff,
+                    regs: Registers {
+                        a: 0x34,
+                        pc: PROGRAM_START + 2 + 1 + 2 + 1,
+                        sp: 0xff,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3 + 2 + 4,
@@ -2807,11 +2966,14 @@ mod tests {
             TestCase {
                 code: "LDA #$80\nPHP",
                 expected_cpu: Cpu {
-                    a: 0x80,
-                    pc: PROGRAM_START + 2 + 1,
-                    sp: 0xff - 1,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0x80,
+                        pc: PROGRAM_START + 2 + 1,
+                        sp: 0xff - 1,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2826,11 +2988,14 @@ mod tests {
             TestCase {
                 code: "LDA #$80\nPHA\nLDA #$00\nPLP",
                 expected_cpu: Cpu {
-                    a: 0x00,
-                    pc: PROGRAM_START + 2 + 1 + 2 + 1,
-                    sp: 0xff,
-                    status: Status {
-                        negative: true,
+                    regs: Registers {
+                        a: 0x00,
+                        pc: PROGRAM_START + 2 + 1 + 2 + 1,
+                        sp: 0xff,
+                        status: Status {
+                            negative: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2856,11 +3021,14 @@ mod tests {
                     memory.write_word(INTERRUPT_VECTOR, 0x1200);
                 }),
                 expected_cpu: Cpu {
-                    pc: 0x1200,
-                    sp: 0xff - 3,
-                    status: Status {
-                        break_command: true,
-                        interrupt_disable: true,
+                    regs: Registers {
+                        pc: 0x1200,
+                        sp: 0xff - 3,
+                        status: Status {
+                            break_command: true,
+                            interrupt_disable: true,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -2882,9 +3050,12 @@ mod tests {
                     memory.write_byte(0x1202, 0x40);
                 }),
                 expected_cpu: Cpu {
-                    a: 0x01,
-                    pc: PROGRAM_START + 1 + 2,
-                    sp: 0xff,
+                    regs: Registers {
+                        a: 0x01,
+                        pc: PROGRAM_START + 1 + 2,
+                        sp: 0xff,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 expected_cycles: 7 + 2 + 6,
