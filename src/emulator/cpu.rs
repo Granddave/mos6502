@@ -1280,8 +1280,6 @@ impl Cpu {
     /// Ticks the clock of the CPU.
     #[tracing::instrument]
     pub fn clock(&mut self, memory: &mut Memory) {
-        // If the break flag is set, we're stopping the CPU.
-
         if self.cycle > 0 {
             // Processing current instruction
             self.cycle -= 1;
