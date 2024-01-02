@@ -1,6 +1,3 @@
-// Allow during initial development
-#![allow(dead_code)]
-
 // Error handling:
 // - Use anyhow for user facing errors
 // - Use thiserror for internal errors
