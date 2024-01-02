@@ -8,7 +8,9 @@ authors = ["David Isaksson <davidisaksson93@gmail.com>"]
 
 [dependencies]
 anyhow = "1.0.76"
+crossterm = "0.27.0"
 lazy_static = "1.4.0"
+ratatui = "0.25.0"
 strum = "0.25.0"
 strum_macros = "0.25.3"
 thiserror = "1.0.51"
