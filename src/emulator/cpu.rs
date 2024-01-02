@@ -30,7 +30,7 @@ pub enum RunOption {
     StopOnBreakInstruction,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Cpu {
     /// CPU registers
     regs: Registers,
@@ -48,19 +48,6 @@ pub struct Cpu {
     cycles_left_for_instruction: usize,
 
     last_instruction: Option<ASTInstructionNode>,
-}
-
-impl Default for Cpu {
-    fn default() -> Self {
-        Self {
-            regs: Registers::default(),
-            reset_interrupt_pending: false,
-            nmi_interrupt_pending: false,
-            irq_interrupt_pending: false,
-            cycles_left_for_instruction: 0,
-            last_instruction: None,
-        }
-    }
 }
 
 // CPU implementation

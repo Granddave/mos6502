@@ -1,3 +1,4 @@
+use mos6502::emulator::cpu::RunOption;
 use mos6502::{
     assembler::compile_code,
     emulator::{
@@ -6,7 +7,6 @@ use mos6502::{
         memory::{Bus, Memory},
     },
 };
-use mos6502::emulator::cpu::RunOption;
 
 #[test]
 fn test_loop_program() {
