@@ -3,6 +3,73 @@ use crate::emulator::{
     memory::{Bus, Memory},
 };
 
+#[derive(Debug, Default, Clone)]
+pub struct StateValue<T> {
+    value: T,
+    did_change: bool,
+}
+
+impl<T: std::cmp::PartialEq> StateValue<T> {
+    pub fn set(&mut self, value: T) {
+        if self.value == value {
+            return;
+        }
+        self.value = value;
+        self.did_change = true;
+    }
+
+    pub fn get(&self) -> T
+    where
+        T: Copy,
+    {
+        self.value
+    }
+
+    pub fn has_changed(&self) -> bool {
+        self.did_change
+    }
+
+    pub fn invalidate(&mut self) {
+        self.did_change = false;
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct EmulationState {
+    pub a: StateValue<u8>,
+    pub x: StateValue<u8>,
+    pub y: StateValue<u8>,
+    pub pc: StateValue<u16>,
+    pub sp: StateValue<u8>,
+
+    // Status register
+    pub carry: StateValue<bool>,
+    pub zero: StateValue<bool>,
+    pub interrupt_disable: StateValue<bool>,
+    pub decimal: StateValue<bool>,
+    pub break_command: StateValue<bool>,
+    pub overflow: StateValue<bool>,
+    pub negative: StateValue<bool>,
+}
+
+impl EmulationState {
+    fn invalidate(&mut self) {
+        self.a.invalidate();
+        self.x.invalidate();
+        self.y.invalidate();
+        self.pc.invalidate();
+        self.sp.invalidate();
+
+        self.carry.invalidate();
+        self.zero.invalidate();
+        self.interrupt_disable.invalidate();
+        self.decimal.invalidate();
+        self.break_command.invalidate();
+        self.overflow.invalidate();
+        self.negative.invalidate();
+    }
+}
+
 pub struct App {
     cpu: Cpu,
     memory: Memory,
@@ -11,6 +78,8 @@ pub struct App {
     program: Vec<u8>,
     /// The start address of the program in memory.
     program_start: u16,
+
+    state: EmulationState,
 
     should_quit: bool,
 }
@@ -22,6 +91,7 @@ impl App {
             memory: Memory::new(),
             program: program.to_vec(),
             program_start,
+            state: EmulationState::default(),
             should_quit: false,
         };
         app.reset();
@@ -41,6 +111,7 @@ impl App {
 
         self.cpu = Cpu::new();
         self.cpu.reset();
+        self.state.invalidate();
     }
 
     /// Quits the application.
@@ -51,6 +122,7 @@ impl App {
     /// Steps the CPU by one instruction.
     pub fn step_cpu(&mut self) {
         self.cpu.step(&mut self.memory);
+        self.state.invalidate();
     }
 
     /// Run CPU execution until a break instruction is reached.
@@ -59,28 +131,24 @@ impl App {
             .run(&mut self.memory, RunOption::StopOnBreakInstruction);
     }
 
-    /// Get the status of the CPU in a string format.
-    pub fn status(&self) -> String {
-        let mut output = String::new();
-
+    /// Get the last and current state of the emulation
+    pub fn state(&mut self) -> EmulationState {
         let regs = self.cpu.registers();
+        self.state.a.set(regs.a);
+        self.state.x.set(regs.x);
+        self.state.y.set(regs.y);
+        self.state.pc.set(regs.pc);
+        self.state.sp.set(regs.sp);
 
-        output.push_str("Registers:\n");
-        output.push_str(&format!("A:  0x{:02x}\n", regs.a));
-        output.push_str(&format!("X:  0x{:02x}\n", regs.x));
-        output.push_str(&format!("Y:  0x{:02x}\n", regs.y));
-        output.push_str(&format!("PC: 0x{:04x}\n", regs.pc));
-        output.push_str(&format!("SP: 0x{:02x}\n", regs.sp));
-        output.push_str(&format!("S:  {:08b}\n", u8::from(regs.status)));
-        output.push_str("    NV-BDIZC\n");
+        let status = regs.status;
+        self.state.carry.set(status.carry);
+        self.state.zero.set(status.zero);
+        self.state.interrupt_disable.set(status.interrupt_disable);
+        self.state.decimal.set(status.decimal);
+        self.state.break_command.set(status.break_command);
+        self.state.overflow.set(status.overflow);
+        self.state.negative.set(status.negative);
 
-        // output.push_str("------------");
-        // output.push_str("Stack:");
-        // self.memory.dump(
-        //     STACK_BASE + self.cpu.stack_pointer() as u16,
-        //     STACK_BASE + STACK_POINTER_START as u16,
-        // );
-
-        output
+        self.state.clone()
     }
 }
