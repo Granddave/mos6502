@@ -6,6 +6,7 @@ use mos6502::{
         memory::{Bus, Memory},
     },
 };
+use mos6502::emulator::cpu::RunOption;
 
 #[test]
 fn test_loop_program() {
@@ -20,7 +21,7 @@ fn test_loop_program() {
     memory.write_word(cpu::RESET_VECTOR, program_start); // TODO: Include in the program
 
     cpu.reset();
-    cpu.run(&mut memory, 217);
+    cpu.run(&mut memory, RunOption::StopOnBreakInstruction);
 
     assert_eq!(memory.read_byte(0x0000), 0x0a);
 }

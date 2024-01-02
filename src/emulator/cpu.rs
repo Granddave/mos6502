@@ -17,6 +17,14 @@ pub const RESET_VECTOR: u16 = 0xfffc;
 /// IRQ (Interrupt request) maskable interrupt
 pub const INTERRUPT_VECTOR: u16 = 0xfffe;
 
+#[derive(Debug)]
+pub enum RunOption {
+    /// Run until the given number of cycles has been reached.
+    UntilCycles(usize),
+    /// Run until the program executes a BRK instruction.
+    StopOnBreakInstruction,
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Status {
     /// (C) Carry flag, set if the last operation caused an overflow from bit 7 or an
@@ -88,7 +96,7 @@ enum Register {
     Y,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cpu {
     // CPU registers
     /// Accumulator
@@ -116,6 +124,8 @@ pub struct Cpu {
     /// This is used to keep track of the current cycle in the current instruction.
     /// A new instruction is fetched and decoded once the current cycle reaches zero.
     cycle: usize,
+
+    last_instruction: Option<ASTInstructionNode>,
 }
 
 impl Default for Cpu {
@@ -132,6 +142,7 @@ impl Default for Cpu {
             nmi_interrupt_pending: false,
             irq_interrupt_pending: false,
             cycle: 0,
+            last_instruction: None,
         }
     }
 }
@@ -174,7 +185,7 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn execute_instruction(&mut self, ins: ASTInstructionNode, memory: &mut Memory) -> usize {
+    fn execute_instruction(&mut self, ins: &ASTInstructionNode, memory: &mut Memory) -> usize {
         match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
             (ASTMnemonic::ADC, _, ASTOperand::Immediate(value)) => {
                 self.add_with_carry(*value);
@@ -1296,7 +1307,8 @@ impl Cpu {
         // Ok, we're ready to process the next instruction
         let instruction = self.fetch_and_decode(memory);
         self.pc += instruction.size() as u16;
-        self.cycle = self.execute_instruction(instruction, memory);
+        self.cycle = self.execute_instruction(&instruction, memory);
+        self.last_instruction = Some(instruction);
         self.cycle -= 1;
     }
 
@@ -1310,9 +1322,21 @@ impl Cpu {
 
     /// Runs the CPU until the given number of cycles has been reached.
     #[tracing::instrument]
-    pub fn run(&mut self, memory: &mut Memory, cycles_to_run: usize) {
-        for _ in 0..cycles_to_run {
-            self.clock(memory);
+    pub fn run(&mut self, memory: &mut Memory, run_option: RunOption) {
+        match run_option {
+            RunOption::UntilCycles(cycles_to_run) => {
+                for _ in 0..cycles_to_run {
+                    self.clock(memory);
+                }
+            }
+            RunOption::StopOnBreakInstruction => loop {
+                if let Some(ins) = &self.last_instruction {
+                    if ins.ins.mnemonic == ASTMnemonic::BRK {
+                        break;
+                    }
+                }
+                self.clock(memory);
+            },
         }
     }
 }
@@ -1372,10 +1396,16 @@ mod tests {
             cpu.set_program_counter(PROGRAM_START);
 
             // Act
-            cpu.run(&mut memory, self.expected_cycles);
+            cpu.run(&mut memory, RunOption::UntilCycles(self.expected_cycles));
 
             // Assert
-            assert_eq!(cpu, self.expected_cpu);
+            assert_eq!(cpu.a, self.expected_cpu.a);
+            assert_eq!(cpu.x, self.expected_cpu.x);
+            assert_eq!(cpu.y, self.expected_cpu.y);
+            assert_eq!(cpu.pc, self.expected_cpu.pc);
+            assert_eq!(cpu.sp, self.expected_cpu.sp);
+            assert_eq!(cpu.status, self.expected_cpu.status);
+
             if let Some(expected_memory_fn) = self.expected_memory_fn {
                 expected_memory_fn(&memory);
             }

@@ -5,7 +5,7 @@ use tracing_subscriber::prelude::*;
 use mos6502::{
     assembler::compile_code,
     emulator::{
-        cpu::{self, Cpu},
+        cpu::{self, Cpu, RunOption},
         memory::{Bus, Memory},
     },
 };
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
 
     let mut cpu = Cpu::new();
     cpu.reset();
-    cpu.run(&mut memory, 1000);
+    cpu.run(&mut memory, RunOption::StopOnBreakInstruction);
 
     Ok(())
 }

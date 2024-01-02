@@ -202,7 +202,7 @@ impl fmt::Display for ASTInstruction {
 }
 
 /// An instruction with an operand.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ASTInstructionNode {
     /// The type of instruction
     pub ins: ASTInstruction,
