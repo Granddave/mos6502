@@ -120,10 +120,9 @@ pub struct Cpu {
     /// If an IRQ interrupt is pending
     irq_interrupt_pending: bool,
 
-    /// Current cycle
     /// This is used to keep track of the current cycle in the current instruction.
     /// A new instruction is fetched and decoded once the current cycle reaches zero.
-    cycle: usize,
+    cycles_left_for_instruction: usize,
 
     last_instruction: Option<ASTInstructionNode>,
 }
@@ -141,7 +140,7 @@ impl Default for Cpu {
             reset_interrupt_pending: false,
             nmi_interrupt_pending: false,
             irq_interrupt_pending: false,
-            cycle: 0,
+            cycles_left_for_instruction: 0,
             last_instruction: None,
         }
     }
@@ -1258,14 +1257,14 @@ impl Cpu {
     fn handle_interrupt_request(&mut self, memory: &mut Memory) {
         if self.reset_interrupt_pending {
             self.reset_interrupt_pending = false;
-            self.cycle = self.handle_reset(memory);
+            self.cycles_left_for_instruction = self.handle_reset(memory);
         } else if self.nmi_interrupt_pending {
             self.nmi_interrupt_pending = false;
-            self.cycle = self.handle_interrupt(memory, NMI_VECTOR);
+            self.cycles_left_for_instruction = self.handle_interrupt(memory, NMI_VECTOR);
         } else if self.irq_interrupt_pending {
             self.irq_interrupt_pending = false;
             if !self.status.interrupt_disable {
-                self.cycle = self.handle_interrupt(memory, INTERRUPT_VECTOR);
+                self.cycles_left_for_instruction = self.handle_interrupt(memory, INTERRUPT_VECTOR);
             }
         }
     }
@@ -1291,31 +1290,31 @@ impl Cpu {
     /// Ticks the clock of the CPU.
     #[tracing::instrument]
     pub fn clock(&mut self, memory: &mut Memory) {
-        if self.cycle > 0 {
+        if self.cycles_left_for_instruction > 0 {
             // Processing current instruction
-            self.cycle -= 1;
+            self.cycles_left_for_instruction -= 1;
             return;
         }
 
         self.handle_interrupt_request(memory);
-        if self.cycle > 0 {
+        if self.cycles_left_for_instruction > 0 {
             // Processing interrupt
-            self.cycle -= 1;
+            self.cycles_left_for_instruction -= 1;
             return;
         }
 
         // Ok, we're ready to process the next instruction
         let instruction = self.fetch_and_decode(memory);
         self.pc += instruction.size() as u16;
-        self.cycle = self.execute_instruction(&instruction, memory);
+        self.cycles_left_for_instruction = self.execute_instruction(&instruction, memory);
         self.last_instruction = Some(instruction);
-        self.cycle -= 1;
+        self.cycles_left_for_instruction -= 1;
     }
 
     /// Steps the CPU by one instruction.
     #[tracing::instrument]
     pub fn step(&mut self, memory: &mut Memory) {
-        for _ in 0..self.cycle {
+        for _ in 0..self.cycles_left_for_instruction {
             self.clock(memory);
         }
     }
