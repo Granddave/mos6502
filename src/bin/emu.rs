@@ -7,6 +7,7 @@ use mos6502::{
     emulator::{
         cpu::{self, Cpu, RunOption},
         memory::{Bus, Memory},
+        tui::Tui,
     },
 };
 
@@ -34,6 +35,11 @@ secondloop:
 
 const PROGRAM_START: u16 = 0x8000;
 
+enum RunMode {
+    Headless,
+    Tui,
+}
+
 fn main() -> Result<()> {
     let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
     tracing_subscriber::registry().with(chrome_layer).init();
@@ -53,13 +59,25 @@ fn main() -> Result<()> {
         compile_code(demo(), PROGRAM_START).with_context(|| "Compilation failed")?
     };
 
+    let run_mode = if std::env::args().any(|arg| arg == "--tui") {
+        RunMode::Tui
+    } else {
+        RunMode::Headless
+    };
+
     let mut memory = Memory::new();
     memory.write_word(cpu::RESET_VECTOR, PROGRAM_START);
     memory.load(PROGRAM_START, &bytes);
 
     let mut cpu = Cpu::new();
     cpu.reset();
-    cpu.run(&mut memory, RunOption::StopOnBreakInstruction);
+    match run_mode {
+        RunMode::Headless => cpu.run(&mut memory, RunOption::StopOnBreakInstruction),
+        RunMode::Tui => {
+            let tui = &mut Tui::new(&mut cpu, &mut memory);
+            tui.exec();
+        }
+    }
 
     Ok(())
 }

@@ -6,8 +6,8 @@ use crate::{
 };
 
 // Stack offsets
-const STACK_BASE: u16 = 0x0100;
-const STACK_POINTER_START: u8 = 0xff;
+pub const STACK_BASE: u16 = 0x0100;
+pub const STACK_POINTER_START: u8 = 0xff;
 
 // Interrupt vectors
 /// NMI (Non-maskable interrupt) vector
@@ -26,7 +26,7 @@ pub enum RunOption {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-struct Status {
+pub struct Status {
     /// (C) Carry flag, set if the last operation caused an overflow from bit 7 or an
     /// underflow from bit 0.
     carry: bool,
@@ -90,7 +90,7 @@ impl From<u8> for Status {
 }
 
 #[derive(Debug)]
-enum Register {
+pub enum Register {
     A,
     X,
     Y,
@@ -150,6 +150,26 @@ impl Cpu {
     #[tracing::instrument]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn register(&self, register: Register) -> u8 {
+        match register {
+            Register::A => self.a,
+            Register::X => self.x,
+            Register::Y => self.y,
+        }
+    }
+
+    pub fn status(&self) -> Status {
+        self.status
+    }
+
+    pub fn program_counter(&self) -> u16 {
+        self.pc
+    }
+
+    pub fn stack_pointer(&self) -> u8 {
+        self.sp
     }
 
     /// Fetches and decodes the next instruction from memory.
@@ -1314,6 +1334,10 @@ impl Cpu {
     /// Steps the CPU by one instruction.
     #[tracing::instrument]
     pub fn step(&mut self, memory: &mut Memory) {
+        // Fetch and decode the instruction
+        self.clock(memory);
+
+        // Execute the instruction
         for _ in 0..self.cycles_left_for_instruction {
             self.clock(memory);
         }
