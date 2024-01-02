@@ -116,6 +116,7 @@ Here we see `0x0a`, which in decimal is `10` just we intended!
 - **Emulator**
     - Graphical state for the emulator
     - Peripherals - I/O would be fun to have...
+    - Decimal mode
 
 
 ## References
