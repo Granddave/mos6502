@@ -16,7 +16,7 @@ fn style_state_text<T: std::cmp::PartialEq>(state: &StateValue<T>) -> Style {
     }
 }
 
-fn registers(app: &mut App) -> Vec<Line> {
+fn registers(app: &mut App) -> Paragraph {
     let state = app.state();
 
     let text: Vec<Line<'_>> = vec![
@@ -87,10 +87,19 @@ fn registers(app: &mut App) -> Vec<Line> {
         Line::styled("      NV-BDIZC", Style::default().dim()),
     ];
 
-    text
+    Paragraph::new(text)
+        .block(
+            Block::default()
+                .title("Registers")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(Alignment::Left)
 }
 
-fn stack_view(app: &mut App) -> Vec<Line> {
+fn stack_view(app: &mut App) -> Paragraph {
     let sp_addr = STACK_PAGE + app.state().sp.get() as u16;
     let stack_slice = app.memory_slice(sp_addr, STACK_BASE);
     let mut lines: Vec<Line<'_>> = vec![];
@@ -104,10 +113,16 @@ fn stack_view(app: &mut App) -> Vec<Line> {
         )))
     }
 
-    lines
+    Paragraph::new(lines).block(
+        Block::default()
+            .title("Stack")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().fg(Color::Yellow)),
+    )
 }
 
-fn disassembly(app: &mut App) -> Vec<Line> {
+fn disassembly(app: &mut App) -> Paragraph {
     let mut lines: Vec<Line<'_>> = vec![];
 
     lines.push(Line::raw("  Addr  Hexdump   Instruction"));
@@ -126,22 +141,40 @@ fn disassembly(app: &mut App) -> Vec<Line> {
         }
     }
 
-    lines
+    Paragraph::new(lines).block(
+        Block::default()
+            .title("Disassembly")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().fg(Color::Yellow)),
+    )
+}
+
+fn top_bar() -> Paragraph<'static> {
+    Paragraph::new(vec!["MOS 6502 Emulator".into()])
+        .style(Style::default().fg(Color::Yellow).bold())
+        .alignment(Alignment::Center)
+}
+
+fn bottom_bar() -> Paragraph<'static> {
+    Paragraph::new(vec![
+        "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
+        "Press `s` to step and `c` to run continuously until BRK instruction".into(),
+        "Press `r` to reset the CPU and memory".into(),
+    ])
+    .style(Style::default().fg(Color::Yellow).dim())
+    .alignment(Alignment::Left)
 }
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Max(1), Constraint::Min(1), Constraint::Max(3)])
+        .constraints([
+            Constraint::Max(1), // Top bar
+            Constraint::Min(1), // App layout
+            Constraint::Max(3), // Bottom bar
+        ])
         .split(frame.size());
-
-    // Main title
-    frame.render_widget(
-        Paragraph::new("6502 Emulator")
-            .style(Style::default().fg(Color::Yellow).italic().bold())
-            .alignment(Alignment::Center),
-        main_layout[0],
-    );
 
     // App layout
     const REGISTER_LAYOUT_W: u16 = 20;
@@ -154,54 +187,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         ])
         .split(main_layout[1]);
 
-    // Registers widget
-    frame.render_widget(
-        Paragraph::new(registers(app))
-            .block(
-                Block::default()
-                    .title("Registers")
-                    .title_alignment(Alignment::Center)
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
-            )
-            .style(Style::default().fg(Color::Yellow))
-            .alignment(Alignment::Left),
-        app_layout[0],
-    );
-
-    // Stack widget
-    frame.render_widget(
-        Paragraph::new(stack_view(app)).block(
-            Block::default()
-                .title("Stack")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .style(Style::default().fg(Color::Yellow)),
-        ),
-        app_layout[1],
-    );
-
-    // Disassembled code
-    frame.render_widget(
-        Paragraph::new(disassembly(app)).block(
-            Block::default()
-                .title("Disassembly")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .style(Style::default().fg(Color::Yellow)),
-        ),
-        app_layout[2],
-    );
-
-    // Bottom help text
-    frame.render_widget(
-        Paragraph::new(vec![
-            "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
-            "Press `s` to step and `c` to run continuously until BRK instruction".into(),
-            "Press `r` to reset the CPU and memory".into(),
-        ])
-        .style(Style::default().fg(Color::Yellow).dim())
-        .alignment(Alignment::Left),
-        main_layout[2],
-    );
+    frame.render_widget(top_bar(), main_layout[0]);
+    frame.render_widget(registers(app), app_layout[0]);
+    frame.render_widget(stack_view(app), app_layout[1]);
+    frame.render_widget(disassembly(app), app_layout[2]);
+    frame.render_widget(bottom_bar(), main_layout[2]);
 }
