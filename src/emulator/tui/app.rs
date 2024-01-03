@@ -151,4 +151,8 @@ impl App {
 
         self.state.clone()
     }
+
+    pub fn memory_slice(&self, start: u16, end: u16) -> &[u8] {
+        &self.memory.slice(start, end)
+    }
 }

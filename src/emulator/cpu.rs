@@ -13,6 +13,9 @@ pub mod registers;
 pub const STACK_PAGE: u16 = 0x0100;
 /// Where on the stack page the stack pointer starts.
 pub const STACK_POINTER_START: u8 = 0xff;
+/// Where in memory the base of the stack resides
+/// This is where in memory the stack pointer starts.
+pub const STACK_BASE: u16 = STACK_PAGE + STACK_POINTER_START as u16;
 
 // Interrupt vectors
 /// NMI (Non-maskable interrupt) vector

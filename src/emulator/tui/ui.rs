@@ -1,10 +1,6 @@
 use ratatui::{prelude::*, widgets::*};
-// use ratatui::{
-//     prelude::{Alignment, Frame},
-//     style::{Color, Style},
-//     text::Span,
-//     widgets::{Block, BorderType, Borders, Paragraph},
-// };
+
+use crate::emulator::cpu::{STACK_BASE, STACK_PAGE};
 
 use super::app::{App, StateValue};
 
@@ -90,6 +86,23 @@ fn registers(app: &mut App) -> Vec<Line> {
     text
 }
 
+fn stack_view(app: &mut App) -> Vec<Line> {
+    let sp_addr = STACK_PAGE + app.state().sp.get() as u16;
+    let stack_slice = app.memory_slice(sp_addr, STACK_BASE);
+    let mut lines: Vec<Line<'_>> = vec![];
+
+    lines.push(Line::raw("Addr   Value"));
+    for (ix, val) in stack_slice.iter().rev().enumerate() {
+        lines.push(Line::raw(format!(
+            "0x{:04x} 0x{:02x}",
+            STACK_PAGE as usize + ix,
+            val
+        )))
+    }
+
+    lines
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -129,6 +142,18 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         app_layout[0],
     );
 
+    // Stack widget
+    frame.render_widget(
+        Paragraph::new(stack_view(app)).block(
+            Block::default()
+                .title("Stack")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(Style::default().fg(Color::Yellow)),
+        ),
+        app_layout[1],
+    );
+
     // Bottom help text
     frame.render_widget(
         Paragraph::new(vec![
@@ -140,11 +165,4 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .alignment(Alignment::Left),
         main_layout[2],
     );
-
-    // output.push_str("------------");
-    // output.push_str("Stack:");
-    // self.memory.dump(
-    //     STACK_BASE + self.cpu.stack_pointer() as u16,
-    //     STACK_BASE + STACK_POINTER_START as u16,
-    // );
 }
