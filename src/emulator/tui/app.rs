@@ -165,6 +165,6 @@ impl App {
     }
 
     pub fn memory_slice(&self, start: u16, end: u16) -> &[u8] {
-        &self.memory.slice(start, end)
+        self.memory.slice(start, end)
     }
 }
