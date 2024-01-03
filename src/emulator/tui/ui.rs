@@ -154,6 +154,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         app_layout[1],
     );
 
+    // Disassembled code
+
     // Bottom help text
     frame.render_widget(
         Paragraph::new(vec![
