@@ -588,7 +588,7 @@ impl<'a> Parser<'a> {
         } else {
             Err(invalid_token!(
                 self,
-                "constant expression, expected hex or decimal"
+                "constant expression, expected hex, binary or decimal"
             ))
         }
     }
