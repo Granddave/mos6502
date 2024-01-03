@@ -114,7 +114,6 @@ Here we see `0x0a`, which in decimal is `10` just we intended!
         - `.word $8000`
     - `#"A"`
 - **Emulator**
-    - Graphical state for the emulator
     - Peripherals - I/O would be fun to have...
     - Decimal mode
     - Stack overflow detection
@@ -123,7 +122,7 @@ Here we see `0x0a`, which in decimal is `10` just we intended!
     - Memory view
         - Stack
         - Scrollable area
-    - disassembler view
+    - Centered disassembler view
 
 
 ## References

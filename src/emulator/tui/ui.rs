@@ -127,6 +127,8 @@ fn disassembly(app: &mut App) -> Paragraph {
 
     lines.push(Line::raw("  Addr  Hexdump   Instruction"));
 
+    // TODO: Center around program counter.
+    //       Would be possible to disassemble the memory instead of the loaded program
     let pc = app.state().pc.get() as usize;
     let mut addr = app.program_start as usize;
     for (_, node) in app.disassembled_program.iter().enumerate() {
