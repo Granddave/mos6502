@@ -2,15 +2,20 @@ use crate::ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTNode,
 
 pub mod listing;
 
+pub fn disassemble_code(input: &[u8]) -> Vec<ASTNode> {
+    let mut disassembler = Disassembler::new(input.to_vec());
+    disassembler.disassemble_code()
+}
+
 #[derive(Debug, Default)]
-pub struct Disassembler {
+struct Disassembler {
     input: Vec<u8>,
     curr_ix: usize,
 }
 
 impl Disassembler {
     #[tracing::instrument]
-    pub fn new(input: Vec<u8>) -> Self {
+    fn new(input: Vec<u8>) -> Self {
         Self { input, curr_ix: 0 }
     }
 
@@ -67,7 +72,7 @@ impl Disassembler {
     }
 
     #[tracing::instrument]
-    pub fn disassemble_code(&mut self) -> Vec<ASTNode> {
+    fn disassemble_code(&mut self) -> Vec<ASTNode> {
         let mut ast = vec![];
 
         while self.curr_ix < self.input.len() {

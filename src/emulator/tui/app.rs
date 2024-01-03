@@ -1,6 +1,10 @@
-use crate::emulator::{
-    cpu::{self, Cpu, RunOption},
-    memory::{Bus, Memory},
+use crate::{
+    ast::AST,
+    disassembler::disassemble_code,
+    emulator::{
+        cpu::{self, Cpu, RunOption},
+        memory::{Bus, Memory},
+    },
 };
 
 #[derive(Debug, Default, Clone)]
@@ -71,16 +75,22 @@ impl EmulationState {
 }
 
 pub struct App {
+    /// Emulated CPU
     cpu: Cpu,
+    /// Emulated memory
     memory: Memory,
 
     /// The program to run.
     program: Vec<u8>,
     /// The start address of the program in memory.
-    program_start: u16,
+    pub program_start: u16,
+    /// A cached disassembled AST of the loaded program
+    pub disassembled_program: AST,
 
+    /// State of the CPU
     state: EmulationState,
 
+    /// If the app should quit
     should_quit: bool,
 }
 
@@ -91,9 +101,11 @@ impl App {
             memory: Memory::new(),
             program: program.to_vec(),
             program_start,
+            disassembled_program: disassemble_code(program),
             state: EmulationState::default(),
             should_quit: false,
         };
+
         app.reset();
         app
     }

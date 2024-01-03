@@ -25,16 +25,19 @@ impl Listing {
         Self::new(ast, 0x8000)
     }
 
+    /// Generate listing line from an AST Node and its memory address
+    ///
+    /// E.g. `$8000  20 06 80  JSR $8006`
     #[tracing::instrument]
-    fn generate_line(&self, ins: &ASTInstructionNode) -> String {
-        let bytes =
-            Compiler::instruction_to_bytes(ins).expect("Failed to convert instruction to bytes");
-        let bytes_str = bytes
+    pub fn generate_line(addr: usize, ins: &ASTInstructionNode) -> String {
+        let bytes_str = Compiler::instruction_to_bytes(ins)
+            .expect("Failed to convert instruction to bytes") // TODO: Return result
             .iter()
-            .map(|b| format!("{:02X}", b))
+            .map(|b| format!("{:02x}", b))
             .collect::<Vec<String>>()
             .join(" ");
-        format!("${:04X}  {:08}  {}\n", self.current_address, bytes_str, ins)
+
+        format!("0x{:04x}  {:08}  {}\n", addr, bytes_str, ins)
     }
 
     #[tracing::instrument]
@@ -46,7 +49,8 @@ impl Listing {
         for node in &self.ast {
             // TODO: Add support for other AST nodes
             if let ASTNode::Instruction(ins_node) = node {
-                self.str.push_str(self.generate_line(ins_node).as_str());
+                self.str
+                    .push_str(Listing::generate_line(self.current_address, ins_node).as_str());
                 self.current_address += ins_node.size();
             }
         }
@@ -90,10 +94,10 @@ mod tests {
         let mut listing = Listing::default(ast);
         let expected = " Addr  Hexdump   Instructions
 -----------------------------
-$8000  20 06 80  JSR $8006
-$8003  A9 01     LDA #$01
-$8005  AD 00 02  LDA $0200
-$8008  BD 00 02  LDA $0200,X
+0x8000  20 06 80  JSR $8006
+0x8003  A9 01     LDA #$01
+0x8005  AD 00 02  LDA $0200
+0x8008  BD 00 02  LDA $0200,X
 ";
 
         assert_eq!(listing.generate(), expected);

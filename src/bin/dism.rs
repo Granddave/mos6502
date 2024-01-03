@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::prelude::*;
 
-use mos6502::disassembler::{listing::Listing, Disassembler};
+use mos6502::disassembler::{disassemble_code, listing::Listing};
 
 #[tracing::instrument]
 fn main() -> Result<()> {
@@ -14,8 +14,7 @@ fn main() -> Result<()> {
         .with_context(|| "No input file specified")?;
     let bytes = std::fs::read(input).with_context(|| "Unable to read file")?;
 
-    let mut disassembler = Disassembler::new(bytes);
-    let ast = disassembler.disassemble_code();
+    let ast = disassemble_code(&bytes);
 
     let mut listing = Listing::default(ast);
     println!("{}", listing.generate());

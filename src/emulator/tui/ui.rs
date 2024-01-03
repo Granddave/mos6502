@@ -1,6 +1,10 @@
 use ratatui::{prelude::*, widgets::*};
 
-use crate::emulator::cpu::{STACK_BASE, STACK_PAGE};
+use crate::{
+    ast::ASTNode,
+    disassembler::listing,
+    emulator::cpu::{STACK_BASE, STACK_PAGE},
+};
 
 use super::app::{App, StateValue};
 
@@ -103,6 +107,28 @@ fn stack_view(app: &mut App) -> Vec<Line> {
     lines
 }
 
+fn disassembly(app: &mut App) -> Vec<Line> {
+    let mut lines: Vec<Line<'_>> = vec![];
+
+    lines.push(Line::raw("  Addr  Hexdump   Instruction"));
+
+    let pc = app.state().pc.get() as usize;
+    let mut addr = app.program_start as usize;
+    for (_, node) in app.disassembled_program.iter().enumerate() {
+        if let ASTNode::Instruction(ins_node) = node {
+            let line = listing::Listing::generate_line(addr, ins_node);
+            if addr == pc {
+                lines.push(Line::styled(line, Style::default().light_yellow().bold()));
+            } else {
+                lines.push(Line::raw(line));
+            }
+            addr += ins_node.size();
+        }
+    }
+
+    lines
+}
+
 pub fn render(app: &mut App, frame: &mut Frame) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -122,8 +148,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let app_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Max(REGISTER_LAYOUT_W),
-            Constraint::Min(REGISTER_LAYOUT_W),
+            Constraint::Max(REGISTER_LAYOUT_W), // Registers
+            Constraint::Percentage(20),         // Stack
+            Constraint::Percentage(50),         // Disassembled code
         ])
         .split(main_layout[1]);
 
@@ -152,6 +179,18 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 .style(Style::default().fg(Color::Yellow)),
         ),
         app_layout[1],
+    );
+
+    // Disassembled code
+    frame.render_widget(
+        Paragraph::new(disassembly(app)).block(
+            Block::default()
+                .title("Disassembly")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(Style::default().fg(Color::Yellow)),
+        ),
+        app_layout[2],
     );
 
     // Bottom help text
