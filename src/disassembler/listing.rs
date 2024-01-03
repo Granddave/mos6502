@@ -95,9 +95,9 @@ mod tests {
         let expected = " Addr  Hexdump   Instructions
 -----------------------------
 0x8000  20 06 80  JSR $8006
-0x8003  A9 01     LDA #$01
-0x8005  AD 00 02  LDA $0200
-0x8008  BD 00 02  LDA $0200,X
+0x8003  a9 01     LDA #$01
+0x8005  ad 00 02  LDA $0200
+0x8008  bd 00 02  LDA $0200,X
 ";
 
         assert_eq!(listing.generate(), expected);
