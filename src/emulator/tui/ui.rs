@@ -10,7 +10,7 @@ use super::app::{App, StateValue};
 
 fn style_state_text<T: std::cmp::PartialEq>(state: &StateValue<T>) -> Style {
     if state.has_changed() {
-        Style::default().bold()
+        Style::default().light_yellow().bold()
     } else {
         Style::default()
     }
