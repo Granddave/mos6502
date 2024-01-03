@@ -117,6 +117,13 @@ Here we see `0x0a`, which in decimal is `10` just we intended!
     - Graphical state for the emulator
     - Peripherals - I/O would be fun to have...
     - Decimal mode
+    - Stack overflow detection
+- **TUI**
+    - Load file with `l`
+    - Memory view
+        - Stack
+        - Scrollable area
+    - disassembler view
 
 
 ## References
