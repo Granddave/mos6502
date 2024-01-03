@@ -21,41 +21,32 @@ fn registers(app: &mut App) -> Vec<Line> {
 
     let text: Vec<Line<'_>> = vec![
         vec![
-            Span::raw("A:  "),
-            Span::styled(
-                format!("0x{:02x}", state.a.get()),
-                style_state_text(&state.a),
-            ),
+            Span::raw("A:  0x"),
+            Span::styled(format!("{:02x}", state.a.get()), style_state_text(&state.a)),
         ]
         .into(),
         vec![
-            Span::raw("X:  "),
-            Span::styled(
-                format!("0x{:02x}", state.x.get()),
-                style_state_text(&state.x),
-            ),
+            Span::raw("X:  0x"),
+            Span::styled(format!("{:02x}", state.x.get()), style_state_text(&state.x)),
         ]
         .into(),
         vec![
-            Span::raw("Y:  "),
-            Span::styled(
-                format!("0x{:02x}", state.y.get()),
-                style_state_text(&state.y),
-            ),
+            Span::raw("Y:  0x"),
+            Span::styled(format!("{:02x}", state.y.get()), style_state_text(&state.y)),
         ]
         .into(),
         vec![
-            Span::raw("PC: "),
+            Span::raw("PC: 0x"),
             Span::styled(
-                format!("0x{:04x}", state.pc.get()),
+                format!("{:04x}", state.pc.get()),
                 style_state_text(&state.pc),
             ),
         ]
         .into(),
         vec![
-            Span::raw("SP: "),
+            Span::raw("SP: 0x"),
             Span::styled(
-                format!("0x{:02x}", state.sp.get()),
+                format!("{:02x}", state.sp.get()),
                 style_state_text(&state.sp),
             ),
         ]
@@ -93,7 +84,7 @@ fn registers(app: &mut App) -> Vec<Line> {
             ),
         ]
         .into(),
-        Line::styled("      NV-BDIZC", Style::default().italic()),
+        Line::styled("      NV-BDIZC", Style::default().dim()),
     ];
 
     text
