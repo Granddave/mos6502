@@ -86,7 +86,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn test_dissasemble_code() {
+    fn test_disassemble_code() {
         let tests = vec![
             (
                 vec![0xA9, 0x01],

@@ -2,7 +2,7 @@
 
 # MOS6502
 
-This is a toy project where I've created an emulator, assembler and a dissasembler for the 1975 8-bit MOS 6502 CPU.
+This is a toy project where I've created an emulator, assembler and a disassembler for the 1975 8-bit MOS 6502 CPU.
 
 
 ## Assembling
