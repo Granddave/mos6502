@@ -16,14 +16,10 @@ fn style_state_text<T: std::cmp::PartialEq>(state: &StateValue<T>) -> Style {
     }
 }
 
-pub fn render(app: &mut App, frame: &mut Frame) {
+fn registers(app: &mut App) -> Vec<Line> {
     let state = app.state();
 
     let text: Vec<Line<'_>> = vec![
-        "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
-        "Press `s` to step and `c` to run continuously until BRK instruction".into(),
-        "Press `r` to reset the CPU and memory".into(),
-        "".into(),
         vec![
             Span::raw("A:  "),
             Span::styled(
@@ -100,19 +96,59 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Line::styled("      NV-BDIZC", Style::default().italic()),
     ];
 
+    text
+}
+
+pub fn render(app: &mut App, frame: &mut Frame) {
+    let main_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Max(1), Constraint::Min(1), Constraint::Max(3)])
+        .split(frame.size());
+
+    // Main title
     frame.render_widget(
-        Paragraph::new(text)
+        Paragraph::new("6502 Emulator")
+            .style(Style::default().fg(Color::Yellow).italic().bold())
+            .alignment(Alignment::Center),
+        main_layout[0],
+    );
+
+    // App layout
+    const REGISTER_LAYOUT_W: u16 = 20;
+    let app_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Max(REGISTER_LAYOUT_W),
+            Constraint::Min(REGISTER_LAYOUT_W),
+        ])
+        .split(main_layout[1]);
+
+    // Registers widget
+    frame.render_widget(
+        Paragraph::new(registers(app))
             .block(
                 Block::default()
-                    .title("6502 Emulator")
+                    .title("Registers")
                     .title_alignment(Alignment::Center)
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded),
             )
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Left),
-        frame.size(),
-    )
+        app_layout[0],
+    );
+
+    // Bottom help text
+    frame.render_widget(
+        Paragraph::new(vec![
+            "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
+            "Press `s` to step and `c` to run continuously until BRK instruction".into(),
+            "Press `r` to reset the CPU and memory".into(),
+        ])
+        .style(Style::default().fg(Color::Yellow).dim())
+        .alignment(Alignment::Left),
+        main_layout[2],
+    );
 
     // output.push_str("------------");
     // output.push_str("Stack:");
