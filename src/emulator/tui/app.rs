@@ -1,6 +1,5 @@
 use crate::{
-    ast::ASTInstructionNode,
-    disassembler::disassemble_code,
+    disassembler::{disassemble_code, listing},
     emulator::{
         cpu::{self, Cpu, RunOption},
         memory::{Bus, Memory},
@@ -87,8 +86,9 @@ pub struct App {
     pub program_start: u16,
     /// A cached disassembled AST of the loaded program
     /// with memory addresses as keys.
-    pub disassembled_program: Vec<(usize, ASTInstructionNode)>,
-    pub disassembly_scroll: u16,
+    pub disassembled_program: Vec<(usize, String)>,
+    pub disassembly_scroll: usize,
+    pub disassembly_frame_height: usize,
 
     /// State of the CPU
     state: EmulationState,
@@ -99,15 +99,19 @@ pub struct App {
 
 impl App {
     pub fn new(program: &[u8], program_start: u16) -> Self {
-        // turn a Vec<ASTInstructionNode> into a Vec<(usize, ASTInstructionNode)>
+        // turn a Vec<ASTInstructionNode> into a Vec<(usize, String)>
         // where the usize is the memory address of the instruction.
-        let instructions = disassemble_code(program);
-        let disassembly: Vec<(usize, ASTInstructionNode)> = instructions
+        let disassembly: Vec<(usize, String)> = disassemble_code(program)
             .iter()
             .scan(0, |acc, ins| {
                 let addr = *acc;
                 *acc += ins.size();
                 Some((addr, ins.clone()))
+            })
+            .map(|(addr, node)| {
+                let memory_addr = program_start as usize + addr;
+                let line = listing::generate_line(memory_addr, &node);
+                (memory_addr, line)
             })
             .collect();
 
@@ -178,5 +182,34 @@ impl App {
 
     pub fn memory_slice(&self, start: u16, end: u16) -> &[u8] {
         self.memory.slice(start, end)
+    }
+
+    pub fn scroll_up(&mut self) {
+        if self.disassembly_scroll > 0 {
+            self.disassembly_scroll -= 1;
+        }
+    }
+
+    pub fn scroll_up_page(&mut self) {
+        if self.disassembly_scroll > self.disassembly_frame_height {
+            self.disassembly_scroll -= self.disassembly_frame_height;
+        } else {
+            self.disassembly_scroll = 0;
+        }
+    }
+
+    pub fn scroll_down(&mut self) {
+        if self.disassembly_scroll < self.disassembled_program.len() - 1 {
+            self.disassembly_scroll += 1;
+        }
+    }
+
+    pub fn scroll_down_page(&mut self) {
+        let max = self.disassembled_program.len() - 1;
+        if self.disassembly_scroll < max - self.disassembly_frame_height {
+            self.disassembly_scroll += self.disassembly_frame_height;
+        } else {
+            self.disassembly_scroll = max;
+        }
     }
 }

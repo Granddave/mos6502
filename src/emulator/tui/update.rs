@@ -14,14 +14,10 @@ pub fn update(app: &mut App, key_event: KeyEvent) {
         }
         KeyCode::Char('s') => app.step_cpu(),
         KeyCode::Char('r') => app.reset(),
-        KeyCode::Up => {
-            if app.disassembly_scroll > 0 {
-                app.disassembly_scroll -= 1;
-            }
-        }
-        KeyCode::Down => {
-            app.disassembly_scroll += 1;
-        }
+        KeyCode::Up => app.scroll_up(),
+        KeyCode::Down => app.scroll_down(),
+        KeyCode::PageUp => app.scroll_up_page(),
+        KeyCode::PageDown => app.scroll_down_page(),
         _ => {}
     };
 }

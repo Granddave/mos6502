@@ -1,9 +1,6 @@
 use ratatui::{prelude::*, widgets::*};
 
-use crate::{
-    disassembler::listing,
-    emulator::cpu::{STACK_BASE, STACK_PAGE},
-};
+use crate::emulator::cpu::{STACK_BASE, STACK_PAGE};
 
 use super::app::{App, StateValue};
 
@@ -121,37 +118,20 @@ fn stack_view(app: &mut App) -> Paragraph {
     )
 }
 
-fn disassembly(app: &mut App) -> (Paragraph, usize) {
-    let mut lines: Vec<Line<'_>> = vec![];
-
+fn disassembly_lines(app: &mut App) -> Vec<Line> {
     // TODO: Center around program counter.
     //       Would be possible to disassemble the memory instead of the loaded program
     let pc = app.state().pc.get() as usize;
-    let start_addr = app.program_start as usize;
-    for (offset, node) in app.disassembled_program.iter() {
-        let memory_addr = start_addr + offset;
-
-        let line = listing::generate_line(memory_addr, node);
-        if memory_addr == pc {
-            lines.push(Line::styled(line, Style::default().light_yellow().bold()));
-        } else {
-            lines.push(Line::raw(line));
-        }
-    }
-
-    let len = lines.len();
-    (
-        Paragraph::new(lines)
-            .scroll((app.disassembly_scroll, 0))
-            .block(
-                Block::default()
-                    .title("Disassembly")
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .style(Style::default().fg(Color::Yellow)),
-            ),
-        len,
-    )
+    app.disassembled_program
+        .iter()
+        .map(|(memory_addr, line)| {
+            if *memory_addr == pc as usize {
+                Line::styled(line, Style::default().light_yellow().bold())
+            } else {
+                Line::raw(line)
+            }
+        })
+        .collect()
 }
 
 fn top_bar() -> Paragraph<'static> {
@@ -196,19 +176,22 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     frame.render_widget(stack_view(app), app_layout[1]);
 
     // Disassembly view
-    let scroll_amount = app.disassembly_scroll as usize;
-    let (disassembly, num_instructions) = disassembly(app);
-    let scrollbar = Scrollbar::default()
-        .orientation(ScrollbarOrientation::VerticalRight)
-        .begin_symbol(Some("↑"))
-        .end_symbol(Some("↓"));
-    let mut scrollbar_state = ScrollbarState::new(num_instructions).position(scroll_amount);
-    frame.render_widget(disassembly, app_layout[2]);
+    app.disassembly_frame_height = app_layout[2].height as usize - 2;
+    let scroll_pos = app.disassembly_scroll;
+    let lines = disassembly_lines(app);
+    let mut scrollbar_state = ScrollbarState::new(lines.len()).position(scroll_pos);
     frame.render_stateful_widget(
-        scrollbar,
+        Scrollbar::default().orientation(ScrollbarOrientation::VerticalRight),
         app_layout[2].inner(&Margin::new(1, 0)),
         &mut scrollbar_state,
     );
-
+    let disassembly = Paragraph::new(lines).scroll((scroll_pos as u16, 0)).block(
+        Block::default()
+            .title("Disassembly")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(Style::default().fg(Color::Yellow)),
+    );
+    frame.render_widget(disassembly, app_layout[2]);
     frame.render_widget(bottom_bar(), main_layout[2]);
 }
