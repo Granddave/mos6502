@@ -121,10 +121,8 @@ fn stack_view(app: &mut App) -> Paragraph {
     )
 }
 
-fn disassembly(app: &mut App) -> Paragraph {
+fn disassembly(app: &mut App) -> (Paragraph, usize) {
     let mut lines: Vec<Line<'_>> = vec![];
-
-    lines.push(Line::raw("  Addr  Hexdump   Instruction"));
 
     // TODO: Center around program counter.
     //       Would be possible to disassemble the memory instead of the loaded program
@@ -141,15 +139,19 @@ fn disassembly(app: &mut App) -> Paragraph {
         }
     }
 
-    Paragraph::new(lines)
-        .scroll((app.disassembly_scroll, 0))
-        .block(
-            Block::default()
-                .title("Disassembly")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .style(Style::default().fg(Color::Yellow)),
-        )
+    let len = lines.len();
+    (
+        Paragraph::new(lines)
+            .scroll((app.disassembly_scroll, 0))
+            .block(
+                Block::default()
+                    .title("Disassembly")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(Color::Yellow)),
+            ),
+        len,
+    )
 }
 
 fn top_bar() -> Paragraph<'static> {
@@ -192,6 +194,21 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     frame.render_widget(top_bar(), main_layout[0]);
     frame.render_widget(registers(app), app_layout[0]);
     frame.render_widget(stack_view(app), app_layout[1]);
-    frame.render_widget(disassembly(app), app_layout[2]);
+
+    // Disassembly view
+    let scroll_amount = app.disassembly_scroll as usize;
+    let (disassembly, num_instructions) = disassembly(app);
+    let scrollbar = Scrollbar::default()
+        .orientation(ScrollbarOrientation::VerticalRight)
+        .begin_symbol(Some("↑"))
+        .end_symbol(Some("↓"));
+    let mut scrollbar_state = ScrollbarState::new(num_instructions).position(scroll_amount);
+    frame.render_widget(disassembly, app_layout[2]);
+    frame.render_stateful_widget(
+        scrollbar,
+        app_layout[2].inner(&Margin::new(1, 0)),
+        &mut scrollbar_state,
+    );
+
     frame.render_widget(bottom_bar(), main_layout[2]);
 }
