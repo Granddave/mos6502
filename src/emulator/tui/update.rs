@@ -14,6 +14,14 @@ pub fn update(app: &mut App, key_event: KeyEvent) {
         }
         KeyCode::Char('s') => app.step_cpu(),
         KeyCode::Char('r') => app.reset(),
+        KeyCode::Up => {
+            if app.disassembly_scroll > 0 {
+                app.disassembly_scroll -= 1;
+            }
+        }
+        KeyCode::Down => {
+            app.disassembly_scroll += 1;
+        }
         _ => {}
     };
 }

@@ -88,6 +88,7 @@ pub struct App {
     /// A cached disassembled AST of the loaded program
     /// with memory addresses as keys.
     pub disassembled_program: Vec<(usize, ASTInstructionNode)>,
+    pub disassembly_scroll: u16,
 
     /// State of the CPU
     state: EmulationState,

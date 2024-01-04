@@ -142,6 +142,7 @@ fn disassembly(app: &mut App) -> Paragraph {
     }
 
     Paragraph::new(lines)
+        .scroll((app.disassembly_scroll, 0))
         .block(
             Block::default()
                 .title("Disassembly")
