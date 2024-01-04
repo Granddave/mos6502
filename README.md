@@ -123,6 +123,8 @@ Here we see `0x0a`, which in decimal is `10` just we intended!
         - Stack
         - Scrollable area
     - Centered disassembler view
+- **CLI**
+    - Better argparsing
 
 
 ## References
