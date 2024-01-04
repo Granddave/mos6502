@@ -56,12 +56,12 @@ The program is assembled to a binary (`a.bin`) and its contents are shown.
 
 ### Disassembling
 
-The disassembler `dism` can parse the assembled binary and list the instructions in the program.
+The disassembler `disasm` can parse the assembled binary and list the instructions in the program.
 
 ```bash
-$ cargo run -r --bin dism -- a.bin
+$ cargo run -r --bin disasm -- a.bin
     Finished release [optimized] target(s) in 0.01s
-     Running `target/release/dism a.bin`
+     Running `target/release/disasm a.bin`
  Addr  Hexdump   Instructions
 -----------------------------
 $8000  20 09 80  JSR $8009
