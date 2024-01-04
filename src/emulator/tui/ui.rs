@@ -121,7 +121,7 @@ fn stack_view(app: &mut App) -> Paragraph {
 fn disassembly_lines(app: &mut App) -> Vec<Line> {
     // TODO: Center around program counter.
     //       Would be possible to disassemble the memory instead of the loaded program
-    let pc = app.state().pc.get() as usize;
+    let pc = app.state().pc.get();
     app.disassembled_program
         .iter()
         .map(|(memory_addr, line)| {
