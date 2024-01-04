@@ -1,5 +1,5 @@
 use crate::{
-    ast::AST,
+    ast::ASTInstructionNode,
     disassembler::disassemble_code,
     emulator::{
         cpu::{self, Cpu, RunOption},
@@ -74,6 +74,7 @@ impl EmulationState {
     }
 }
 
+#[derive(Default)]
 pub struct App {
     /// Emulated CPU
     cpu: Cpu,
@@ -85,7 +86,8 @@ pub struct App {
     /// The start address of the program in memory.
     pub program_start: u16,
     /// A cached disassembled AST of the loaded program
-    pub disassembled_program: AST,
+    /// with memory addresses as keys.
+    pub disassembled_program: Vec<(usize, ASTInstructionNode)>,
 
     /// State of the CPU
     state: EmulationState,
@@ -96,14 +98,23 @@ pub struct App {
 
 impl App {
     pub fn new(program: &[u8], program_start: u16) -> Self {
+        // turn a Vec<ASTInstructionNode> into a Vec<(usize, ASTInstructionNode)>
+        // where the usize is the memory address of the instruction.
+        let instructions = disassemble_code(program);
+        let disassembly: Vec<(usize, ASTInstructionNode)> = instructions
+            .iter()
+            .scan(0, |acc, ins| {
+                let addr = *acc;
+                *acc += ins.size();
+                Some((addr, ins.clone()))
+            })
+            .collect();
+
         let mut app = Self {
-            cpu: Cpu::new(),
-            memory: Memory::new(),
             program: program.to_vec(),
             program_start,
-            disassembled_program: disassemble_code(program),
-            state: EmulationState::default(),
-            should_quit: false,
+            disassembled_program: disassembly,
+            ..Default::default()
         };
 
         app.reset();

@@ -1,7 +1,6 @@
 use ratatui::{prelude::*, widgets::*};
 
 use crate::{
-    ast::ASTNode,
     disassembler::listing,
     emulator::cpu::{STACK_BASE, STACK_PAGE},
 };
@@ -130,26 +129,26 @@ fn disassembly(app: &mut App) -> Paragraph {
     // TODO: Center around program counter.
     //       Would be possible to disassemble the memory instead of the loaded program
     let pc = app.state().pc.get() as usize;
-    let mut addr = app.program_start as usize;
-    for node in app.disassembled_program.iter() {
-        if let ASTNode::Instruction(ins_node) = node {
-            let line = listing::Listing::generate_line(addr, ins_node);
-            if addr == pc {
-                lines.push(Line::styled(line, Style::default().light_yellow().bold()));
-            } else {
-                lines.push(Line::raw(line));
-            }
-            addr += ins_node.size();
+    let start_addr = app.program_start as usize;
+    for (offset, node) in app.disassembled_program.iter() {
+        let memory_addr = start_addr + offset;
+
+        let line = listing::generate_line(memory_addr, node);
+        if memory_addr == pc {
+            lines.push(Line::styled(line, Style::default().light_yellow().bold()));
+        } else {
+            lines.push(Line::raw(line));
         }
     }
 
-    Paragraph::new(lines).block(
-        Block::default()
-            .title("Disassembly")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().fg(Color::Yellow)),
-    )
+    Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Disassembly")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(Style::default().fg(Color::Yellow)),
+        )
 }
 
 fn top_bar() -> Paragraph<'static> {

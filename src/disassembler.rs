@@ -1,86 +1,65 @@
-use crate::ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTNode, ASTOperand};
+use crate::ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTOperand};
 
 pub mod listing;
 
-pub fn disassemble_code(input: &[u8]) -> Vec<ASTNode> {
-    let mut disassembler = Disassembler::new(input.to_vec());
-    disassembler.disassemble_code()
+#[tracing::instrument]
+fn decode_operand(input: &[u8], curr_ix: usize, addressing_mode: ASTAddressingMode) -> ASTOperand {
+    let ix = curr_ix;
+
+    macro_rules! byte {
+        () => {{
+            input[ix]
+        }};
+    }
+    macro_rules! word {
+        () => {{
+            ((input[ix + 1] as u16) << 8) | input[ix] as u16
+        }};
+    }
+
+    match addressing_mode {
+        ASTAddressingMode::Absolute => ASTOperand::Absolute(word!()),
+        ASTAddressingMode::ZeroPage => ASTOperand::ZeroPage(byte!()),
+        ASTAddressingMode::ZeroPageX => ASTOperand::ZeroPage(byte!()),
+        ASTAddressingMode::ZeroPageY => ASTOperand::ZeroPage(byte!()),
+        ASTAddressingMode::AbsoluteX => ASTOperand::Absolute(word!()),
+        ASTAddressingMode::AbsoluteY => ASTOperand::Absolute(word!()),
+        ASTAddressingMode::Relative => ASTOperand::Relative(byte!() as i8),
+        ASTAddressingMode::Indirect => ASTOperand::Absolute(word!()),
+        ASTAddressingMode::IndirectIndexedX => ASTOperand::ZeroPage(byte!()),
+        ASTAddressingMode::IndirectIndexedY => ASTOperand::ZeroPage(byte!()),
+        ASTAddressingMode::Immediate => ASTOperand::Immediate(byte!()),
+        ASTAddressingMode::Accumulator => ASTOperand::Implied,
+        ASTAddressingMode::Implied => ASTOperand::Implied,
+        _ => panic!("Invalid addressing mode: '{:#?}'", addressing_mode),
+    }
 }
 
-#[derive(Debug, Default)]
-struct Disassembler {
-    input: Vec<u8>,
-    curr_ix: usize,
+#[tracing::instrument]
+fn decode_opcode(opcode: u8) -> ASTInstruction {
+    crate::assembler::compiler::opcode::OPCODE_MAPPING
+        .find_instruction(opcode)
+        .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", opcode))
 }
 
-impl Disassembler {
-    #[tracing::instrument]
-    fn new(input: Vec<u8>) -> Self {
-        Self { input, curr_ix: 0 }
+#[tracing::instrument]
+fn decode_instruction(input: &[u8], ix: usize) -> ASTInstructionNode {
+    let ins = decode_opcode(input[ix]);
+    let operand = decode_operand(input, ix + 1, ins.addr_mode);
+    ASTInstructionNode { ins, operand }
+}
+
+pub fn disassemble_code(input: &[u8]) -> Vec<ASTInstructionNode> {
+    let mut code = vec![];
+    let mut curr_ix = 0;
+
+    while curr_ix < input.len() {
+        let node = decode_instruction(input, curr_ix);
+        code.push(node.clone());
+        curr_ix += node.size();
     }
 
-    #[tracing::instrument]
-    fn decode_operand(&mut self, addressing_mode: ASTAddressingMode) -> ASTOperand {
-        let ix = self.curr_ix;
-
-        macro_rules! byte {
-            () => {{
-                self.input[ix]
-            }};
-        }
-        macro_rules! word {
-            () => {{
-                ((self.input[ix + 1] as u16) << 8) | self.input[ix] as u16
-            }};
-        }
-
-        match addressing_mode {
-            ASTAddressingMode::Absolute => ASTOperand::Absolute(word!()),
-            ASTAddressingMode::ZeroPage => ASTOperand::ZeroPage(byte!()),
-            ASTAddressingMode::ZeroPageX => ASTOperand::ZeroPage(byte!()),
-            ASTAddressingMode::ZeroPageY => ASTOperand::ZeroPage(byte!()),
-            ASTAddressingMode::AbsoluteX => ASTOperand::Absolute(word!()),
-            ASTAddressingMode::AbsoluteY => ASTOperand::Absolute(word!()),
-            ASTAddressingMode::Relative => ASTOperand::Relative(byte!() as i8),
-            ASTAddressingMode::Indirect => ASTOperand::Absolute(word!()),
-            ASTAddressingMode::IndirectIndexedX => ASTOperand::ZeroPage(byte!()),
-            ASTAddressingMode::IndirectIndexedY => ASTOperand::ZeroPage(byte!()),
-            ASTAddressingMode::Immediate => ASTOperand::Immediate(byte!()),
-            ASTAddressingMode::Accumulator => ASTOperand::Implied,
-            ASTAddressingMode::Implied => ASTOperand::Implied,
-            _ => panic!("Invalid addressing mode: '{:#?}'", addressing_mode),
-        }
-    }
-
-    #[tracing::instrument]
-    fn decode_opcode(&mut self, opcode: u8) -> ASTInstruction {
-        crate::assembler::compiler::opcode::OPCODE_MAPPING
-            .find_instruction(opcode)
-            .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", opcode))
-    }
-
-    #[tracing::instrument]
-    fn decode_instruction(&mut self) -> ASTNode {
-        let ins = self.decode_opcode(self.input[self.curr_ix]);
-        self.curr_ix += 1; // Step over opcode
-
-        let operand = self.decode_operand(ins.addr_mode);
-        let instruction = ASTInstructionNode { ins, operand };
-        self.curr_ix += instruction.size() - 1; // Step over operand
-
-        ASTNode::Instruction(instruction)
-    }
-
-    #[tracing::instrument]
-    fn disassemble_code(&mut self) -> Vec<ASTNode> {
-        let mut ast = vec![];
-
-        while self.curr_ix < self.input.len() {
-            ast.push(self.decode_instruction());
-        }
-
-        ast
-    }
+    code
 }
 
 #[cfg(test)]
@@ -95,7 +74,7 @@ mod tests {
         let tests = vec![
             (
                 vec![0xA9, 0x01],
-                vec![ASTNode::new_instruction(
+                vec![ASTInstructionNode::new(
                     ASTMnemonic::LDA,
                     ASTAddressingMode::Immediate,
                     ASTOperand::Immediate(0x01),
@@ -103,7 +82,7 @@ mod tests {
             ),
             (
                 vec![0xAD, 0x00, 0x02],
-                vec![ASTNode::new_instruction(
+                vec![ASTInstructionNode::new(
                     ASTMnemonic::LDA,
                     ASTAddressingMode::Absolute,
                     ASTOperand::Absolute(0x0200),
@@ -111,7 +90,7 @@ mod tests {
             ),
             (
                 vec![0xBD, 0x00, 0x02],
-                vec![ASTNode::new_instruction(
+                vec![ASTInstructionNode::new(
                     ASTMnemonic::LDA,
                     ASTAddressingMode::AbsoluteX,
                     ASTOperand::Absolute(0x0200),
@@ -120,17 +99,17 @@ mod tests {
             (
                 vec![0xA9, 0x01, 0xAD, 0x00, 0x02, 0xBD, 0x00, 0x02],
                 vec![
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::LDA,
                         ASTAddressingMode::Immediate,
                         ASTOperand::Immediate(0x01),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::LDA,
                         ASTAddressingMode::Absolute,
                         ASTOperand::Absolute(0x0200),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::LDA,
                         ASTAddressingMode::AbsoluteX,
                         ASTOperand::Absolute(0x0200),
@@ -144,32 +123,32 @@ mod tests {
                     /* BRK */ 0x00,
                 ],
                 vec![
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::LDX,
                         ASTAddressingMode::Immediate,
                         ASTOperand::Immediate(0x08),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::LDA,
                         ASTAddressingMode::Immediate,
                         ASTOperand::Immediate(0x01),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::JMP,
                         ASTAddressingMode::Absolute,
                         ASTOperand::Absolute(0x000C),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::STA,
                         ASTAddressingMode::Absolute,
                         ASTOperand::Absolute(0x0200),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::BNE,
                         ASTAddressingMode::Relative,
                         ASTOperand::Relative(-10),
                     ),
-                    ASTNode::new_instruction(
+                    ASTInstructionNode::new(
                         ASTMnemonic::BRK,
                         ASTAddressingMode::Implied,
                         ASTOperand::Implied,
@@ -179,8 +158,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let mut disassembler = Disassembler::new(input);
-            let actual = disassembler.disassemble_code();
+            let actual = disassemble_code(input.as_slice());
             assert_eq!(actual, expected);
         }
     }
