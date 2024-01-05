@@ -1,7 +1,7 @@
 use crate::{
     disassembler::{disassemble_code, listing},
     emulator::{
-        cpu::{self, Cpu, RunOption},
+        cpu::{self, Cpu, RunOption, STACK_BASE, STACK_PAGE},
         memory::{Bus, Memory},
     },
 };
@@ -182,6 +182,11 @@ impl App {
 
     pub fn memory_slice(&self, start: u16, end: u16) -> &[u8] {
         self.memory.slice(start, end)
+    }
+
+    pub fn stack_memory(&self) -> &[u8] {
+        let sp_addr = STACK_PAGE + self.state.sp.get() as u16;
+        self.memory_slice(sp_addr, STACK_BASE)
     }
 
     pub fn scroll_up(&mut self) {

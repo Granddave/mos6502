@@ -1,6 +1,6 @@
 use ratatui::{prelude::*, widgets::*};
 
-use crate::emulator::cpu::{STACK_BASE, STACK_PAGE};
+use crate::emulator::cpu::STACK_PAGE;
 
 use super::app::{App, StateValue};
 
@@ -99,8 +99,7 @@ fn render_registers_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
 }
 
 fn render_stack_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
-    let sp_addr = STACK_PAGE + app.state().sp.get() as u16;
-    let stack_slice = app.memory_slice(sp_addr, STACK_BASE);
+    let stack_slice = app.stack_memory();
     let mut lines: Vec<Line<'_>> = vec![];
 
     lines.push(Line::raw("Addr   Value"));
