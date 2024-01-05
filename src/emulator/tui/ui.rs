@@ -1,6 +1,9 @@
 use ratatui::{prelude::*, widgets::*};
 
-use crate::emulator::cpu::STACK_PAGE;
+use crate::{
+    emulator::cpu::STACK_BASE,
+    hexdump::{hexdump_1, hexdump_2},
+};
 
 use super::app::{App, StateValue};
 
@@ -10,6 +13,7 @@ pub enum AppWidget {
     Stack,
     #[default]
     Disassembly,
+    Memory,
 }
 
 impl AppWidget {
@@ -17,7 +21,8 @@ impl AppWidget {
         match self {
             AppWidget::Registers => AppWidget::Stack,
             AppWidget::Stack => AppWidget::Disassembly,
-            AppWidget::Disassembly => AppWidget::Disassembly, // Don't wrap
+            AppWidget::Disassembly => AppWidget::Memory,
+            AppWidget::Memory => AppWidget::Memory, // Don't wrap
         }
     }
 
@@ -26,6 +31,7 @@ impl AppWidget {
             AppWidget::Registers => AppWidget::Registers, // Don't wrap
             AppWidget::Stack => AppWidget::Registers,
             AppWidget::Disassembly => AppWidget::Stack,
+            AppWidget::Memory => AppWidget::Disassembly,
         }
     }
 }
@@ -163,7 +169,7 @@ fn render_stack_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     for (ix, val) in stack_slice.iter().rev().enumerate() {
         lines.push(Line::raw(format!(
             "0x{:04x} 0x{:02x}",
-            STACK_PAGE as usize + ix,
+            STACK_BASE as usize - ix,
             val
         )))
     }
@@ -225,6 +231,59 @@ fn render_disassembly_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     );
 }
 
+fn render_memory_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
+    let page = app.memory_page_to_display as u16;
+    let page_slice = app.memory_slice(page * 0x0100, (page + 1) * 0x0100);
+    let mut lines: Vec<Line<'_>> = vec![];
+
+    // let hexdump = hexdump_1(memory, 4, 16);
+    // for line in hexdump.lines() {
+    //     lines.push(Line::raw(line));
+    // }
+
+    let mut curr_line: Vec<Span> = vec![];
+
+    let addr_width = 4;
+    let stride = 16;
+    let mut line = 0;
+    let mut ix = 0;
+    for bytes in page_slice.chunks(2) {
+        if ix % stride == 0 {
+            if ix != 0 {
+                lines.push(curr_line.clone().into());
+                curr_line.clear();
+            }
+            curr_line.push(Span::raw(format!(
+                "0x{:0width$X}",
+                page + stride * line + 0x0100,
+                width = addr_width
+            )));
+            line += 1;
+        }
+        if ix % 2 == 0 {
+            curr_line.push(Span::raw(" "));
+        }
+
+        curr_line.push(Span::raw(format!(
+            "{:04x}",
+            u16::from_le_bytes([bytes[0], if bytes.len() == 1 { 0 } else { bytes[1] }])
+        )));
+        ix += 2;
+    }
+
+    // Render text
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .title("Memory")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(is_selected_style(app.selected_widget, AppWidget::Memory)),
+        ),
+        layout,
+    );
+}
+
 fn render_top_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
     frame.render_widget(
         Paragraph::new(vec!["MOS 6502 Emulator".into()])
@@ -261,9 +320,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let app_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Max(20), // Registers
-            Constraint::Max(20), // Stack
-            Constraint::Max(40), // Disassembled code
+            Constraint::Max(20),        // Registers
+            Constraint::Max(20),        // Stack
+            Constraint::Max(40),        // Disassembled code
+            Constraint::Percentage(20), // Memory viewer
         ])
         .split(main_layout[1]);
 
@@ -271,5 +331,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     render_registers_widget(app, frame, app_layout[0]);
     render_stack_widget(app, frame, app_layout[1]);
     render_disassembly_widget(app, frame, app_layout[2]);
+    render_memory_widget(app, frame, app_layout[3]);
     render_bottom_bar(app, frame, main_layout[2])
 }

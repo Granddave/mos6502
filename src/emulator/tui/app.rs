@@ -92,6 +92,9 @@ pub struct App {
     pub disassembly_widget_scroll: usize,
     pub disassembly_frame_height: usize,
 
+    pub memory_page_to_display: usize,
+    pub memory_frame_height: usize,
+
     /// State of the CPU
     state: EmulationState,
 
@@ -201,6 +204,11 @@ impl App {
                     self.disassembly_widget_scroll -= 1;
                 }
             }
+            AppWidget::Memory => {
+                if self.memory_page_to_display > 0 {
+                    self.memory_page_to_display -= 1;
+                }
+            }
             _ => {}
         }
     }
@@ -223,6 +231,11 @@ impl App {
             AppWidget::Disassembly => {
                 if self.disassembly_widget_scroll < self.disassembled_program.len() - 1 {
                     self.disassembly_widget_scroll += 1;
+                }
+            }
+            AppWidget::Memory => {
+                if self.memory_page_to_display < 0xff {
+                    self.memory_page_to_display += 1;
                 }
             }
             _ => {}
