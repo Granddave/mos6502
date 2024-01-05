@@ -18,6 +18,12 @@ pub fn update(app: &mut App, key_event: KeyEvent) {
         KeyCode::Down => app.scroll_down(),
         KeyCode::PageUp => app.scroll_up_page(),
         KeyCode::PageDown => app.scroll_down_page(),
+        KeyCode::Left => {
+            app.selected_widget = app.selected_widget.prev();
+        }
+        KeyCode::Right => {
+            app.selected_widget = app.selected_widget.next();
+        }
         _ => {}
     };
 }

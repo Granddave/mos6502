@@ -6,6 +6,8 @@ use crate::{
     },
 };
 
+use super::ui::AppWidget;
+
 #[derive(Debug, Default, Clone)]
 pub struct StateValue<T> {
     value: T,
@@ -93,6 +95,8 @@ pub struct App {
     /// State of the CPU
     state: EmulationState,
 
+    pub selected_widget: AppWidget,
+
     /// If the app should quit
     should_quit: bool,
 }
@@ -119,6 +123,7 @@ impl App {
             program: program.to_vec(),
             program_start,
             disassembled_program: disassembly,
+            selected_widget: AppWidget::Disassembly,
             ..Default::default()
         };
 
@@ -190,31 +195,51 @@ impl App {
     }
 
     pub fn scroll_up(&mut self) {
-        if self.disassembly_widget_scroll > 0 {
-            self.disassembly_widget_scroll -= 1;
+        match self.selected_widget {
+            AppWidget::Disassembly => {
+                if self.disassembly_widget_scroll > 0 {
+                    self.disassembly_widget_scroll -= 1;
+                }
+            }
+            _ => {}
         }
     }
 
     pub fn scroll_up_page(&mut self) {
-        if self.disassembly_widget_scroll > self.disassembly_frame_height {
-            self.disassembly_widget_scroll -= self.disassembly_frame_height;
-        } else {
-            self.disassembly_widget_scroll = 0;
+        match self.selected_widget {
+            AppWidget::Disassembly => {
+                if self.disassembly_widget_scroll > self.disassembly_frame_height {
+                    self.disassembly_widget_scroll -= self.disassembly_frame_height;
+                } else {
+                    self.disassembly_widget_scroll = 0;
+                }
+            }
+            _ => {}
         }
     }
 
     pub fn scroll_down(&mut self) {
-        if self.disassembly_widget_scroll < self.disassembled_program.len() - 1 {
-            self.disassembly_widget_scroll += 1;
+        match self.selected_widget {
+            AppWidget::Disassembly => {
+                if self.disassembly_widget_scroll < self.disassembled_program.len() - 1 {
+                    self.disassembly_widget_scroll += 1;
+                }
+            }
+            _ => {}
         }
     }
 
     pub fn scroll_down_page(&mut self) {
-        let max = self.disassembled_program.len() - 1;
-        if self.disassembly_widget_scroll < max - self.disassembly_frame_height {
-            self.disassembly_widget_scroll += self.disassembly_frame_height;
-        } else {
-            self.disassembly_widget_scroll = max;
+        match self.selected_widget {
+            AppWidget::Disassembly => {
+                let max = self.disassembled_program.len() - 1;
+                if self.disassembly_widget_scroll < max - self.disassembly_frame_height {
+                    self.disassembly_widget_scroll += self.disassembly_frame_height;
+                } else {
+                    self.disassembly_widget_scroll = max;
+                }
+            }
+            _ => {}
         }
     }
 }

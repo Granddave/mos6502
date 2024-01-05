@@ -4,6 +4,63 @@ use crate::emulator::cpu::STACK_PAGE;
 
 use super::app::{App, StateValue};
 
+#[derive(Debug, Default, Copy, Clone, PartialEq)]
+pub enum AppWidget {
+    Registers,
+    Stack,
+    #[default]
+    Disassembly,
+}
+
+impl AppWidget {
+    pub fn next(&self) -> AppWidget {
+        match self {
+            AppWidget::Registers => AppWidget::Stack,
+            AppWidget::Stack => AppWidget::Disassembly,
+            AppWidget::Disassembly => AppWidget::Disassembly, // Don't wrap
+        }
+    }
+
+    pub fn prev(&self) -> AppWidget {
+        match self {
+            AppWidget::Registers => AppWidget::Registers, // Don't wrap
+            AppWidget::Stack => AppWidget::Registers,
+            AppWidget::Disassembly => AppWidget::Stack,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_widget_cycle() {
+        let mut w = AppWidget::default();
+        assert_eq!(w, AppWidget::Disassembly);
+        w = w.next();
+        assert_eq!(w, AppWidget::Disassembly);
+        w = w.prev();
+        assert_eq!(w, AppWidget::Stack);
+        w = w.prev();
+        assert_eq!(w, AppWidget::Registers);
+        w = w.prev();
+        assert_eq!(w, AppWidget::Registers);
+        w = w.next();
+        assert_eq!(w, AppWidget::Stack);
+    }
+}
+
+fn is_selected_style(selected: AppWidget, current_widget: AppWidget) -> Style {
+    if selected == current_widget {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::DIM)
+    }
+}
+
 fn style_state_text<T: PartialEq>(state: &StateValue<T>) -> Style {
     if state.has_changed() {
         Style::default().light_yellow().bold()
@@ -92,7 +149,7 @@ fn render_registers_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded),
             )
-            .style(Style::default().fg(Color::Yellow))
+            .style(is_selected_style(app.selected_widget, AppWidget::Registers))
             .alignment(Alignment::Left),
         layout,
     );
@@ -117,7 +174,7 @@ fn render_stack_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
                 .title("Stack")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .style(Style::default().fg(Color::Yellow)),
+                .style(is_selected_style(app.selected_widget, AppWidget::Stack)),
         ),
         layout,
     );
@@ -151,7 +208,10 @@ fn render_disassembly_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
                 .title("Disassembly")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .style(Style::default().fg(Color::Yellow)),
+                .style(is_selected_style(
+                    app.selected_widget,
+                    AppWidget::Disassembly,
+                )),
         ),
         layout,
     );
