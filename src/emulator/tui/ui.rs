@@ -131,7 +131,10 @@ fn render_disassembly_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
         .iter()
         .map(|(memory_addr, line)| {
             if *memory_addr == pc as usize {
-                Line::styled(line, Style::default().light_yellow().bold())
+                Line::styled(
+                    format!("{:028} <", line),
+                    Style::default().light_yellow().bold(),
+                )
             } else {
                 Line::raw(line)
             }
