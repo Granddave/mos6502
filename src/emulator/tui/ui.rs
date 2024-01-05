@@ -12,7 +12,7 @@ fn style_state_text<T: std::cmp::PartialEq>(state: &StateValue<T>) -> Style {
     }
 }
 
-fn registers(app: &mut App) -> Paragraph {
+fn render_registers_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     let state = app.state();
 
     let text: Vec<Line<'_>> = vec![
@@ -83,19 +83,22 @@ fn registers(app: &mut App) -> Paragraph {
         Line::styled("      NV-BDIZC", Style::default().dim()),
     ];
 
-    Paragraph::new(text)
-        .block(
-            Block::default()
-                .title("Registers")
-                .title_alignment(Alignment::Center)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-        )
-        .style(Style::default().fg(Color::Yellow))
-        .alignment(Alignment::Left)
+    frame.render_widget(
+        Paragraph::new(text)
+            .block(
+                Block::default()
+                    .title("Registers")
+                    .title_alignment(Alignment::Center)
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
+            .style(Style::default().fg(Color::Yellow))
+            .alignment(Alignment::Left),
+        layout,
+    );
 }
 
-fn stack_view(app: &mut App) -> Paragraph {
+fn render_stack_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     let sp_addr = STACK_PAGE + app.state().sp.get() as u16;
     let stack_slice = app.memory_slice(sp_addr, STACK_BASE);
     let mut lines: Vec<Line<'_>> = vec![];
@@ -109,20 +112,22 @@ fn stack_view(app: &mut App) -> Paragraph {
         )))
     }
 
-    Paragraph::new(lines).block(
-        Block::default()
-            .title("Stack")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().fg(Color::Yellow)),
-    )
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .title("Stack")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(Style::default().fg(Color::Yellow)),
+        ),
+        layout,
+    );
 }
 
-fn disassembly_lines(app: &mut App) -> Vec<Line> {
-    // TODO: Center around program counter.
-    //       Would be possible to disassemble the memory instead of the loaded program
+fn render_disassembly_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     let pc = app.state().pc.get();
-    app.disassembled_program
+    let lines: Vec<Line> = app
+        .disassembled_program
         .iter()
         .map(|(memory_addr, line)| {
             if *memory_addr == pc as usize {
@@ -131,23 +136,53 @@ fn disassembly_lines(app: &mut App) -> Vec<Line> {
                 Line::raw(line)
             }
         })
-        .collect()
+        .collect();
+
+    app.disassembly_frame_height = layout.height as usize - 2; // subtract border size
+    let scroll_pos = app.disassembly_widget_scroll;
+    let num_lines = lines.len();
+
+    // Render text
+    frame.render_widget(
+        Paragraph::new(lines).scroll((scroll_pos as u16, 0)).block(
+            Block::default()
+                .title("Disassembly")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(Style::default().fg(Color::Yellow)),
+        ),
+        layout,
+    );
+
+    // Render scrollbar
+    let mut scrollbar_state = ScrollbarState::new(num_lines).position(scroll_pos);
+    frame.render_stateful_widget(
+        Scrollbar::default().orientation(ScrollbarOrientation::VerticalRight),
+        layout.inner(&Margin::new(1, 0)),
+        &mut scrollbar_state,
+    );
 }
 
-fn top_bar() -> Paragraph<'static> {
-    Paragraph::new(vec!["MOS 6502 Emulator".into()])
-        .style(Style::default().fg(Color::Yellow).bold())
-        .alignment(Alignment::Center)
+fn render_top_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
+    frame.render_widget(
+        Paragraph::new(vec!["MOS 6502 Emulator".into()])
+            .style(Style::default().fg(Color::Yellow).bold())
+            .alignment(Alignment::Center),
+        layout,
+    );
 }
 
-fn bottom_bar() -> Paragraph<'static> {
-    Paragraph::new(vec![
-        "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
-        "Press `s` to step and `c` to run continuously until BRK instruction".into(),
-        "Press `r` to reset the CPU and memory".into(),
-    ])
-    .style(Style::default().fg(Color::Yellow).dim())
-    .alignment(Alignment::Left)
+fn render_bottom_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
+    frame.render_widget(
+        Paragraph::new(vec![
+            "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
+            "Press `s` to step and `c` to run continuously until BRK instruction".into(),
+            "Press `r` to reset the CPU and memory".into(),
+        ])
+        .style(Style::default().fg(Color::Yellow).dim())
+        .alignment(Alignment::Left),
+        layout,
+    );
 }
 
 pub fn render(app: &mut App, frame: &mut Frame) {
@@ -171,27 +206,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         ])
         .split(main_layout[1]);
 
-    frame.render_widget(top_bar(), main_layout[0]);
-    frame.render_widget(registers(app), app_layout[0]);
-    frame.render_widget(stack_view(app), app_layout[1]);
-
-    // Disassembly view
-    app.disassembly_frame_height = app_layout[2].height as usize - 2;
-    let scroll_pos = app.disassembly_scroll;
-    let lines = disassembly_lines(app);
-    let mut scrollbar_state = ScrollbarState::new(lines.len()).position(scroll_pos);
-    frame.render_stateful_widget(
-        Scrollbar::default().orientation(ScrollbarOrientation::VerticalRight),
-        app_layout[2].inner(&Margin::new(1, 0)),
-        &mut scrollbar_state,
-    );
-    let disassembly = Paragraph::new(lines).scroll((scroll_pos as u16, 0)).block(
-        Block::default()
-            .title("Disassembly")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(Style::default().fg(Color::Yellow)),
-    );
-    frame.render_widget(disassembly, app_layout[2]);
-    frame.render_widget(bottom_bar(), main_layout[2]);
+    render_top_bar(app, frame, main_layout[0]);
+    render_registers_widget(app, frame, app_layout[0]);
+    render_stack_widget(app, frame, app_layout[1]);
+    render_disassembly_widget(app, frame, app_layout[2]);
+    render_bottom_bar(app, frame, main_layout[2])
 }
