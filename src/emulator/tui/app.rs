@@ -92,6 +92,9 @@ pub struct App {
     pub disassembly_widget_scroll: usize,
     pub disassembly_frame_height: usize,
 
+    pub memory_page_to_display: usize,
+    pub memory_frame_height: usize,
+
     /// State of the CPU
     state: EmulationState,
 
@@ -185,13 +188,13 @@ impl App {
         self.state.clone()
     }
 
-    pub fn memory_slice(&self, start: u16, end: u16) -> &[u8] {
+    pub fn memory_slice(&self, start: usize, end: usize) -> &[u8] {
         self.memory.slice(start, end)
     }
 
     pub fn stack_memory(&self) -> &[u8] {
         let sp_addr = STACK_PAGE + self.state.sp.get() as u16;
-        self.memory_slice(sp_addr, STACK_BASE)
+        self.memory_slice(sp_addr as usize, STACK_BASE as usize)
     }
 
     pub fn scroll_up(&mut self) {
@@ -199,6 +202,11 @@ impl App {
             AppWidget::Disassembly => {
                 if self.disassembly_widget_scroll > 0 {
                     self.disassembly_widget_scroll -= 1;
+                }
+            }
+            AppWidget::Memory => {
+                if self.memory_page_to_display > 0 {
+                    self.memory_page_to_display -= 1;
                 }
             }
             _ => {}
@@ -214,6 +222,13 @@ impl App {
                     self.disassembly_widget_scroll = 0;
                 }
             }
+            AppWidget::Memory => {
+                if self.memory_page_to_display > 0x10 {
+                    self.memory_page_to_display -= 0x10;
+                } else {
+                    self.memory_page_to_display = 0;
+                }
+            }
             _ => {}
         }
     }
@@ -223,6 +238,12 @@ impl App {
             AppWidget::Disassembly => {
                 if self.disassembly_widget_scroll < self.disassembled_program.len() - 1 {
                     self.disassembly_widget_scroll += 1;
+                }
+            }
+            AppWidget::Memory => {
+                if self.memory_page_to_display < 0xff {
+                    self.memory_page_to_display += 1;
+                    self.memory_slice(0xfff0, 0xffff);
                 }
             }
             _ => {}
@@ -237,6 +258,15 @@ impl App {
                     self.disassembly_widget_scroll += self.disassembly_frame_height;
                 } else {
                     self.disassembly_widget_scroll = max;
+                }
+            }
+            AppWidget::Memory => {
+                let max = 0xff;
+                let step = 0x10;
+                if self.memory_page_to_display < max - step {
+                    self.memory_page_to_display += step;
+                } else {
+                    self.memory_page_to_display = max;
                 }
             }
             _ => {}

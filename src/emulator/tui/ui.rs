@@ -1,8 +1,8 @@
 use ratatui::{prelude::*, widgets::*};
 
-use crate::emulator::cpu::STACK_PAGE;
+use crate::emulator::cpu::STACK_BASE;
 
-use super::app::{App, StateValue};
+use super::app::App;
 
 #[derive(Debug, Default, Copy, Clone, PartialEq)]
 pub enum AppWidget {
@@ -10,6 +10,7 @@ pub enum AppWidget {
     Stack,
     #[default]
     Disassembly,
+    Memory,
 }
 
 impl AppWidget {
@@ -17,7 +18,8 @@ impl AppWidget {
         match self {
             AppWidget::Registers => AppWidget::Stack,
             AppWidget::Stack => AppWidget::Disassembly,
-            AppWidget::Disassembly => AppWidget::Disassembly, // Don't wrap
+            AppWidget::Disassembly => AppWidget::Memory,
+            AppWidget::Memory => AppWidget::Memory, // Don't wrap
         }
     }
 
@@ -26,6 +28,7 @@ impl AppWidget {
             AppWidget::Registers => AppWidget::Registers, // Don't wrap
             AppWidget::Stack => AppWidget::Registers,
             AppWidget::Disassembly => AppWidget::Stack,
+            AppWidget::Memory => AppWidget::Disassembly,
         }
     }
 }
@@ -39,6 +42,10 @@ mod tests {
         let mut w = AppWidget::default();
         assert_eq!(w, AppWidget::Disassembly);
         w = w.next();
+        assert_eq!(w, AppWidget::Memory);
+        w = w.next();
+        assert_eq!(w, AppWidget::Memory);
+        w = w.prev();
         assert_eq!(w, AppWidget::Disassembly);
         w = w.prev();
         assert_eq!(w, AppWidget::Stack);
@@ -61,8 +68,8 @@ fn is_selected_style(selected: AppWidget, current_widget: AppWidget) -> Style {
     }
 }
 
-fn style_state_text<T: PartialEq>(state: &StateValue<T>) -> Style {
-    if state.has_changed() {
+fn style_active_text(condition: bool) -> Style {
+    if condition {
         Style::default().light_yellow().bold()
     } else {
         Style::default()
@@ -75,24 +82,33 @@ fn render_registers_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     let text: Vec<Line<'_>> = vec![
         vec![
             Span::raw("A:  0x"),
-            Span::styled(format!("{:02x}", state.a.get()), style_state_text(&state.a)),
+            Span::styled(
+                format!("{:02x}", state.a.get()),
+                style_active_text(state.a.has_changed()),
+            ),
         ]
         .into(),
         vec![
             Span::raw("X:  0x"),
-            Span::styled(format!("{:02x}", state.x.get()), style_state_text(&state.x)),
+            Span::styled(
+                format!("{:02x}", state.x.get()),
+                style_active_text(state.x.has_changed()),
+            ),
         ]
         .into(),
         vec![
             Span::raw("Y:  0x"),
-            Span::styled(format!("{:02x}", state.y.get()), style_state_text(&state.y)),
+            Span::styled(
+                format!("{:02x}", state.y.get()),
+                style_active_text(state.y.has_changed()),
+            ),
         ]
         .into(),
         vec![
             Span::raw("PC: 0x"),
             Span::styled(
                 format!("{:04x}", state.pc.get()),
-                style_state_text(&state.pc),
+                style_active_text(state.pc.has_changed()),
             ),
         ]
         .into(),
@@ -100,7 +116,7 @@ fn render_registers_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
             Span::raw("SP: 0x"),
             Span::styled(
                 format!("{:02x}", state.sp.get()),
-                style_state_text(&state.sp),
+                style_active_text(state.sp.has_changed()),
             ),
         ]
         .into(),
@@ -108,32 +124,32 @@ fn render_registers_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
             Span::raw("S:  0b"),
             Span::styled(
                 format!("{:1b}", state.negative.get() as u8),
-                style_state_text(&state.negative),
+                style_active_text(state.negative.has_changed()),
             ),
             Span::styled(
                 format!("{:1b}", state.overflow.get() as u8),
-                style_state_text(&state.overflow),
+                style_active_text(state.overflow.has_changed()),
             ),
             Span::raw("0"),
             Span::styled(
                 format!("{:1b}", state.break_command.get() as u8),
-                style_state_text(&state.break_command),
+                style_active_text(state.break_command.has_changed()),
             ),
             Span::styled(
                 format!("{:1b}", state.decimal.get() as u8),
-                style_state_text(&state.decimal),
+                style_active_text(state.decimal.has_changed()),
             ),
             Span::styled(
                 format!("{:1b}", state.interrupt_disable.get() as u8),
-                style_state_text(&state.interrupt_disable),
+                style_active_text(state.interrupt_disable.has_changed()),
             ),
             Span::styled(
                 format!("{:1b}", state.zero.get() as u8),
-                style_state_text(&state.zero),
+                style_active_text(state.zero.has_changed()),
             ),
             Span::styled(
                 format!("{:1b}", state.carry.get() as u8),
-                style_state_text(&state.carry),
+                style_active_text(state.carry.has_changed()),
             ),
         ]
         .into(),
@@ -163,7 +179,7 @@ fn render_stack_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     for (ix, val) in stack_slice.iter().rev().enumerate() {
         lines.push(Line::raw(format!(
             "0x{:04x} 0x{:02x}",
-            STACK_PAGE as usize + ix,
+            STACK_BASE as usize - ix,
             val
         )))
     }
@@ -225,6 +241,56 @@ fn render_disassembly_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     );
 }
 
+fn render_memory_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
+    let page = app.memory_page_to_display;
+    let page_slice = app.memory_slice(page * 0x0100, (page + 1) * 0x0100);
+    let mut lines: Vec<Line<'_>> = vec![];
+
+    // TODO: Move this to a helper function in hexdump module
+    let addr_width = 4;
+    let stride = 16;
+    let mut ix = 0;
+    for (stride_ix, stride_slice) in page_slice.chunks(stride).enumerate() {
+        let mut curr_line: Vec<Span> = vec![];
+        curr_line.push(Span::raw(format!(
+            "0x{:0width$x}",
+            (page as usize * 0x0100) + stride * stride_ix,
+            width = addr_width
+        )));
+        for bytes in stride_slice.chunks(2) {
+            if ix % 2 == 0 {
+                curr_line.push(Span::raw(" "));
+            }
+            let word = u16::from_le_bytes([bytes[0], if bytes.len() == 1 { 0 } else { bytes[1] }]);
+            curr_line.push(Span::styled(
+                format!("{:04x}", word),
+                style_active_text(word != 0),
+            ));
+            ix += 2;
+        }
+        lines.push(curr_line.clone().into());
+    }
+
+    let page_title = match page {
+        0x00 => "Zero Page",
+        0x01 => "Stack",
+        0x02..=0x7f => "RAM",
+        _ => "ROM",
+    };
+
+    // Render text
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .title(format!("Memory ({})", page_title))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(is_selected_style(app.selected_widget, AppWidget::Memory)),
+        ),
+        layout,
+    );
+}
+
 fn render_top_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
     frame.render_widget(
         Paragraph::new(vec!["MOS 6502 Emulator".into()])
@@ -261,9 +327,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let app_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Max(20), // Registers
-            Constraint::Max(20), // Stack
-            Constraint::Max(40), // Disassembled code
+            Constraint::Max(20),        // Registers
+            Constraint::Max(20),        // Stack
+            Constraint::Max(40),        // Disassembled code
+            Constraint::Percentage(20), // Memory viewer
         ])
         .split(main_layout[1]);
 
@@ -271,5 +338,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     render_registers_widget(app, frame, app_layout[0]);
     render_stack_widget(app, frame, app_layout[1]);
     render_disassembly_widget(app, frame, app_layout[2]);
+    render_memory_widget(app, frame, app_layout[3]);
     render_bottom_bar(app, frame, main_layout[2])
 }

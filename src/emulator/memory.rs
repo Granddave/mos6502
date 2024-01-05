@@ -22,8 +22,8 @@ impl Memory {
 
     /// Get a slice reference
     #[tracing::instrument]
-    pub fn slice(&self, start_address: u16, end_address: u16) -> &[u8] {
-        &self.data[start_address as usize..end_address as usize]
+    pub fn slice(&self, start_address: usize, end_address: usize) -> &[u8] {
+        &self.data[start_address..end_address]
     }
 
     #[tracing::instrument]
