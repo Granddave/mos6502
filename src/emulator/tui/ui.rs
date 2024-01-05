@@ -196,13 +196,12 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .split(frame.size());
 
     // App layout
-    const REGISTER_LAYOUT_W: u16 = 20;
     let app_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Max(REGISTER_LAYOUT_W), // Registers
-            Constraint::Percentage(20),         // Stack
-            Constraint::Percentage(50),         // Disassembled code
+            Constraint::Max(20), // Registers
+            Constraint::Max(20), // Stack
+            Constraint::Max(40), // Disassembled code
         ])
         .split(main_layout[1]);
 
