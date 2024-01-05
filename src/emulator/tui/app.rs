@@ -12,7 +12,7 @@ pub struct StateValue<T> {
     did_change: bool,
 }
 
-impl<T: std::cmp::PartialEq> StateValue<T> {
+impl<T: PartialEq> StateValue<T> {
     pub fn set(&mut self, value: T) {
         if self.value == value {
             return;

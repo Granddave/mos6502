@@ -4,7 +4,7 @@ use crate::emulator::cpu::STACK_PAGE;
 
 use super::app::{App, StateValue};
 
-fn style_state_text<T: std::cmp::PartialEq>(state: &StateValue<T>) -> Style {
+fn style_state_text<T: PartialEq>(state: &StateValue<T>) -> Style {
     if state.has_changed() {
         Style::default().light_yellow().bold()
     } else {
