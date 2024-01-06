@@ -6,74 +6,13 @@ use crate::{
     },
 };
 
-use super::ui::AppWidget;
+use self::{state::EmulationState, widget::AppWidget};
 
-#[derive(Debug, Default, Clone)]
-pub struct StateValue<T> {
-    value: T,
-    did_change: bool,
-}
+pub mod state;
+pub mod widget;
 
-impl<T: PartialEq> StateValue<T> {
-    pub fn set(&mut self, value: T) {
-        if self.value == value {
-            return;
-        }
-        self.value = value;
-        self.did_change = true;
-    }
-
-    pub fn get(&self) -> T
-    where
-        T: Copy,
-    {
-        self.value
-    }
-
-    pub fn has_changed(&self) -> bool {
-        self.did_change
-    }
-
-    pub fn invalidate(&mut self) {
-        self.did_change = false;
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct EmulationState {
-    pub a: StateValue<u8>,
-    pub x: StateValue<u8>,
-    pub y: StateValue<u8>,
-    pub pc: StateValue<u16>,
-    pub sp: StateValue<u8>,
-
-    // Status register
-    pub carry: StateValue<bool>,
-    pub zero: StateValue<bool>,
-    pub interrupt_disable: StateValue<bool>,
-    pub decimal: StateValue<bool>,
-    pub break_command: StateValue<bool>,
-    pub overflow: StateValue<bool>,
-    pub negative: StateValue<bool>,
-}
-
-impl EmulationState {
-    fn invalidate(&mut self) {
-        self.a.invalidate();
-        self.x.invalidate();
-        self.y.invalidate();
-        self.pc.invalidate();
-        self.sp.invalidate();
-
-        self.carry.invalidate();
-        self.zero.invalidate();
-        self.interrupt_disable.invalidate();
-        self.decimal.invalidate();
-        self.break_command.invalidate();
-        self.overflow.invalidate();
-        self.negative.invalidate();
-    }
-}
+const MEMORY_SCROLL_PAGE: usize = 0x10;
+const MEMORY_SCROLL_MAX: usize = 0xff;
 
 #[derive(Default)]
 pub struct App {
@@ -108,6 +47,7 @@ impl App {
     pub fn new(program: &[u8], program_start: u16) -> Self {
         // turn a Vec<ASTInstructionNode> into a Vec<(usize, String)>
         // where the usize is the memory address of the instruction.
+        // TODO: Refactor this into a function
         let disassembly: Vec<(usize, String)> = disassemble_code(program)
             .iter()
             .scan(0, |acc, ins| {
@@ -223,8 +163,8 @@ impl App {
                 }
             }
             AppWidget::Memory => {
-                if self.memory_page_to_display > 0x10 {
-                    self.memory_page_to_display -= 0x10;
+                if self.memory_page_to_display > MEMORY_SCROLL_PAGE {
+                    self.memory_page_to_display -= MEMORY_SCROLL_PAGE;
                 } else {
                     self.memory_page_to_display = 0;
                 }
@@ -241,9 +181,8 @@ impl App {
                 }
             }
             AppWidget::Memory => {
-                if self.memory_page_to_display < 0xff {
+                if self.memory_page_to_display < MEMORY_SCROLL_MAX {
                     self.memory_page_to_display += 1;
-                    self.memory_slice(0xfff0, 0xffff);
                 }
             }
             _ => {}
@@ -253,20 +192,18 @@ impl App {
     pub fn scroll_down_page(&mut self) {
         match self.selected_widget {
             AppWidget::Disassembly => {
-                let max = self.disassembled_program.len() - 1;
-                if self.disassembly_widget_scroll < max - self.disassembly_frame_height {
+                let max_scroll = self.disassembled_program.len() - 1;
+                if self.disassembly_widget_scroll < max_scroll - self.disassembly_frame_height {
                     self.disassembly_widget_scroll += self.disassembly_frame_height;
                 } else {
-                    self.disassembly_widget_scroll = max;
+                    self.disassembly_widget_scroll = max_scroll;
                 }
             }
             AppWidget::Memory => {
-                let max = 0xff;
-                let step = 0x10;
-                if self.memory_page_to_display < max - step {
-                    self.memory_page_to_display += step;
+                if self.memory_page_to_display < MEMORY_SCROLL_MAX - MEMORY_SCROLL_PAGE {
+                    self.memory_page_to_display += MEMORY_SCROLL_PAGE;
                 } else {
-                    self.memory_page_to_display = max;
+                    self.memory_page_to_display = MEMORY_SCROLL_MAX;
                 }
             }
             _ => {}
