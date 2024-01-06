@@ -1,13 +1,13 @@
 use crate::{
     assembler::compiler::Compiler,
-    ast::{ASTInstructionNode, ASTNode, AST},
+    ast::{ASTNode, Instruction, AST},
 };
 
 /// Generate listing line from an AST Node and its memory address
 ///
 /// E.g. `$8000  20 06 80  JSR $8006`
 #[tracing::instrument]
-pub fn generate_line(addr: usize, ins: &ASTInstructionNode) -> String {
+pub fn generate_line(addr: usize, ins: &Instruction) -> String {
     let bytes_str = Compiler::instruction_to_bytes(ins)
         .expect("Failed to convert instruction to bytes") // TODO: Return result
         .iter()
@@ -40,33 +40,33 @@ pub fn generate(program_addr: usize, ast: AST) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::ASTOperand;
+    use crate::ast::Operand;
 
     use pretty_assertions::assert_eq;
 
     #[test]
     fn test_listing() {
-        use crate::ast::{ASTAddressingMode, ASTMnemonic, ASTNode};
+        use crate::ast::{ASTNode, AddressingMode, Mnemonic};
         let ast = vec![
             ASTNode::new_instruction(
-                ASTMnemonic::JSR,
-                ASTAddressingMode::Absolute,
-                ASTOperand::Absolute(0x8006),
+                Mnemonic::JSR,
+                AddressingMode::Absolute,
+                Operand::Absolute(0x8006),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::LDA,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x01),
+                Mnemonic::LDA,
+                AddressingMode::Immediate,
+                Operand::Immediate(0x01),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::LDA,
-                ASTAddressingMode::Absolute,
-                ASTOperand::Absolute(0x0200),
+                Mnemonic::LDA,
+                AddressingMode::Absolute,
+                Operand::Absolute(0x0200),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::LDA,
-                ASTAddressingMode::AbsoluteX,
-                ASTOperand::Absolute(0x0200),
+                Mnemonic::LDA,
+                AddressingMode::AbsoluteX,
+                Operand::Absolute(0x0200),
             ),
         ];
         let listing = generate(0x8000, ast);

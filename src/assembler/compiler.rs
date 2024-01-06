@@ -1,12 +1,12 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
-    ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand, AST},
+    ast::{ASTNode, AddressingMode, Instruction, Operand, AST},
 };
 
 use thiserror::Error;
 
-/// Mapping from ASTInstruction to opcode.
+/// Mapping from instruction definitions to opcodes.
 pub mod opcode;
 
 /// Resolves symbols in the AST.
@@ -21,11 +21,11 @@ pub enum CompilerError {
     #[error("Symbol not defined: {0}")]
     UndefinedSymbol(String),
     #[error("Invalid addressing mode: {0}")]
-    InvalidAddressingMode(ASTInstructionNode),
+    InvalidAddressingMode(Instruction),
     #[error("Invalid symbol type for constant operand: {0}")]
-    InvalidSymbolTypeForConstantOperand(ASTInstructionNode),
+    InvalidSymbolTypeForConstantOperand(Instruction),
     #[error("Invalid opcode: {0}")]
-    InvalidOpcode(ASTInstructionNode),
+    InvalidOpcode(Instruction),
 }
 
 /// Compiler for the 6502 CPU.
@@ -56,10 +56,10 @@ impl Compiler {
 
     fn resolve_label_to_addr(
         &mut self,
-        ins_node: &mut ASTInstructionNode,
+        ins_node: &mut Instruction,
         current_addr: usize,
     ) -> Result<(), CompilerError> {
-        if let ASTOperand::Label(label_operand) = &ins_node.operand {
+        if let Operand::Label(label_operand) = &ins_node.operand {
             let label_symbol = match self.symbol_table.find_symbol(label_operand) {
                 Some(symbol) => symbol,
                 None => return Err(CompilerError::SymbolNotFound(label_operand.clone())),
@@ -67,17 +67,17 @@ impl Compiler {
 
             if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
                 match ins_node.addr_mode {
-                    ASTAddressingMode::Absolute => {
+                    AddressingMode::Absolute => {
                         let address = (absolute_offset_in_program as u16)
                             .checked_add(self.program_offset)
                             .expect("Overflow error");
-                        ins_node.operand = ASTOperand::Absolute(address);
+                        ins_node.operand = Operand::Absolute(address);
                     }
-                    ASTAddressingMode::Relative => {
+                    AddressingMode::Relative => {
                         let offset_addr = (absolute_offset_in_program as u16)
                             .wrapping_sub(current_addr as u16)
                             as i8;
-                        ins_node.operand = ASTOperand::Relative(offset_addr);
+                        ins_node.operand = Operand::Relative(offset_addr);
                     }
                     _ => {
                         return Err(CompilerError::InvalidAddressingMode(ins_node.clone()));
@@ -110,7 +110,7 @@ impl Compiler {
     #[tracing::instrument]
     fn resolve_constants_to_values(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
         for ins in ast.iter_mut().filter_map(|node| node.get_instruction()) {
-            if let ASTOperand::Constant(constant) = &ins.operand {
+            if let Operand::Constant(constant) = &ins.operand {
                 let symbol = match self.symbol_table.find_symbol(constant) {
                     Some(symbol) => symbol,
                     None => {
@@ -120,31 +120,31 @@ impl Compiler {
 
                 match symbol.symbol {
                     SymbolType::ConstantByte(byte) => match ins.addr_mode {
-                        ASTAddressingMode::Immediate => {
-                            ins.operand = ASTOperand::Immediate(byte);
+                        AddressingMode::Immediate => {
+                            ins.operand = Operand::Immediate(byte);
                         }
-                        ASTAddressingMode::ZeroPageX
-                        | ASTAddressingMode::ZeroPageY
-                        | ASTAddressingMode::IndirectIndexedX
-                        | ASTAddressingMode::IndirectIndexedY => {
-                            ins.operand = ASTOperand::ZeroPage(byte);
+                        AddressingMode::ZeroPageX
+                        | AddressingMode::ZeroPageY
+                        | AddressingMode::IndirectIndexedX
+                        | AddressingMode::IndirectIndexedY => {
+                            ins.operand = Operand::ZeroPage(byte);
                         }
-                        ASTAddressingMode::Constant => {
+                        AddressingMode::Constant => {
                             // Special case for the zeropage addressing mode since we at the
                             // parsing stage don't know if the operand is a byte or word.
-                            ins.operand = ASTOperand::ZeroPage(byte);
-                            ins.addr_mode = ASTAddressingMode::ZeroPage;
+                            ins.operand = Operand::ZeroPage(byte);
+                            ins.addr_mode = AddressingMode::ZeroPage;
                         }
                         _ => {
                             return Err(CompilerError::InvalidAddressingMode(ins.clone()));
                         }
                     },
                     SymbolType::ConstantWord(word) => match ins.addr_mode {
-                        ASTAddressingMode::Constant => {
+                        AddressingMode::Constant => {
                             // Special case for the absolute addressing mode since we at the
                             // parsing stage don't know if the operand is a byte or word.
-                            ins.operand = ASTOperand::Absolute(word);
-                            ins.addr_mode = ASTAddressingMode::Absolute;
+                            ins.operand = Operand::Absolute(word);
+                            ins.addr_mode = AddressingMode::Absolute;
                         }
                         _ => {
                             return Err(CompilerError::InvalidAddressingMode(ins.clone()));
@@ -184,7 +184,7 @@ impl Compiler {
 
     /// Compile a single instruction node from the AST to machine code.
     #[tracing::instrument]
-    pub fn instruction_to_bytes(ins: &ASTInstructionNode) -> Result<Vec<u8>, CompilerError> {
+    pub fn instruction_to_bytes(ins: &Instruction) -> Result<Vec<u8>, CompilerError> {
         let mut bytes = vec![];
 
         bytes.push(
@@ -195,13 +195,13 @@ impl Compiler {
         );
 
         bytes.extend(match ins.operand {
-            ASTOperand::Immediate(value) => vec![value],
-            ASTOperand::Absolute(address) => vec![address as u8, (address >> 8) as u8],
-            ASTOperand::ZeroPage(address) => vec![address],
-            ASTOperand::Relative(offset) => vec![offset as u8],
-            ASTOperand::Implied => vec![],
-            ASTOperand::Label(_) => panic!("Label should have been resolved to a relative offset"),
-            ASTOperand::Constant(_) => panic!("Constant should have been resolved to its value"),
+            Operand::Immediate(value) => vec![value],
+            Operand::Absolute(address) => vec![address as u8, (address >> 8) as u8],
+            Operand::ZeroPage(address) => vec![address],
+            Operand::Relative(offset) => vec![offset as u8],
+            Operand::Implied => vec![],
+            Operand::Label(_) => panic!("Label should have been resolved to a relative offset"),
+            Operand::Constant(_) => panic!("Constant should have been resolved to its value"),
         });
 
         Ok(bytes)
@@ -209,7 +209,7 @@ impl Compiler {
 
     /// Compile a instruction to machine code and increment address.
     #[tracing::instrument]
-    fn compile_instruction(&mut self, ins: &ASTInstructionNode) -> Result<Vec<u8>, CompilerError> {
+    fn compile_instruction(&mut self, ins: &Instruction) -> Result<Vec<u8>, CompilerError> {
         let bytes: Vec<u8> = Compiler::instruction_to_bytes(ins)?;
         self.current_address += ins.size() as u16;
         Ok(bytes)
@@ -252,7 +252,7 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand};
+    use crate::ast::{ASTConstantNode, ASTNode, AddressingMode, Mnemonic, Operand};
 
     use pretty_assertions::assert_eq;
 
@@ -263,44 +263,44 @@ mod tests {
         let tests = vec![
             (
                 vec![ASTNode::new_instruction(
-                    ASTMnemonic::LDA,
-                    ASTAddressingMode::Immediate,
-                    ASTOperand::Immediate(0x01),
+                    Mnemonic::LDA,
+                    AddressingMode::Immediate,
+                    Operand::Immediate(0x01),
                 )],
                 vec![0xA9, 0x01],
             ),
             (
                 vec![ASTNode::new_instruction(
-                    ASTMnemonic::LDA,
-                    ASTAddressingMode::Absolute,
-                    ASTOperand::Absolute(0x0200),
+                    Mnemonic::LDA,
+                    AddressingMode::Absolute,
+                    Operand::Absolute(0x0200),
                 )],
                 vec![0xAD, 0x00, 0x02],
             ),
             (
                 vec![ASTNode::new_instruction(
-                    ASTMnemonic::LDA,
-                    ASTAddressingMode::AbsoluteX,
-                    ASTOperand::Absolute(0x0200),
+                    Mnemonic::LDA,
+                    AddressingMode::AbsoluteX,
+                    Operand::Absolute(0x0200),
                 )],
                 vec![0xBD, 0x00, 0x02],
             ),
             (
                 vec![
                     ASTNode::new_instruction(
-                        ASTMnemonic::LDA,
-                        ASTAddressingMode::Immediate,
-                        ASTOperand::Immediate(0x01),
+                        Mnemonic::LDA,
+                        AddressingMode::Immediate,
+                        Operand::Immediate(0x01),
                     ),
                     ASTNode::new_instruction(
-                        ASTMnemonic::LDA,
-                        ASTAddressingMode::Absolute,
-                        ASTOperand::Absolute(0x0200),
+                        Mnemonic::LDA,
+                        AddressingMode::Absolute,
+                        Operand::Absolute(0x0200),
                     ),
                     ASTNode::new_instruction(
-                        ASTMnemonic::LDA,
-                        ASTAddressingMode::AbsoluteX,
-                        ASTOperand::Absolute(0x0200),
+                        Mnemonic::LDA,
+                        AddressingMode::AbsoluteX,
+                        Operand::Absolute(0x0200),
                     ),
                 ],
                 vec![0xA9, 0x01, 0xAD, 0x00, 0x02, 0xBD, 0x00, 0x02],
@@ -324,36 +324,36 @@ mod tests {
             (
                 vec![
                     ASTNode::new_instruction(
-                        ASTMnemonic::LDX,
-                        ASTAddressingMode::Immediate,
-                        ASTOperand::Immediate(0x08),
+                        Mnemonic::LDX,
+                        AddressingMode::Immediate,
+                        Operand::Immediate(0x08),
                     ),
                     ASTNode::Label("loop".to_string()),
                     ASTNode::new_instruction(
-                        ASTMnemonic::LDA,
-                        ASTAddressingMode::Immediate,
-                        ASTOperand::Immediate(0x01),
+                        Mnemonic::LDA,
+                        AddressingMode::Immediate,
+                        Operand::Immediate(0x01),
                     ),
                     ASTNode::new_instruction(
-                        ASTMnemonic::JMP,
-                        ASTAddressingMode::Absolute,
-                        ASTOperand::Label("end".to_string()),
+                        Mnemonic::JMP,
+                        AddressingMode::Absolute,
+                        Operand::Label("end".to_string()),
                     ),
                     ASTNode::new_instruction(
-                        ASTMnemonic::STA,
-                        ASTAddressingMode::Absolute,
-                        ASTOperand::Absolute(0x0200),
+                        Mnemonic::STA,
+                        AddressingMode::Absolute,
+                        Operand::Absolute(0x0200),
                     ),
                     ASTNode::new_instruction(
-                        ASTMnemonic::BNE,
-                        ASTAddressingMode::Relative,
-                        ASTOperand::Label("loop".to_string()),
+                        Mnemonic::BNE,
+                        AddressingMode::Relative,
+                        Operand::Label("loop".to_string()),
                     ),
                     ASTNode::Label("end".to_string()),
                     ASTNode::new_instruction(
-                        ASTMnemonic::BRK,
-                        ASTAddressingMode::Implied,
-                        ASTOperand::Implied,
+                        Mnemonic::BRK,
+                        AddressingMode::Implied,
+                        Operand::Implied,
                     ),
                 ],
                 vec![
@@ -365,22 +365,22 @@ mod tests {
             (
                 vec![
                     ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-                    ASTNode::Instruction(ASTInstructionNode::new(
-                        ASTMnemonic::LDY,
-                        ASTAddressingMode::Constant,
-                        ASTOperand::Constant("sysRandom".to_string()),
+                    ASTNode::Instruction(Instruction::new(
+                        Mnemonic::LDY,
+                        AddressingMode::Constant,
+                        Operand::Constant("sysRandom".to_string()),
                     )),
                     ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
-                    ASTNode::Instruction(ASTInstructionNode::new(
-                        ASTMnemonic::LDX,
-                        ASTAddressingMode::Immediate,
-                        ASTOperand::Constant("a_dozen".to_string()),
+                    ASTNode::Instruction(Instruction::new(
+                        Mnemonic::LDX,
+                        AddressingMode::Immediate,
+                        Operand::Constant("a_dozen".to_string()),
                     )),
                     ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(ASTInstructionNode::new(
-                        ASTMnemonic::LDA,
-                        ASTAddressingMode::Constant,
-                        ASTOperand::Constant("zpage".to_string()),
+                    ASTNode::Instruction(Instruction::new(
+                        Mnemonic::LDA,
+                        AddressingMode::Constant,
+                        Operand::Constant("zpage".to_string()),
                     )),
                 ],
                 vec![
@@ -403,37 +403,33 @@ mod tests {
     fn test_program_offset() -> Result<(), CompilerError> {
         let ast = vec![
             ASTNode::new_instruction(
-                ASTMnemonic::LDX,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x08),
+                Mnemonic::LDX,
+                AddressingMode::Immediate,
+                Operand::Immediate(0x08),
             ),
             ASTNode::Label("loop".to_string()),
             ASTNode::new_instruction(
-                ASTMnemonic::LDA,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x01),
+                Mnemonic::LDA,
+                AddressingMode::Immediate,
+                Operand::Immediate(0x01),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::JMP,
-                ASTAddressingMode::Absolute,
-                ASTOperand::Label("end".to_string()),
+                Mnemonic::JMP,
+                AddressingMode::Absolute,
+                Operand::Label("end".to_string()),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::STA,
-                ASTAddressingMode::Absolute,
-                ASTOperand::Absolute(0x0200),
+                Mnemonic::STA,
+                AddressingMode::Absolute,
+                Operand::Absolute(0x0200),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::BNE,
-                ASTAddressingMode::Relative,
-                ASTOperand::Label("loop".to_string()),
+                Mnemonic::BNE,
+                AddressingMode::Relative,
+                Operand::Label("loop".to_string()),
             ),
             ASTNode::Label("end".to_string()),
-            ASTNode::new_instruction(
-                ASTMnemonic::BRK,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
-            ),
+            ASTNode::new_instruction(Mnemonic::BRK, AddressingMode::Implied, Operand::Implied),
         ];
 
         let tests = vec![

@@ -4,7 +4,7 @@ use std::fmt;
 ///
 /// This represents the operation that is performed by the instruction.
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy, strum_macros::EnumString)]
-pub enum ASTMnemonic {
+pub enum Mnemonic {
     ADC,
     AND,
     ASL,
@@ -63,65 +63,65 @@ pub enum ASTMnemonic {
     TYA,
 }
 
-impl ASTMnemonic {
+impl Mnemonic {
     pub fn is_jumping_instruction(&self) -> bool {
-        matches!(self, ASTMnemonic::JMP | ASTMnemonic::JSR)
+        matches!(self, Mnemonic::JMP | Mnemonic::JSR)
     }
 
     pub fn is_branching_instruction(&self) -> bool {
         matches!(
             self,
-            ASTMnemonic::BCC
-                | ASTMnemonic::BCS
-                | ASTMnemonic::BEQ
-                | ASTMnemonic::BMI
-                | ASTMnemonic::BNE
-                | ASTMnemonic::BPL
-                | ASTMnemonic::BVC
-                | ASTMnemonic::BVS
+            Mnemonic::BCC
+                | Mnemonic::BCS
+                | Mnemonic::BEQ
+                | Mnemonic::BMI
+                | Mnemonic::BNE
+                | Mnemonic::BPL
+                | Mnemonic::BVC
+                | Mnemonic::BVS
         )
     }
 
     pub fn has_implied_addressing_mode(&self) -> bool {
         matches!(
             self,
-            ASTMnemonic::BRK
-                | ASTMnemonic::CLC
-                | ASTMnemonic::CLD
-                | ASTMnemonic::CLI
-                | ASTMnemonic::CLV
-                | ASTMnemonic::DEX
-                | ASTMnemonic::DEY
-                | ASTMnemonic::INX
-                | ASTMnemonic::INY
-                | ASTMnemonic::NOP
-                | ASTMnemonic::PHA
-                | ASTMnemonic::PHP
-                | ASTMnemonic::PLA
-                | ASTMnemonic::PLP
-                | ASTMnemonic::RTI
-                | ASTMnemonic::RTS
-                | ASTMnemonic::SEC
-                | ASTMnemonic::SED
-                | ASTMnemonic::SEI
-                | ASTMnemonic::TAX
-                | ASTMnemonic::TAY
-                | ASTMnemonic::TSX
-                | ASTMnemonic::TXA
-                | ASTMnemonic::TXS
-                | ASTMnemonic::TYA
+            Mnemonic::BRK
+                | Mnemonic::CLC
+                | Mnemonic::CLD
+                | Mnemonic::CLI
+                | Mnemonic::CLV
+                | Mnemonic::DEX
+                | Mnemonic::DEY
+                | Mnemonic::INX
+                | Mnemonic::INY
+                | Mnemonic::NOP
+                | Mnemonic::PHA
+                | Mnemonic::PHP
+                | Mnemonic::PLA
+                | Mnemonic::PLP
+                | Mnemonic::RTI
+                | Mnemonic::RTS
+                | Mnemonic::SEC
+                | Mnemonic::SED
+                | Mnemonic::SEI
+                | Mnemonic::TAX
+                | Mnemonic::TAY
+                | Mnemonic::TSX
+                | Mnemonic::TXA
+                | Mnemonic::TXS
+                | Mnemonic::TYA
         )
     }
 
     pub fn has_accumulator_addressing_mode(&self) -> bool {
         matches!(
             self,
-            ASTMnemonic::ASL | ASTMnemonic::LSR | ASTMnemonic::ROL | ASTMnemonic::ROR
+            Mnemonic::ASL | Mnemonic::LSR | Mnemonic::ROL | Mnemonic::ROR
         )
     }
 }
 
-impl fmt::Display for ASTMnemonic {
+impl fmt::Display for Mnemonic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO: Why did it have spaces in front?
         write!(f, "{:?}", self)
@@ -132,7 +132,7 @@ impl fmt::Display for ASTMnemonic {
 ///
 /// This represents the way the instruction uses the operand.
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum ASTAddressingMode {
+pub enum AddressingMode {
     // Addressing modes
     /// `a`
     Absolute,
@@ -147,7 +147,7 @@ pub enum ASTAddressingMode {
     /// `a,y`
     AbsoluteY,
     /// `r` for branch instructions.
-    /// [`ASTOperand::Label`][self::ASTOperand#variant.Label] is resolved to relative offsets
+    /// [`Operand::Label`][self::Operand#variant.Label] is resolved to relative offsets
     Relative,
     /// `(a)`
     Indirect,
@@ -162,15 +162,15 @@ pub enum ASTAddressingMode {
     Accumulator,
     Implied,
 
-    /// Special addressing mode used in parsing: [`ASTOperand::Constant`][self::ASTOperand#variant.Constant]
+    /// Special addressing mode used in parsing: [`Operand::Constant`][self::Operand#variant.Constant]
     Constant,
 }
 
-/// An operand of an [`instruction`][self::ASTInstruction].
+/// An operand of an [`instruction`][self::Instruction].
 ///
 /// This represents the actual data that is used by the instruction.
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub enum ASTOperand {
+pub enum Operand {
     Immediate(u8),
     Absolute(u16),
     ZeroPage(u8),
@@ -181,39 +181,23 @@ pub enum ASTOperand {
     /// `Constant` is only used during parsing of the source code.
     /// A reference to [`ASTNode::Constant`][crate::ast::ASTNode#variant.Constant] node.
     Constant(String),
-    /// `Implied` covers both [`ASTAddressingMode::Accumulator`][self::ASTAddressingMode#variant.Accumulator] and
-    /// [`ASTAddressingMode::Implied`][self::ASTAddressingMode#variant.Implied]
+    /// `Implied` covers both [`AddressingMode::Accumulator`][self::AddressingMode#variant.Accumulator] and
+    /// [`AddressingMode::Implied`][self::AddressingMode#variant.Implied]
     Implied,
 }
 
-/// An instruction without an operand.
-// #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-// pub struct ASTInstruction {}
-//
-// impl fmt::Display for ASTInstruction {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "{} {:?}", self.mnemonic, self.addr_mode)
-//     }
-// }
-
-/// An instruction with an operand.
+/// A CPU instruction with an an optional operand and the addressing mode which tells the CPU how
+/// to interpret the operand.
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct ASTInstruction {
-    /// Mnemonic of the instruction
-    pub mnemonic: ASTMnemonic,
-    /// Addressing mode of the instruction
-    pub addr_mode: ASTAddressingMode,
-    /// Operand of the instruction
-    pub operand: ASTOperand,
+pub struct Instruction {
+    pub mnemonic: Mnemonic,
+    pub addr_mode: AddressingMode,
+    pub operand: Operand,
 }
 
-impl ASTInstruction {
-    pub fn new(
-        mnemonic: ASTMnemonic,
-        addr_mode: ASTAddressingMode,
-        operand: ASTOperand,
-    ) -> ASTInstruction {
-        ASTInstruction {
+impl Instruction {
+    pub fn new(mnemonic: Mnemonic, addr_mode: AddressingMode, operand: Operand) -> Instruction {
+        Instruction {
             mnemonic,
             addr_mode,
             operand,
@@ -223,102 +207,102 @@ impl ASTInstruction {
     /// Size of instruction opcode + operand in bytes
     pub fn size(&self) -> usize {
         match self.operand {
-            ASTOperand::Immediate(_) => 2,
-            ASTOperand::Absolute(_) => 3,
-            ASTOperand::ZeroPage(_) => 2,
-            ASTOperand::Relative(_) => 2,
-            ASTOperand::Label(_) | ASTOperand::Constant(_) => {
+            Operand::Immediate(_) => 2,
+            Operand::Absolute(_) => 3,
+            Operand::ZeroPage(_) => 2,
+            Operand::Relative(_) => 2,
+            Operand::Label(_) | Operand::Constant(_) => {
                 // Labels are during compilation resolved to relative and absolute addresses
                 // Constants are during compilation resolved to values which are either bytes or words
                 match self.addr_mode {
-                    ASTAddressingMode::Absolute => 3,
-                    ASTAddressingMode::Relative => 2,
-                    ASTAddressingMode::Immediate => 2,
+                    AddressingMode::Absolute => 3,
+                    AddressingMode::Relative => 2,
+                    AddressingMode::Immediate => 2,
                     _ => panic!("Cannot calculata size for: {:#?}", self),
                 }
             }
-            ASTOperand::Implied => 1,
+            Operand::Implied => 1,
         }
     }
 }
 
-impl fmt::Display for ASTInstruction {
+impl fmt::Display for Instruction {
     // NOTE: This might not be correct for all addressing modes
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.addr_mode == ASTAddressingMode::Implied {
+        if self.addr_mode == AddressingMode::Implied {
             write!(f, "{}", self.mnemonic)
         } else {
             match &self.operand {
-                ASTOperand::Immediate(value) => match self.addr_mode {
-                    ASTAddressingMode::Immediate => {
+                Operand::Immediate(value) => match self.addr_mode {
+                    AddressingMode::Immediate => {
                         write!(f, "{} #${:02X}", self.mnemonic, value)
                     }
-                    ASTAddressingMode::ZeroPage => {
+                    AddressingMode::ZeroPage => {
                         write!(f, "{} ${:02X}", self.mnemonic, value)
                     }
                     _ => write!(f, "{} #${:02X}", self.mnemonic, value),
                 },
-                ASTOperand::Absolute(address) => match self.addr_mode {
-                    ASTAddressingMode::Absolute => {
+                Operand::Absolute(address) => match self.addr_mode {
+                    AddressingMode::Absolute => {
                         write!(f, "{} ${:04X}", self.mnemonic, address)
                     }
-                    ASTAddressingMode::AbsoluteX => {
+                    AddressingMode::AbsoluteX => {
                         write!(f, "{} ${:04X},X", self.mnemonic, address)
                     }
-                    ASTAddressingMode::AbsoluteY => {
+                    AddressingMode::AbsoluteY => {
                         write!(f, "{} ${:04X},Y", self.mnemonic, address)
                     }
-                    ASTAddressingMode::Indirect => {
+                    AddressingMode::Indirect => {
                         write!(f, "{} (${:04X})", self.mnemonic, address)
                     }
                     _ => panic!("Invalid addressing mode for absolute address"),
                 },
-                ASTOperand::ZeroPage(address) => match self.addr_mode {
-                    ASTAddressingMode::ZeroPage => {
+                Operand::ZeroPage(address) => match self.addr_mode {
+                    AddressingMode::ZeroPage => {
                         write!(f, "{} ${:02X}", self.mnemonic, address)
                     }
-                    ASTAddressingMode::ZeroPageX => {
+                    AddressingMode::ZeroPageX => {
                         write!(f, "{} ${:02X},X", self.mnemonic, address)
                     }
-                    ASTAddressingMode::ZeroPageY => {
+                    AddressingMode::ZeroPageY => {
                         write!(f, "{} ${:02X},Y", self.mnemonic, address)
                     }
-                    ASTAddressingMode::IndirectIndexedX => {
+                    AddressingMode::IndirectIndexedX => {
                         write!(f, "{} (${:02X},X)", self.mnemonic, address)
                     }
-                    ASTAddressingMode::IndirectIndexedY => {
+                    AddressingMode::IndirectIndexedY => {
                         write!(f, "{} (${:02X}),Y", self.mnemonic, address)
                     }
                     _ => panic!("Invalid addressing mode for zero page address"),
                 },
-                ASTOperand::Relative(offset) => write!(f, "{} ${:02X}", self.mnemonic, offset),
-                ASTOperand::Label(label) => write!(f, "{} {}", self.mnemonic, label),
-                ASTOperand::Implied => write!(f, "{}", self.mnemonic),
-                ASTOperand::Constant(constant) => match self.addr_mode {
-                    ASTAddressingMode::Absolute => write!(f, "{} {}", self.mnemonic, constant),
-                    ASTAddressingMode::ZeroPage => write!(f, "{} {}", self.mnemonic, constant),
-                    ASTAddressingMode::ZeroPageX => {
+                Operand::Relative(offset) => write!(f, "{} ${:02X}", self.mnemonic, offset),
+                Operand::Label(label) => write!(f, "{} {}", self.mnemonic, label),
+                Operand::Implied => write!(f, "{}", self.mnemonic),
+                Operand::Constant(constant) => match self.addr_mode {
+                    AddressingMode::Absolute => write!(f, "{} {}", self.mnemonic, constant),
+                    AddressingMode::ZeroPage => write!(f, "{} {}", self.mnemonic, constant),
+                    AddressingMode::ZeroPageX => {
                         write!(f, "{} {},X", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::ZeroPageY => {
+                    AddressingMode::ZeroPageY => {
                         write!(f, "{} {},Y", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::AbsoluteX => {
+                    AddressingMode::AbsoluteX => {
                         write!(f, "{} {},X", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::AbsoluteY => {
+                    AddressingMode::AbsoluteY => {
                         write!(f, "{} {},Y", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::Indirect => {
+                    AddressingMode::Indirect => {
                         write!(f, "{} ({})", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::IndirectIndexedX => {
+                    AddressingMode::IndirectIndexedX => {
                         write!(f, "{} ({},X)", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::IndirectIndexedY => {
+                    AddressingMode::IndirectIndexedY => {
                         write!(f, "{} ({}),Y", self.mnemonic, constant)
                     }
-                    ASTAddressingMode::Immediate => {
+                    AddressingMode::Immediate => {
                         write!(f, "{} #{}", self.mnemonic, constant)
                     }
                     _ => panic!("Invalid addressing mode for constant"),
@@ -329,6 +313,8 @@ impl fmt::Display for ASTInstruction {
 }
 
 /// A constant value.
+///
+/// This is only used during parsing of the source code.
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTConstantValue {
     Byte(u8),
@@ -380,7 +366,7 @@ impl fmt::Display for ASTConstantNode {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ASTNode {
     /// A CPU instruction
-    Instruction(ASTInstruction),
+    Instruction(Instruction),
     /// A label to mark a location in the code
     ///
     /// Labels are resolved to absolute addresses during compilation.
@@ -394,14 +380,14 @@ pub enum ASTNode {
 
 impl ASTNode {
     pub fn new_instruction(
-        mnemonic: ASTMnemonic,
-        addr_mode: ASTAddressingMode,
-        operand: ASTOperand,
+        mnemonic: Mnemonic,
+        addr_mode: AddressingMode,
+        operand: Operand,
     ) -> ASTNode {
-        ASTNode::Instruction(ASTInstruction::new(mnemonic, addr_mode, operand))
+        ASTNode::Instruction(Instruction::new(mnemonic, addr_mode, operand))
     }
 
-    pub fn get_instruction(&mut self) -> Option<&mut ASTInstruction> {
+    pub fn get_instruction(&mut self) -> Option<&mut Instruction> {
         match self {
             ASTNode::Instruction(instruction) => Some(instruction),
             _ => None,

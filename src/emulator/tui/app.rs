@@ -45,7 +45,7 @@ pub struct App {
 
 impl App {
     pub fn new(program: &[u8], program_start: u16) -> Self {
-        // turn a Vec<ASTInstructionNode> into a Vec<(usize, String)>
+        // turn a Vec<Instruction> into a Vec<(usize, String)>
         // where the usize is the memory address of the instruction.
         // TODO: Refactor this into a function
         let disassembly: Vec<(usize, String)> = disassemble_code(program)

@@ -1,4 +1,4 @@
-use crate::ast::{ASTConstantValue, ASTNode, ASTOperand, AST};
+use crate::ast::{ASTConstantValue, ASTNode, Operand, AST};
 
 use std::fmt;
 
@@ -105,16 +105,14 @@ pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), C
     for node in ast {
         if let ASTNode::Instruction(ins_node) = node {
             match &ins_node.operand {
-                ASTOperand::Label(label_str) => match symbol_table.find_symbol(label_str) {
+                Operand::Label(label_str) => match symbol_table.find_symbol(label_str) {
                     Some(_) => (),
                     None => return Err(CompilerError::UndefinedSymbol(label_str.clone())),
                 },
-                ASTOperand::Constant(constant_str) => {
-                    match symbol_table.find_symbol(constant_str) {
-                        Some(_) => (),
-                        None => return Err(CompilerError::UndefinedSymbol(constant_str.clone())),
-                    }
-                }
+                Operand::Constant(constant_str) => match symbol_table.find_symbol(constant_str) {
+                    Some(_) => (),
+                    None => return Err(CompilerError::UndefinedSymbol(constant_str.clone())),
+                },
                 _ => (),
             }
         }
@@ -126,7 +124,7 @@ pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ASTAddressingMode, ASTConstantNode, ASTMnemonic, ASTNode, ASTOperand, AST};
+    use crate::ast::{ASTConstantNode, ASTNode, AddressingMode, Mnemonic, Operand, AST};
 
     use pretty_assertions::assert_eq;
 
@@ -135,76 +133,52 @@ mod tests {
             ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),
             ASTNode::Constant(ASTConstantNode::new_word("addr".to_string(), 0x1234)),
             ASTNode::new_instruction(
-                ASTMnemonic::LDX,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Constant("zero".to_string()),
+                Mnemonic::LDX,
+                AddressingMode::Immediate,
+                Operand::Constant("zero".to_string()),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::LDY,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x00),
+                Mnemonic::LDY,
+                AddressingMode::Immediate,
+                Operand::Immediate(0x00),
             ),
             ASTNode::Label("firstloop".to_string()),
+            ASTNode::new_instruction(Mnemonic::TXA, AddressingMode::Implied, Operand::Implied),
             ASTNode::new_instruction(
-                ASTMnemonic::TXA,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
+                Mnemonic::STA,
+                AddressingMode::Absolute,
+                Operand::Constant("addr".to_string()),
+            ),
+            ASTNode::new_instruction(Mnemonic::PHA, AddressingMode::Implied, Operand::Implied),
+            ASTNode::new_instruction(Mnemonic::INX, AddressingMode::Implied, Operand::Implied),
+            ASTNode::new_instruction(Mnemonic::INY, AddressingMode::Implied, Operand::Implied),
+            ASTNode::new_instruction(
+                Mnemonic::CPY,
+                AddressingMode::Immediate,
+                Operand::Immediate(0x10),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::STA,
-                ASTAddressingMode::Absolute,
-                ASTOperand::Constant("addr".to_string()),
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::PHA,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::INX,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::INY,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::CPY,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x10),
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::BNE,
-                ASTAddressingMode::Relative,
-                ASTOperand::Label("firstloop".to_string()),
+                Mnemonic::BNE,
+                AddressingMode::Relative,
+                Operand::Label("firstloop".to_string()),
             ),
             ASTNode::Label("secondloop".to_string()),
+            ASTNode::new_instruction(Mnemonic::PLA, AddressingMode::Implied, Operand::Implied),
             ASTNode::new_instruction(
-                ASTMnemonic::PLA,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
+                Mnemonic::STA,
+                AddressingMode::AbsoluteY,
+                Operand::Absolute(0x0200),
+            ),
+            ASTNode::new_instruction(Mnemonic::INY, AddressingMode::Implied, Operand::Implied),
+            ASTNode::new_instruction(
+                Mnemonic::CPY,
+                AddressingMode::Immediate,
+                Operand::Immediate(0x20),
             ),
             ASTNode::new_instruction(
-                ASTMnemonic::STA,
-                ASTAddressingMode::AbsoluteY,
-                ASTOperand::Absolute(0x0200),
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::INY,
-                ASTAddressingMode::Implied,
-                ASTOperand::Implied,
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::CPY,
-                ASTAddressingMode::Immediate,
-                ASTOperand::Immediate(0x20),
-            ),
-            ASTNode::new_instruction(
-                ASTMnemonic::BNE,
-                ASTAddressingMode::Relative,
-                ASTOperand::Label("secondloop".to_string()),
+                Mnemonic::BNE,
+                AddressingMode::Relative,
+                Operand::Label("secondloop".to_string()),
             ),
         ]
     }
@@ -242,9 +216,9 @@ mod tests {
     fn test_undefined_label() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![ASTNode::new_instruction(
-            ASTMnemonic::BNE,
-            ASTAddressingMode::Relative,
-            ASTOperand::Label("undefined".to_string()),
+            Mnemonic::BNE,
+            AddressingMode::Relative,
+            Operand::Label("undefined".to_string()),
         )];
 
         resolve_labels(&ast, &mut symbol_table);
@@ -259,9 +233,9 @@ mod tests {
     fn test_undefined_constant() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![ASTNode::new_instruction(
-            ASTMnemonic::LDX,
-            ASTAddressingMode::Immediate,
-            ASTOperand::Constant("zero".to_string()),
+            Mnemonic::LDX,
+            AddressingMode::Immediate,
+            Operand::Constant("zero".to_string()),
         )];
 
         resolve_constants(&ast, &mut symbol_table);
