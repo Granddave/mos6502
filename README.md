@@ -4,6 +4,7 @@
 
 This is a toy project where I've created an emulator, assembler and a disassembler for the 1975 8-bit MOS 6502 CPU.
 
+![Screenshot of TUI emulator](resources/screenshot.png)
 
 ## Assembling
 
@@ -81,18 +82,13 @@ $8019  60        RTS
 
 ### Emulating
 
-To run the assembled program we can invoke the emulator, `emu`.
-
-With a modified emulator that at the end of execution outputs the contents of the memory at address `0x0000` to the terminal, we can verify that the progam executed correctly.
+To run the assembled program we can invoke the emulator, `emu`. By providing the `--tui` flag a graphical interface is opened (See screenshot up above).
 
 ```bash
-$ cargo run -r --bin emu -- a.bin
-    Finished release [optimized] target(s) in 0.01s
-     Running `target/release/emu a.bin`
-Memory address 0x0000: 0x0a
+$ cargo run -r --bin emu -- a.bin --tui
 ```
 
-Here we see `0x0a`, which in decimal is `10` just we intended!
+If the file passed to `emu` is a file with assembly code, the program will be assembled and run automatically.
 
 
 ## Supported assembler syntax
@@ -119,9 +115,6 @@ Here we see `0x0a`, which in decimal is `10` just we intended!
     - Stack overflow detection
 - **TUI**
     - Load file with `l`
-    - Memory view
-        - Stack
-        - Scrollable area
     - Centered disassembler view
 - **CLI**
     - Better argparsing
