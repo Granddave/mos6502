@@ -26,6 +26,8 @@ pub enum CompilerError {
     InvalidSymbolTypeForConstantOperand(Instruction),
     #[error("Invalid opcode: {0}")]
     InvalidOpcode(Instruction),
+    #[error("Program too large")]
+    ProgramOverflow,
 }
 
 /// Compiler for the 6502 CPU.
@@ -237,6 +239,10 @@ impl Compiler {
         let mut ast = ast;
         self.pass_1(&mut ast)?;
         let bytes = self.pass_2(&mut ast)?;
+
+        if bytes.len() > 0xffff {
+            return Err(CompilerError::ProgramOverflow);
+        }
 
         Ok(bytes)
     }
