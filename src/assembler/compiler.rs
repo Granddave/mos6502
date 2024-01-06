@@ -34,7 +34,6 @@ pub enum CompilerError {
 #[derive(Debug)]
 pub struct Compiler {
     symbol_table: SymbolTable,
-    current_address: u16,
     program_offset: u16,
 }
 
@@ -49,7 +48,6 @@ impl Compiler {
     pub fn new(program_offset: u16) -> Compiler {
         Compiler {
             symbol_table: SymbolTable::new(),
-            current_address: 0,
             program_offset,
         }
     }
@@ -207,14 +205,6 @@ impl Compiler {
         Ok(bytes)
     }
 
-    /// Compile a instruction to machine code and increment address.
-    #[tracing::instrument]
-    fn compile_instruction(&mut self, ins: &Instruction) -> Result<Vec<u8>, CompilerError> {
-        let bytes: Vec<u8> = Compiler::instruction_to_bytes(ins)?;
-        self.current_address += ins.size() as u16;
-        Ok(bytes)
-    }
-
     /// Pass 2 of the compiler.
     ///
     /// This pass generates machine code from the AST. The AST is assumed to have been resolved
@@ -228,7 +218,7 @@ impl Compiler {
                 _ => None,
             })
             .try_fold(Vec::new(), |mut acc, ins| {
-                let bytes = self.compile_instruction(ins)?;
+                let bytes = Compiler::instruction_to_bytes(ins)?;
                 acc.extend(bytes);
                 Ok(acc)
             })
