@@ -109,6 +109,7 @@ If the file passed to `emu` is a file with assembly code, the program will be as
         - `.byte 42`
         - `.word $8000`
     - `#"A"`
+    - Operand arithmetics
 - **Emulator**
     - Peripherals - I/O would be fun to have...
     - Decimal mode
