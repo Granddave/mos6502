@@ -17,7 +17,7 @@ pub enum AddressingMode {
     /// `a,y`
     AbsoluteY,
     /// `r` for branch instructions.
-    /// [`Operand::Label`][self::Operand#variant.Label] is resolved to relative offsets
+    /// [`Operand::Label`][super::operand::Operand#variant.Label] is resolved to relative offsets
     Relative,
     /// `(a)`
     Indirect,
@@ -32,6 +32,6 @@ pub enum AddressingMode {
     Accumulator,
     Implied,
 
-    /// Special addressing mode used in parsing: [`Operand::Constant`][self::Operand#variant.Constant]
+    /// Special addressing mode used in parsing: [`Operand::Constant`][super::operand::Operand#variant.Constant]
     Constant,
 }

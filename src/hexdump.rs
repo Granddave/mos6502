@@ -1,4 +1,4 @@
-/// Hexdump a program based on https://skilldrick.github.io/easy6502
+/// Hexdump a program based on <https://skilldrick.github.io/easy6502>
 pub fn hexdump_2(program: &[u8], program_offset: u16, addr_width: usize, stride: usize) -> String {
     fn addr(str: &mut String, offset: usize, addr_width: usize) {
         if offset != 0 {
