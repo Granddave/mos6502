@@ -1,7 +1,7 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
-    ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTNode, ASTOperand, AST},
+    ast::{ASTAddressingMode, ASTInstructionNode, ASTNode, ASTOperand, AST},
 };
 
 use thiserror::Error;
@@ -21,11 +21,11 @@ pub enum CompilerError {
     #[error("Symbol not defined: {0}")]
     UndefinedSymbol(String),
     #[error("Invalid addressing mode: {0}")]
-    InvalidAddressingMode(ASTInstruction),
+    InvalidAddressingMode(ASTInstructionNode),
     #[error("Invalid symbol type for constant operand: {0}")]
-    InvalidSymbolTypeForConstantOperand(ASTInstruction),
+    InvalidSymbolTypeForConstantOperand(ASTInstructionNode),
     #[error("Invalid opcode: {0}")]
-    InvalidOpcode(ASTInstruction),
+    InvalidOpcode(ASTInstructionNode),
 }
 
 /// Compiler for the 6502 CPU.
@@ -66,7 +66,7 @@ impl Compiler {
             };
 
             if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
-                match ins_node.ins.addr_mode {
+                match ins_node.addr_mode {
                     ASTAddressingMode::Absolute => {
                         let address = (absolute_offset_in_program as u16)
                             .checked_add(self.program_offset)
@@ -80,7 +80,7 @@ impl Compiler {
                         ins_node.operand = ASTOperand::Relative(offset_addr);
                     }
                     _ => {
-                        return Err(CompilerError::InvalidAddressingMode(ins_node.ins));
+                        return Err(CompilerError::InvalidAddressingMode(ins_node.clone()));
                     }
                 }
             }
@@ -119,7 +119,7 @@ impl Compiler {
                 };
 
                 match symbol.symbol {
-                    SymbolType::ConstantByte(byte) => match ins.ins.addr_mode {
+                    SymbolType::ConstantByte(byte) => match ins.addr_mode {
                         ASTAddressingMode::Immediate => {
                             ins.operand = ASTOperand::Immediate(byte);
                         }
@@ -133,24 +133,28 @@ impl Compiler {
                             // Special case for the zeropage addressing mode since we at the
                             // parsing stage don't know if the operand is a byte or word.
                             ins.operand = ASTOperand::ZeroPage(byte);
-                            ins.ins.addr_mode = ASTAddressingMode::ZeroPage;
+                            ins.addr_mode = ASTAddressingMode::ZeroPage;
                         }
                         _ => {
-                            return Err(CompilerError::InvalidAddressingMode(ins.ins));
+                            return Err(CompilerError::InvalidAddressingMode(ins.clone()));
                         }
                     },
-                    SymbolType::ConstantWord(word) => match ins.ins.addr_mode {
+                    SymbolType::ConstantWord(word) => match ins.addr_mode {
                         ASTAddressingMode::Constant => {
                             // Special case for the absolute addressing mode since we at the
                             // parsing stage don't know if the operand is a byte or word.
                             ins.operand = ASTOperand::Absolute(word);
-                            ins.ins.addr_mode = ASTAddressingMode::Absolute;
+                            ins.addr_mode = ASTAddressingMode::Absolute;
                         }
                         _ => {
-                            return Err(CompilerError::InvalidAddressingMode(ins.ins));
+                            return Err(CompilerError::InvalidAddressingMode(ins.clone()));
                         }
                     },
-                    _ => return Err(CompilerError::InvalidSymbolTypeForConstantOperand(ins.ins)),
+                    _ => {
+                        return Err(CompilerError::InvalidSymbolTypeForConstantOperand(
+                            ins.clone(),
+                        ))
+                    }
                 }
             }
         }
@@ -183,10 +187,12 @@ impl Compiler {
     pub fn instruction_to_bytes(ins: &ASTInstructionNode) -> Result<Vec<u8>, CompilerError> {
         let mut bytes = vec![];
 
-        bytes.push(match OPCODE_MAPPING.find_opcode(ins.ins) {
-            Some(bytes) => bytes,
-            None => return Err(CompilerError::InvalidOpcode(ins.ins)),
-        });
+        bytes.push(
+            match OPCODE_MAPPING.find_opcode((ins.mnemonic, ins.addr_mode)) {
+                Some(bytes) => bytes,
+                None => return Err(CompilerError::InvalidOpcode(ins.clone())),
+            },
+        );
 
         bytes.extend(match ins.operand {
             ASTOperand::Immediate(value) => vec![value],

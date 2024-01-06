@@ -1,25 +1,25 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-use crate::ast::{ASTAddressingMode, ASTInstruction, ASTMnemonic};
+use crate::ast::{ASTAddressingMode, ASTMnemonic};
 
 /// A mapper between ASTInstructions and opcodes.
 #[derive(Debug)]
 pub struct OpcodeMapping {
-    forward_map: HashMap<ASTInstruction, u8>,
-    reverse_map: HashMap<u8, ASTInstruction>,
+    forward_map: HashMap<(ASTMnemonic, ASTAddressingMode), u8>,
+    reverse_map: HashMap<u8, (ASTMnemonic, ASTAddressingMode)>,
 }
 
 impl OpcodeMapping {
     /// Find the opcode corresponding to the given instruction.
     #[tracing::instrument]
-    pub fn find_opcode(&self, instruction: ASTInstruction) -> Option<u8> {
+    pub fn find_opcode(&self, instruction: (ASTMnemonic, ASTAddressingMode)) -> Option<u8> {
         self.forward_map.get(&instruction).copied()
     }
 
     /// Find the instruction corresponding to the given opcode.
     #[tracing::instrument]
-    pub fn find_instruction(&self, opcode: u8) -> Option<ASTInstruction> {
+    pub fn find_instruction(&self, opcode: u8) -> Option<(ASTMnemonic, ASTAddressingMode)> {
         self.reverse_map.get(&opcode).copied()
     }
 
@@ -183,20 +183,8 @@ impl OpcodeMapping {
         ];
 
         for &(mnemonic, addr_mode, opcode) in &mappings {
-            forward_map.insert(
-                ASTInstruction {
-                    mnemonic,
-                    addr_mode,
-                },
-                opcode,
-            );
-            reverse_map.insert(
-                opcode,
-                ASTInstruction {
-                    mnemonic,
-                    addr_mode,
-                },
-            );
+            forward_map.insert((mnemonic, addr_mode), opcode);
+            reverse_map.insert(opcode, (mnemonic, addr_mode));
         }
 
         OpcodeMapping {

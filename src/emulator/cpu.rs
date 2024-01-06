@@ -64,11 +64,11 @@ impl Cpu {
     #[tracing::instrument]
     fn fetch_and_decode(&mut self, memory: &mut Memory) -> ASTInstructionNode {
         let opcode = memory.read_byte(self.regs.pc);
-        let ins = OPCODE_MAPPING
+        let (mnemonic, addr_mode) = OPCODE_MAPPING
             .find_instruction(opcode)
             .unwrap_or_else(|| panic!("Invalid opcode: '{:#02x}'", opcode));
 
-        let operand = match ins.addr_mode {
+        let operand = match addr_mode {
             ASTAddressingMode::Absolute
             | ASTAddressingMode::AbsoluteX
             | ASTAddressingMode::AbsoluteY
@@ -89,15 +89,19 @@ impl Cpu {
                 ASTOperand::Immediate(memory.read_byte(self.regs.pc + 1))
             }
             ASTAddressingMode::Accumulator | ASTAddressingMode::Implied => ASTOperand::Implied,
-            _ => panic!("Invalid addressing mode: '{:#?}'", ins.addr_mode),
+            _ => panic!("Invalid addressing mode: '{:#?}'", addr_mode),
         };
 
-        ASTInstructionNode { ins, operand }
+        ASTInstructionNode {
+            mnemonic,
+            addr_mode,
+            operand,
+        }
     }
 
     #[tracing::instrument]
     fn execute_instruction(&mut self, ins: &ASTInstructionNode, memory: &mut Memory) -> usize {
-        match (&ins.ins.mnemonic, &ins.ins.addr_mode, &ins.operand) {
+        match (&ins.mnemonic, &ins.addr_mode, &ins.operand) {
             (ASTMnemonic::ADC, _, ASTOperand::Immediate(value)) => {
                 self.add_with_carry(*value);
                 2
@@ -1250,7 +1254,7 @@ impl Cpu {
             }
             RunOption::StopOnBreakInstruction => loop {
                 if let Some(ins) = &self.last_instruction {
-                    if ins.ins.mnemonic == ASTMnemonic::BRK {
+                    if ins.mnemonic == ASTMnemonic::BRK {
                         break;
                     }
                 }

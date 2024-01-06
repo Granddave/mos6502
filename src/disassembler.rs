@@ -1,4 +1,4 @@
-use crate::ast::{ASTAddressingMode, ASTInstruction, ASTInstructionNode, ASTOperand};
+use crate::ast::{ASTAddressingMode, ASTInstructionNode, ASTMnemonic, ASTOperand};
 
 pub mod listing;
 
@@ -36,7 +36,7 @@ fn decode_operand(input: &[u8], curr_ix: usize, addressing_mode: ASTAddressingMo
 }
 
 #[tracing::instrument]
-fn decode_opcode(opcode: u8) -> ASTInstruction {
+fn decode_opcode(opcode: u8) -> (ASTMnemonic, ASTAddressingMode) {
     crate::assembler::compiler::opcode::OPCODE_MAPPING
         .find_instruction(opcode)
         .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", opcode))
@@ -44,9 +44,13 @@ fn decode_opcode(opcode: u8) -> ASTInstruction {
 
 #[tracing::instrument]
 fn decode_instruction(input: &[u8], ix: usize) -> ASTInstructionNode {
-    let ins = decode_opcode(input[ix]);
-    let operand = decode_operand(input, ix + 1, ins.addr_mode);
-    ASTInstructionNode { ins, operand }
+    let (mnemonic, addr_mode) = decode_opcode(input[ix]);
+    let operand = decode_operand(input, ix + 1, addr_mode);
+    ASTInstructionNode {
+        mnemonic,
+        addr_mode,
+        operand,
+    }
 }
 
 pub fn disassemble_code(input: &[u8]) -> Vec<ASTInstructionNode> {
