@@ -133,8 +133,8 @@ impl App {
     }
 
     pub fn stack_memory(&self) -> &[u8] {
-        let sp_addr = STACK_PAGE + self.state.sp.get() as u16;
-        self.memory_slice(sp_addr as usize, STACK_BASE as usize)
+        let sp_addr = STACK_PAGE + self.state.sp.get() as u16 + 1;
+        self.memory_slice(sp_addr as usize, STACK_BASE as usize + 1)
     }
 
     pub fn scroll_up(&mut self) {
