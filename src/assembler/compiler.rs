@@ -68,7 +68,8 @@ impl Compiler {
                     AddressingMode::Absolute => {
                         let address = (absolute_offset_in_program as u16)
                             .checked_add(self.program_offset)
-                            .expect("Overflow error");
+                            .expect("Overflow error"); // TODO: Return compiler error saying that
+                                                       // the label is too far away from the current address
                         ins.operand = Operand::Absolute(address);
                     }
                     AddressingMode::Relative => {
@@ -98,6 +99,8 @@ impl Compiler {
             // The relative offset is calculated from the address of the following
             // instruction due to the fact that the CPU has already incremented the
             // program counter past the current instruction.
+            //
+            // TODO: Handle .org directives
             current_addr += ins.size();
             self.resolve_label_to_addr(ins, current_addr)?;
         }
@@ -165,9 +168,8 @@ impl Compiler {
     /// This pass resolves labels and constants and verifies that all symbols are valid.
     #[tracing::instrument]
     fn pass_1(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
-        // The constant resolver needs to be run before the label resolver since the label
-        // resolver depends on the constant resolver to have resolved all constants to their
-        // values.
+        // We need to resolve constants before the label are resolved.
+        // This is due to the fact constants alter memory offsets which labels are dependent on.
         symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
         self.resolve_constants_to_values(ast)?;
 
@@ -180,7 +182,7 @@ impl Compiler {
         Ok(())
     }
 
-    /// Compile a single instruction node from the AST to machine code.
+    /// Compile a single instruction to machine code.
     #[tracing::instrument]
     pub fn instruction_to_bytes(ins: &Instruction) -> Result<Vec<u8>, CompilerError> {
         let mut bytes = vec![];
@@ -198,6 +200,7 @@ impl Compiler {
             Operand::ZeroPage(address) => vec![address],
             Operand::Relative(offset) => vec![offset as u8],
             Operand::Implied => vec![],
+            // TODO: Return compiler errors
             Operand::Label(_) => panic!("Label should have been resolved to a relative offset"),
             Operand::Constant(_) => panic!("Constant should have been resolved to its value"),
         });
