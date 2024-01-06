@@ -1,7 +1,7 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
-    ast::{ASTNode, AddressingMode, Instruction, Operand, AST},
+    ast::{AddressingMode, Instruction, Node, Operand, AST},
 };
 
 use thiserror::Error;
@@ -56,31 +56,31 @@ impl Compiler {
 
     fn resolve_label_to_addr(
         &mut self,
-        ins_node: &mut Instruction,
+        ins: &mut Instruction,
         current_addr: usize,
     ) -> Result<(), CompilerError> {
-        if let Operand::Label(label_operand) = &ins_node.operand {
+        if let Operand::Label(label_operand) = &ins.operand {
             let label_symbol = match self.symbol_table.find_symbol(label_operand) {
                 Some(symbol) => symbol,
                 None => return Err(CompilerError::SymbolNotFound(label_operand.clone())),
             };
 
             if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
-                match ins_node.addr_mode {
+                match ins.addr_mode {
                     AddressingMode::Absolute => {
                         let address = (absolute_offset_in_program as u16)
                             .checked_add(self.program_offset)
                             .expect("Overflow error");
-                        ins_node.operand = Operand::Absolute(address);
+                        ins.operand = Operand::Absolute(address);
                     }
                     AddressingMode::Relative => {
                         let offset_addr = (absolute_offset_in_program as u16)
                             .wrapping_sub(current_addr as u16)
                             as i8;
-                        ins_node.operand = Operand::Relative(offset_addr);
+                        ins.operand = Operand::Relative(offset_addr);
                     }
                     _ => {
-                        return Err(CompilerError::InvalidAddressingMode(ins_node.clone()));
+                        return Err(CompilerError::InvalidAddressingMode(ins.clone()));
                     }
                 }
             }
@@ -95,13 +95,13 @@ impl Compiler {
     fn resolve_labels_to_addr(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
         let mut current_addr = 0;
 
-        for ins_node in ast.iter_mut().filter_map(|node| node.get_instruction()) {
+        for ins in ast.iter_mut().filter_map(|node| node.get_instruction()) {
             // The current address is pointing to the address of the next instruction.
             // The relative offset is calculated from the address of the following
             // instruction due to the fact that the CPU has already incremented the
             // program counter past the current instruction.
-            current_addr += ins_node.size();
-            self.resolve_label_to_addr(ins_node, current_addr)?;
+            current_addr += ins.size();
+            self.resolve_label_to_addr(ins, current_addr)?;
         }
 
         Ok(())
@@ -224,7 +224,7 @@ impl Compiler {
     fn pass_2(&mut self, ast: &mut AST) -> Result<Vec<u8>, CompilerError> {
         ast.iter()
             .filter_map(|node| match node {
-                ASTNode::Instruction(ins) => Some(ins),
+                Node::Instruction(ins) => Some(ins),
                 _ => None,
             })
             .try_fold(Vec::new(), |mut acc, ins| {
@@ -252,7 +252,7 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ASTConstantNode, ASTNode, AddressingMode, Mnemonic, Operand};
+    use crate::ast::{AddressingMode, Constant, Mnemonic, Node, Operand};
 
     use pretty_assertions::assert_eq;
 
@@ -262,7 +262,7 @@ mod tests {
         // TODO: Test more instructions
         let tests = vec![
             (
-                vec![ASTNode::new_instruction(
+                vec![Node::new_instruction(
                     Mnemonic::LDA,
                     AddressingMode::Immediate,
                     Operand::Immediate(0x01),
@@ -270,7 +270,7 @@ mod tests {
                 vec![0xA9, 0x01],
             ),
             (
-                vec![ASTNode::new_instruction(
+                vec![Node::new_instruction(
                     Mnemonic::LDA,
                     AddressingMode::Absolute,
                     Operand::Absolute(0x0200),
@@ -278,7 +278,7 @@ mod tests {
                 vec![0xAD, 0x00, 0x02],
             ),
             (
-                vec![ASTNode::new_instruction(
+                vec![Node::new_instruction(
                     Mnemonic::LDA,
                     AddressingMode::AbsoluteX,
                     Operand::Absolute(0x0200),
@@ -287,17 +287,17 @@ mod tests {
             ),
             (
                 vec![
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::LDA,
                         AddressingMode::Immediate,
                         Operand::Immediate(0x01),
                     ),
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::LDA,
                         AddressingMode::Absolute,
                         Operand::Absolute(0x0200),
                     ),
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::LDA,
                         AddressingMode::AbsoluteX,
                         Operand::Absolute(0x0200),
@@ -323,38 +323,34 @@ mod tests {
             // calculate the relative offset. Both forward and backward branches are tested.
             (
                 vec![
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::LDX,
                         AddressingMode::Immediate,
                         Operand::Immediate(0x08),
                     ),
-                    ASTNode::Label("loop".to_string()),
-                    ASTNode::new_instruction(
+                    Node::Label("loop".to_string()),
+                    Node::new_instruction(
                         Mnemonic::LDA,
                         AddressingMode::Immediate,
                         Operand::Immediate(0x01),
                     ),
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::JMP,
                         AddressingMode::Absolute,
                         Operand::Label("end".to_string()),
                     ),
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::STA,
                         AddressingMode::Absolute,
                         Operand::Absolute(0x0200),
                     ),
-                    ASTNode::new_instruction(
+                    Node::new_instruction(
                         Mnemonic::BNE,
                         AddressingMode::Relative,
                         Operand::Label("loop".to_string()),
                     ),
-                    ASTNode::Label("end".to_string()),
-                    ASTNode::new_instruction(
-                        Mnemonic::BRK,
-                        AddressingMode::Implied,
-                        Operand::Implied,
-                    ),
+                    Node::Label("end".to_string()),
+                    Node::new_instruction(Mnemonic::BRK, AddressingMode::Implied, Operand::Implied),
                 ],
                 vec![
                     /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
@@ -364,20 +360,20 @@ mod tests {
             ),
             (
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_word("sysRandom".to_string(), 0xd010)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDY,
                         AddressingMode::Constant,
                         Operand::Constant("sysRandom".to_string()),
                     )),
-                    ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("a_dozen".to_string(), 0x0c)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDX,
                         AddressingMode::Immediate,
                         Operand::Constant("a_dozen".to_string()),
                     )),
-                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("zpage".to_string(), 0x02)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::Constant,
                         Operand::Constant("zpage".to_string()),
@@ -402,34 +398,34 @@ mod tests {
     #[test]
     fn test_program_offset() -> Result<(), CompilerError> {
         let ast = vec![
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::LDX,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x08),
             ),
-            ASTNode::Label("loop".to_string()),
-            ASTNode::new_instruction(
+            Node::Label("loop".to_string()),
+            Node::new_instruction(
                 Mnemonic::LDA,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x01),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::JMP,
                 AddressingMode::Absolute,
                 Operand::Label("end".to_string()),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::STA,
                 AddressingMode::Absolute,
                 Operand::Absolute(0x0200),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::BNE,
                 AddressingMode::Relative,
                 Operand::Label("loop".to_string()),
             ),
-            ASTNode::Label("end".to_string()),
-            ASTNode::new_instruction(Mnemonic::BRK, AddressingMode::Implied, Operand::Implied),
+            Node::Label("end".to_string()),
+            Node::new_instruction(Mnemonic::BRK, AddressingMode::Implied, Operand::Implied),
         ];
 
         let tests = vec![

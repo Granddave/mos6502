@@ -1,4 +1,4 @@
-use crate::ast::{ASTConstantValue, ASTNode, Operand, AST};
+use crate::ast::{ConstantValue, Node, Operand, AST};
 
 use std::fmt;
 
@@ -56,10 +56,10 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
     let mut current_addr = 0;
 
     ast.iter().for_each(|node| match node {
-        ASTNode::Instruction(ins_node) => {
-            current_addr += ins_node.size();
+        Node::Instruction(ins) => {
+            current_addr += ins.size();
         }
-        ASTNode::Label(label) => symbol_table.symbols.push(Symbol {
+        Node::Label(label) => symbol_table.symbols.push(Symbol {
             name: label.clone(),
             symbol: SymbolType::Label(current_addr),
         }),
@@ -71,12 +71,12 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
 #[tracing::instrument]
 pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
     ast.iter().for_each(|node| {
-        if let ASTNode::Constant(constant) = node {
+        if let Node::Constant(constant) = node {
             symbol_table.symbols.push(Symbol {
                 name: constant.identifier.clone(),
                 symbol: match constant.value {
-                    ASTConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
-                    ASTConstantValue::Word(word) => SymbolType::ConstantWord(word),
+                    ConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
+                    ConstantValue::Word(word) => SymbolType::ConstantWord(word),
                 },
             });
         }
@@ -103,8 +103,8 @@ pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), C
 
     // Verify that all symbols used in the AST are defined
     for node in ast {
-        if let ASTNode::Instruction(ins_node) = node {
-            match &ins_node.operand {
+        if let Node::Instruction(ins) = node {
+            match &ins.operand {
                 Operand::Label(label_str) => match symbol_table.find_symbol(label_str) {
                     Some(_) => (),
                     None => return Err(CompilerError::UndefinedSymbol(label_str.clone())),
@@ -124,58 +124,58 @@ pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), C
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ASTConstantNode, ASTNode, AddressingMode, Mnemonic, Operand, AST};
+    use crate::ast::{AddressingMode, Constant, Mnemonic, Node, Operand, AST};
 
     use pretty_assertions::assert_eq;
 
     fn example_ast() -> AST {
         vec![
-            ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),
-            ASTNode::Constant(ASTConstantNode::new_word("addr".to_string(), 0x1234)),
-            ASTNode::new_instruction(
+            Node::Constant(Constant::new_byte("zero".to_string(), 0x00)),
+            Node::Constant(Constant::new_word("addr".to_string(), 0x1234)),
+            Node::new_instruction(
                 Mnemonic::LDX,
                 AddressingMode::Immediate,
                 Operand::Constant("zero".to_string()),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::LDY,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x00),
             ),
-            ASTNode::Label("firstloop".to_string()),
-            ASTNode::new_instruction(Mnemonic::TXA, AddressingMode::Implied, Operand::Implied),
-            ASTNode::new_instruction(
+            Node::Label("firstloop".to_string()),
+            Node::new_instruction(Mnemonic::TXA, AddressingMode::Implied, Operand::Implied),
+            Node::new_instruction(
                 Mnemonic::STA,
                 AddressingMode::Absolute,
                 Operand::Constant("addr".to_string()),
             ),
-            ASTNode::new_instruction(Mnemonic::PHA, AddressingMode::Implied, Operand::Implied),
-            ASTNode::new_instruction(Mnemonic::INX, AddressingMode::Implied, Operand::Implied),
-            ASTNode::new_instruction(Mnemonic::INY, AddressingMode::Implied, Operand::Implied),
-            ASTNode::new_instruction(
+            Node::new_instruction(Mnemonic::PHA, AddressingMode::Implied, Operand::Implied),
+            Node::new_instruction(Mnemonic::INX, AddressingMode::Implied, Operand::Implied),
+            Node::new_instruction(Mnemonic::INY, AddressingMode::Implied, Operand::Implied),
+            Node::new_instruction(
                 Mnemonic::CPY,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x10),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::BNE,
                 AddressingMode::Relative,
                 Operand::Label("firstloop".to_string()),
             ),
-            ASTNode::Label("secondloop".to_string()),
-            ASTNode::new_instruction(Mnemonic::PLA, AddressingMode::Implied, Operand::Implied),
-            ASTNode::new_instruction(
+            Node::Label("secondloop".to_string()),
+            Node::new_instruction(Mnemonic::PLA, AddressingMode::Implied, Operand::Implied),
+            Node::new_instruction(
                 Mnemonic::STA,
                 AddressingMode::AbsoluteY,
                 Operand::Absolute(0x0200),
             ),
-            ASTNode::new_instruction(Mnemonic::INY, AddressingMode::Implied, Operand::Implied),
-            ASTNode::new_instruction(
+            Node::new_instruction(Mnemonic::INY, AddressingMode::Implied, Operand::Implied),
+            Node::new_instruction(
                 Mnemonic::CPY,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x20),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::BNE,
                 AddressingMode::Relative,
                 Operand::Label("secondloop".to_string()),
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn test_undefined_label() {
         let mut symbol_table = SymbolTable::new();
-        let ast = vec![ASTNode::new_instruction(
+        let ast = vec![Node::new_instruction(
             Mnemonic::BNE,
             AddressingMode::Relative,
             Operand::Label("undefined".to_string()),
@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn test_undefined_constant() {
         let mut symbol_table = SymbolTable::new();
-        let ast = vec![ASTNode::new_instruction(
+        let ast = vec![Node::new_instruction(
             Mnemonic::LDX,
             AddressingMode::Immediate,
             Operand::Constant("zero".to_string()),
@@ -248,8 +248,8 @@ mod tests {
     fn test_double_label_definition() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
-            ASTNode::Label("label".to_string()),
-            ASTNode::Label("label".to_string()),
+            Node::Label("label".to_string()),
+            Node::Label("label".to_string()),
         ];
 
         resolve_labels(&ast, &mut symbol_table);
@@ -264,8 +264,8 @@ mod tests {
     fn test_double_constant_definition() {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
-            ASTNode::Constant(ASTConstantNode::new_byte("my_byte".to_string(), 0x12)),
-            ASTNode::Constant(ASTConstantNode::new_byte("my_byte".to_string(), 0x12)),
+            Node::Constant(Constant::new_byte("my_byte".to_string(), 0x12)),
+            Node::Constant(Constant::new_byte("my_byte".to_string(), 0x12)),
         ];
 
         resolve_constants(&ast, &mut symbol_table);

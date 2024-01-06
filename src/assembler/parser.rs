@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{
     assembler::lexer::{token::Token, token::TokenType, Lexer, LexerError},
-    ast::{ASTConstantNode, ASTNode, AddressingMode, Instruction, Mnemonic, Operand, AST},
+    ast::{AddressingMode, Constant, Instruction, Mnemonic, Node, Operand, AST},
 };
 
 #[derive(Error, Debug)]
@@ -536,7 +536,7 @@ impl<'a> Parser<'a> {
     }
 
     #[tracing::instrument]
-    fn parse_constant(&mut self) -> Result<ASTConstantNode, ParseError> {
+    fn parse_constant(&mut self) -> Result<Constant, ParseError> {
         if !self.peek_token_is(0, TokenType::Identifier) {
             return Err(invalid_token!(self, "expected identifier, got"));
         }
@@ -548,25 +548,25 @@ impl<'a> Parser<'a> {
 
         if self.current_token_is(TokenType::Hex) {
             if let Some(byte) = self.try_parse_hex_u8() {
-                Ok(ASTConstantNode::new_byte(identifier, byte))
+                Ok(Constant::new_byte(identifier, byte))
             } else if let Some(word) = self.try_parse_hex_u16() {
-                Ok(ASTConstantNode::new_word(identifier, word))
+                Ok(Constant::new_word(identifier, word))
             } else {
                 Err(invalid_token!(self, "expected hex constant"))
             }
         } else if self.current_token_is(TokenType::Binary) {
             if let Some(byte) = self.try_parse_binary_u8() {
-                Ok(ASTConstantNode::new_byte(identifier, byte))
+                Ok(Constant::new_byte(identifier, byte))
             } else if let Some(word) = self.try_parse_binary_u16() {
-                Ok(ASTConstantNode::new_word(identifier, word))
+                Ok(Constant::new_word(identifier, word))
             } else {
                 Err(invalid_token!(self, "expected hex constant"))
             }
         } else if self.current_token_is(TokenType::Decimal) {
             if let Ok(byte) = self.current_token.literal.parse::<u8>() {
-                Ok(ASTConstantNode::new_byte(identifier, byte))
+                Ok(Constant::new_byte(identifier, byte))
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
-                Ok(ASTConstantNode::new_word(identifier, word))
+                Ok(Constant::new_word(identifier, word))
             } else {
                 Err(invalid_token!(self, "expected decimal constant"))
             }
@@ -579,16 +579,16 @@ impl<'a> Parser<'a> {
     }
 
     #[tracing::instrument]
-    fn parse_node(&mut self) -> Result<ASTNode, ParseError> {
+    fn parse_node(&mut self) -> Result<Node, ParseError> {
         match &self.current_token.token {
             TokenType::Identifier => {
                 if self.peek_token_is(0, TokenType::Colon) {
-                    Ok(ASTNode::Label(self.parse_label()?))
+                    Ok(Node::Label(self.parse_label()?))
                 } else {
-                    Ok(ASTNode::Instruction(self.parse_instruction()?))
+                    Ok(Node::Instruction(self.parse_instruction()?))
                 }
             }
-            TokenType::Define => Ok(ASTNode::Constant(self.parse_constant()?)),
+            TokenType::Define => Ok(Node::Constant(self.parse_constant()?)),
             _ => Err(invalid_token!(self, "start of node")),
         }
     }
@@ -1023,15 +1023,12 @@ mod tests {
             (
                 // byte hex
                 "define val $FE",
-                vec![ASTNode::Constant(ASTConstantNode::new_byte(
-                    "val".to_string(),
-                    0xFE,
-                ))],
+                vec![Node::Constant(Constant::new_byte("val".to_string(), 0xFE))],
             ),
             (
                 // byte binary
                 "define val %01010101",
-                vec![ASTNode::Constant(ASTConstantNode::new_byte(
+                vec![Node::Constant(Constant::new_byte(
                     "val".to_string(),
                     0b01010101,
                 ))],
@@ -1039,15 +1036,12 @@ mod tests {
             (
                 // byte decimal
                 "define val 32",
-                vec![ASTNode::Constant(ASTConstantNode::new_byte(
-                    "val".to_string(),
-                    32,
-                ))],
+                vec![Node::Constant(Constant::new_byte("val".to_string(), 32))],
             ),
             (
                 // word hex
                 "define sysRandom $d010",
-                vec![ASTNode::Constant(ASTConstantNode::new_word(
+                vec![Node::Constant(Constant::new_word(
                     "sysRandom".to_string(),
                     0xd010,
                 ))],
@@ -1055,7 +1049,7 @@ mod tests {
             (
                 // word decimal
                 "define sysRandom %0101010101010101",
-                vec![ASTNode::Constant(ASTConstantNode::new_word(
+                vec![Node::Constant(Constant::new_word(
                     "sysRandom".to_string(),
                     0b0101010101010101,
                 ))],
@@ -1063,7 +1057,7 @@ mod tests {
             (
                 // word decimal
                 "define sysRandom 53264",
-                vec![ASTNode::Constant(ASTConstantNode::new_word(
+                vec![Node::Constant(Constant::new_word(
                     "sysRandom".to_string(),
                     53264,
                 ))],
@@ -1072,8 +1066,8 @@ mod tests {
             (
                 "define sysRandom $d010\nLDY sysRandom",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_word("sysRandom".to_string(), 0xd010)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDY,
                         AddressingMode::Constant,
                         Operand::Constant("sysRandom".to_string()),
@@ -1083,8 +1077,8 @@ mod tests {
             (
                 "define sysRandom $d010\nLDY (sysRandom)",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_word("sysRandom".to_string(), 0xd010)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDY,
                         AddressingMode::Indirect,
                         Operand::Constant("sysRandom".to_string()),
@@ -1094,8 +1088,8 @@ mod tests {
             (
                 "define sysRandom $d010\nLDY (sysRandom,X)",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_word("sysRandom".to_string(), 0xd010)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDY,
                         AddressingMode::IndirectIndexedX,
                         Operand::Constant("sysRandom".to_string()),
@@ -1105,8 +1099,8 @@ mod tests {
             (
                 "define sysRandom $d010\nLDY (sysRandom),Y",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_word("sysRandom".to_string(), 0xd010)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_word("sysRandom".to_string(), 0xd010)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDY,
                         AddressingMode::IndirectIndexedY,
                         Operand::Constant("sysRandom".to_string()),
@@ -1116,8 +1110,8 @@ mod tests {
             (
                 "define a_dozen $0c\nLDX #a_dozen",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_byte("a_dozen".to_string(), 0x0c)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("a_dozen".to_string(), 0x0c)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDX,
                         AddressingMode::Immediate,
                         Operand::Constant("a_dozen".to_string()),
@@ -1127,8 +1121,8 @@ mod tests {
             (
                 "define zpage $02\nLDA zpage",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("zpage".to_string(), 0x02)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::Constant,
                         Operand::Constant("zpage".to_string()),
@@ -1138,8 +1132,8 @@ mod tests {
             (
                 "define zpage $02\nLDA zpage,X",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("zpage".to_string(), 0x02)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::ZeroPageX,
                         Operand::Constant("zpage".to_string()),
@@ -1149,8 +1143,8 @@ mod tests {
             (
                 "define zpage $02\nLDA zpage,Y",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("zpage".to_string(), 0x02)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::ZeroPageY,
                         Operand::Constant("zpage".to_string()),
@@ -1160,8 +1154,8 @@ mod tests {
             (
                 "define zpage $02\nSTA (zpage,X)",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("zpage".to_string(), 0x02)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::STA,
                         AddressingMode::IndirectIndexedX,
                         Operand::Constant("zpage".to_string()),
@@ -1171,8 +1165,8 @@ mod tests {
             (
                 "define zpage $02\nSTA (zpage),Y",
                 vec![
-                    ASTNode::Constant(ASTConstantNode::new_byte("zpage".to_string(), 0x02)),
-                    ASTNode::Instruction(Instruction::new(
+                    Node::Constant(Constant::new_byte("zpage".to_string(), 0x02)),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::STA,
                         AddressingMode::IndirectIndexedY,
                         Operand::Constant("zpage".to_string()),
@@ -1212,79 +1206,76 @@ secondloop:
   CPY #$20
   BNE secondloop";
         let expected = vec![
-            ASTNode::Constant(ASTConstantNode::new_byte("zero".to_string(), 0x00)),
-            ASTNode::Constant(ASTConstantNode::new_byte(
-                "some_constant".to_string(),
-                0b01010101,
-            )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Constant(Constant::new_byte("zero".to_string(), 0x00)),
+            Node::Constant(Constant::new_byte("some_constant".to_string(), 0b01010101)),
+            Node::Instruction(Instruction::new(
                 Mnemonic::LDX,
                 AddressingMode::Immediate,
                 Operand::Constant("zero".to_string()),
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::LDY,
                 AddressingMode::Immediate,
                 Operand::Immediate(0),
             )),
-            ASTNode::Label("firstloop".to_string()),
-            ASTNode::Instruction(Instruction::new(
+            Node::Label("firstloop".to_string()),
+            Node::Instruction(Instruction::new(
                 Mnemonic::TXA,
                 AddressingMode::Implied,
                 Operand::Implied,
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::STA,
                 AddressingMode::AbsoluteY,
                 Operand::Absolute(0x0200),
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::PHA,
                 AddressingMode::Implied,
                 Operand::Implied,
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::INX,
                 AddressingMode::Implied,
                 Operand::Implied,
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::INY,
                 AddressingMode::Implied,
                 Operand::Implied,
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::CPY,
                 AddressingMode::Immediate,
                 Operand::Immediate(16),
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::BNE,
                 AddressingMode::Relative,
                 Operand::Label("firstloop".to_string()),
             )),
-            ASTNode::Label("secondloop".to_string()),
-            ASTNode::Instruction(Instruction::new(
+            Node::Label("secondloop".to_string()),
+            Node::Instruction(Instruction::new(
                 Mnemonic::PLA,
                 AddressingMode::Implied,
                 Operand::Implied,
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::STA,
                 AddressingMode::AbsoluteY,
                 Operand::Absolute(0x0200),
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::INY,
                 AddressingMode::Implied,
                 Operand::Implied,
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::CPY,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x20),
             )),
-            ASTNode::Instruction(Instruction::new(
+            Node::Instruction(Instruction::new(
                 Mnemonic::BNE,
                 AddressingMode::Relative,
                 Operand::Label("secondloop".to_string()),

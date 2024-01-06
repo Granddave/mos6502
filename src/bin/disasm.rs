@@ -3,7 +3,7 @@ use tracing_chrome::ChromeLayerBuilder;
 use tracing_subscriber::prelude::*;
 
 use mos6502::{
-    ast::ASTNode,
+    ast::Node,
     disassembler::{disassemble_code, listing},
 };
 
@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     let bytes = std::fs::read(input).with_context(|| "Unable to read file")?;
     let ast = disassemble_code(&bytes)
         .into_iter()
-        .map(ASTNode::Instruction)
+        .map(Node::Instruction)
         .collect();
     println!("{}", listing::generate(0x8000, ast));
 

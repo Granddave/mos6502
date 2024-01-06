@@ -86,11 +86,7 @@ impl Cpu {
             _ => panic!("Invalid addressing mode: '{:#?}'", addr_mode),
         };
 
-        Instruction {
-            mnemonic,
-            addr_mode,
-            operand,
-        }
+        Instruction::new(mnemonic, addr_mode, operand)
     }
 
     #[tracing::instrument]

@@ -1,6 +1,6 @@
 use crate::{
     assembler::compiler::Compiler,
-    ast::{ASTNode, Instruction, AST},
+    ast::{Instruction, Node, AST},
 };
 
 /// Generate listing line from an AST Node and its memory address
@@ -28,9 +28,9 @@ pub fn generate(program_addr: usize, ast: AST) -> String {
     let mut current_address = program_addr;
     for node in &ast {
         // TODO: Add support for other AST nodes
-        if let ASTNode::Instruction(ins_node) = node {
-            string.push_str(generate_line(current_address, ins_node).as_str());
-            current_address += ins_node.size();
+        if let Node::Instruction(ins) = node {
+            string.push_str(generate_line(current_address, ins).as_str());
+            current_address += ins.size();
         }
     }
 
@@ -46,24 +46,24 @@ mod tests {
 
     #[test]
     fn test_listing() {
-        use crate::ast::{ASTNode, AddressingMode, Mnemonic};
+        use crate::ast::{AddressingMode, Mnemonic, Node};
         let ast = vec![
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::JSR,
                 AddressingMode::Absolute,
                 Operand::Absolute(0x8006),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::LDA,
                 AddressingMode::Immediate,
                 Operand::Immediate(0x01),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::LDA,
                 AddressingMode::Absolute,
                 Operand::Absolute(0x0200),
             ),
-            ASTNode::new_instruction(
+            Node::new_instruction(
                 Mnemonic::LDA,
                 AddressingMode::AbsoluteX,
                 Operand::Absolute(0x0200),
