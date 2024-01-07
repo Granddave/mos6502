@@ -10,6 +10,7 @@ pub fn hexdump_2(program: &[u8], program_offset: u16, addr_width: usize, stride:
 
     let mut line = 0;
     for (ix, byte) in program.iter().enumerate() {
+        // TODO: Detect if the last line is the same as the previous line and use `*` instead
         if ix % stride == 0 {
             let offset = program_offset as usize + (line * stride);
             addr(&mut str, offset, addr_width);

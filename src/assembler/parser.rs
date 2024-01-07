@@ -182,13 +182,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a literal byte
+    /// Parse a literal number or identifier.
     ///
     /// The literal number is denoted by the following tokens:
     /// - Hex: #$xx
     /// - Binary: %xx
     /// - Decimal: #xx
-    /// - Identifier: #constant
+    /// - Identifier: #some_constant
     #[tracing::instrument]
     fn parse_literal_number(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
         self.next_token()?;
@@ -218,10 +218,10 @@ impl<'a> Parser<'a> {
                 if let Some(identifier) = self.try_parse_identifier() {
                     Ok((AddressingMode::Immediate, Operand::Constant(identifier)))
                 } else {
-                    Err(invalid_token!(self, "invalid identifier"))
+                    Err(invalid_token!(self, "invalid constant identifier"))
                 }
             }
-            _ => Err(invalid_token!(self, "invalid literal number")),
+            _ => Err(invalid_token!(self, "invalid literal number/constant")),
         }
     }
 
@@ -229,7 +229,7 @@ impl<'a> Parser<'a> {
     fn parse_byte_operand(
         &mut self,
         byte: u8,
-        mnemonic: &Mnemonic,
+        preceding_mnemonic: &Mnemonic,
     ) -> Result<(AddressingMode, Operand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y
@@ -243,7 +243,7 @@ impl<'a> Parser<'a> {
                 "Y" => Ok((AddressingMode::ZeroPageY, Operand::ZeroPage(byte))),
                 _ => Err(invalid_token!(self, "invalid ZeroPageX/Y operand")),
             }
-        } else if mnemonic.is_branching_instruction() {
+        } else if preceding_mnemonic.is_branching_instruction() {
             Ok((AddressingMode::Relative, Operand::Relative(byte as i8)))
         } else {
             Ok((AddressingMode::ZeroPage, Operand::ZeroPage(byte)))
