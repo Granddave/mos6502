@@ -13,11 +13,11 @@ fn test_loop_program() {
     let program_start = 0x8000;
 
     let source = include_str!("../examples/loop.asm");
-    let bytes = compile_code(source, program_start).unwrap();
+    let bytes = compile_code(source, 0).unwrap();
 
     let mut cpu = Cpu::new();
     let mut memory = Memory::new();
-    memory.load(program_start, &bytes);
+    memory.load(0x0000, &bytes);
     memory.write_word(cpu::RESET_VECTOR, program_start); // TODO: Include in the program
 
     cpu.reset();

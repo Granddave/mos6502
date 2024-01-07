@@ -1,6 +1,8 @@
 define counter $00  ; Address of counter
 define max 10       ; Num of times to loop
 
+.org $8000
+
 main:
   jsr init          ; Initialize counter
   jsr loop          ; Run loop

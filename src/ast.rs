@@ -1,9 +1,11 @@
 use std::fmt;
 
 pub mod constant;
+pub mod directive;
 pub mod instruction;
 
 pub use constant::{Constant, ConstantValue};
+pub use directive::Directive;
 pub use instruction::{AddressingMode, Instruction, Mnemonic, Operand};
 
 /// A single node in the AST, i.e. a single line in the source code.
@@ -20,6 +22,7 @@ pub enum Node {
     ///
     /// E.g. `define max_items $FF`
     Constant(Constant),
+    Directive(Directive),
 }
 
 impl Node {
@@ -45,6 +48,7 @@ impl fmt::Display for Node {
             Node::Instruction(instruction) => write!(f, "{}", instruction),
             Node::Label(label) => write!(f, "{}:", label),
             Node::Constant(constant) => write!(f, "  {}", constant),
+            Node::Directive(directive) => write!(f, "{}", directive),
         }
     }
 }

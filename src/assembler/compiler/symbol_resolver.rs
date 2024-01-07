@@ -1,4 +1,4 @@
-use crate::ast::{ConstantValue, Node, Operand, AST};
+use crate::ast::{ConstantValue, Directive, Node, Operand, AST};
 
 use std::fmt;
 
@@ -6,7 +6,7 @@ use super::CompilerError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolType {
-    /// Label with an offset into the program
+    /// Label with an absolute offset into the program
     Label(usize),
     ConstantByte(u8),
     ConstantWord(u16),
@@ -60,9 +60,13 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
             current_addr += ins.size();
         }
         Node::Label(label) => symbol_table.symbols.push(Symbol {
+            // TODO: Refactor out to helper function that also checks if label is already defined
             name: label.clone(),
             symbol: SymbolType::Label(current_addr),
         }),
+        Node::Directive(directive) => match directive {
+            Directive::Origin(org_addr) => current_addr = *org_addr as usize,
+        },
         _ => (),
     })
 }
@@ -73,6 +77,7 @@ pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
     ast.iter().for_each(|node| {
         if let Node::Constant(constant) = node {
             symbol_table.symbols.push(Symbol {
+                // TODO: Refactor out to helper function that also checks if constant is already defined
                 name: constant.identifier.clone(),
                 symbol: match constant.value {
                     ConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
@@ -130,6 +135,7 @@ mod tests {
 
     fn example_ast() -> AST {
         vec![
+            Node::Directive(Directive::Origin(0x8000)),
             Node::Constant(Constant::new_byte("zero".to_string(), 0x00)),
             Node::Constant(Constant::new_word("addr".to_string(), 0x1234)),
             Node::new_instruction(
@@ -195,9 +201,15 @@ mod tests {
         assert!(res.is_ok());
         assert_eq!(symbol_table.symbols.len(), 4);
         assert_eq!(symbol_table.symbols[0].name, "firstloop");
-        assert_eq!(symbol_table.symbols[0].symbol, SymbolType::Label(0x04));
+        assert_eq!(
+            symbol_table.symbols[0].symbol,
+            SymbolType::Label(0x8000 + 0x04)
+        );
         assert_eq!(symbol_table.symbols[1].name, "secondloop");
-        assert_eq!(symbol_table.symbols[1].symbol, SymbolType::Label(0x0f));
+        assert_eq!(
+            symbol_table.symbols[1].symbol,
+            SymbolType::Label(0x8000 + 0x0f)
+        );
         assert_eq!(symbol_table.symbols[2].name, "zero");
         assert_eq!(
             symbol_table.symbols[2].symbol,

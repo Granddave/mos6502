@@ -40,8 +40,9 @@ fn main() -> Result<()> {
     let bytes = mos6502::assembler::compile_code(&input_source, PROGRAM_START)
         .with_context(|| "Compilation failed")?;
 
-    println!("{}", mos6502::hexdump::hexdump_2(&bytes, 0x8000, 4, 16));
-    std::fs::write("a.bin", &bytes).with_context(|| "Unable to write file")?;
+    let output_filename = "a.bin";
+    std::fs::write(output_filename, bytes).with_context(|| "Unable to write file")?;
+    eprintln!("Wrote {}", output_filename);
 
     Ok(())
 }

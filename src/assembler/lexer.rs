@@ -124,6 +124,10 @@ impl<'a> Lexer<'a> {
                     self.skip_comment();
                     self.next_token()?
                 }
+                '.' => {
+                    self.read_char();
+                    Some(self.create_token(TokenType::Dot, "."))
+                }
                 '$' => {
                     self.read_char();
                     let hex = self.read_hex();
@@ -162,6 +166,8 @@ impl<'a> Lexer<'a> {
                     let identifier = self.read_string();
                     if identifier == "define" {
                         Some(self.create_token(TokenType::Define, &identifier))
+                    } else if identifier == "org" {
+                        Some(self.create_token(TokenType::OrgDirective, &identifier))
                     } else {
                         Some(self.create_token(TokenType::Identifier, &identifier))
                     }

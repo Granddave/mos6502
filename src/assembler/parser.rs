@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{
     assembler::lexer::{token::Token, token::TokenType, Lexer, LexerError},
-    ast::{AddressingMode, Constant, Instruction, Mnemonic, Node, Operand, AST},
+    ast::{AddressingMode, Constant, Directive, Instruction, Mnemonic, Node, Operand, AST},
 };
 
 #[derive(Error, Debug)]
@@ -585,6 +585,50 @@ impl<'a> Parser<'a> {
     }
 
     #[tracing::instrument]
+    fn parse_org_directive(&mut self) -> Result<Directive, ParseError> {
+        self.next_token()?; // Consume the org keyword
+
+        // TODO: Refactor this into a function
+        if self.current_token_is(TokenType::Hex) {
+            if let Some(word) = self.try_parse_hex_u16() {
+                Ok(Directive::Origin(word))
+            } else {
+                Err(invalid_token!(self, "invalid hex literal"))
+            }
+        } else if self.current_token_is(TokenType::Binary) {
+            if let Some(word) = self.try_parse_binary_u16() {
+                Ok(Directive::Origin(word))
+            } else {
+                Err(invalid_token!(self, "invalid binary literal"))
+            }
+        } else if self.current_token_is(TokenType::Decimal) {
+            if let Ok(word) = self.current_token.literal.parse::<u16>() {
+                Ok(Directive::Origin(word))
+            } else {
+                Err(invalid_token!(self, "invalid decimal literal"))
+            }
+        } else {
+            Err(invalid_token!(
+                self,
+                "integer literal, expected hex, binary or decimal"
+            ))
+        }
+    }
+
+    #[tracing::instrument]
+    fn parse_directive(&mut self) -> Result<Directive, ParseError> {
+        if !self.current_token_is(TokenType::Dot) {
+            return Err(invalid_token!(self, "expected directive"));
+        }
+
+        self.next_token()?; // Consume the dot
+        match self.current_token.token {
+            TokenType::OrgDirective => Ok(self.parse_org_directive()?),
+            _ => Err(invalid_token!(self, "invalid directive")),
+        }
+    }
+
+    #[tracing::instrument]
     fn parse_node(&mut self) -> Result<Node, ParseError> {
         match &self.current_token.token {
             TokenType::Identifier => {
@@ -595,6 +639,7 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenType::Define => Ok(Node::Constant(self.parse_constant()?)),
+            TokenType::Dot => Ok(Node::Directive(self.parse_directive()?)),
             _ => Err(invalid_token!(self, "start of node")),
         }
     }
@@ -1191,8 +1236,12 @@ mod tests {
 
     #[test]
     fn test_parse_program() -> Result<(), ParseError> {
-        let input = "  define zero 0
+        let input = "
+  define zero 0
   define some_constant %01010101
+
+.org $8000
+
   LDX #zero
   LDY #0
 firstloop:
@@ -1212,6 +1261,7 @@ secondloop:
         let expected = vec![
             Node::Constant(Constant::new_byte("zero".to_string(), 0x00)),
             Node::Constant(Constant::new_byte("some_constant".to_string(), 0b01010101)),
+            Node::Directive(Directive::Origin(0x8000)),
             Node::Instruction(Instruction::new(
                 Mnemonic::LDX,
                 AddressingMode::Immediate,

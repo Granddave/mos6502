@@ -1,6 +1,8 @@
 /// TokenType definies the types of tokens that are found in source code.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
+    /// Dot
+    Dot,
     /// `#` Literal number prefix character
     LiteralNumber,
     /// `$` Hex prefix including hex number
@@ -13,6 +15,8 @@ pub enum TokenType {
     Colon,
     /// Constant definition keyword
     Define,
+    /// Org directive keyword
+    OrgDirective,
     /// `,`
     Comma,
     /// `(`
@@ -60,12 +64,14 @@ impl ToString for Token {
     #[tracing::instrument]
     fn to_string(&self) -> String {
         match self.token {
+            TokenType::Dot => ".".to_owned(),
             TokenType::LiteralNumber => self.literal.to_owned(),
             TokenType::Hex => "$".to_string() + &self.literal,
             TokenType::Binary => "%".to_string() + &self.literal,
             TokenType::Decimal => self.literal.to_owned(),
             TokenType::Colon => ":".to_owned(),
             TokenType::Define => "define".to_owned(),
+            TokenType::OrgDirective => "org".to_owned(),
             TokenType::Comma => ",".to_owned(),
             TokenType::ParenLeft => "(".to_owned(),
             TokenType::ParenRight => ")".to_owned(),

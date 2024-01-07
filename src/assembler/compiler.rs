@@ -1,7 +1,7 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::{
     assembler::compiler::opcode::OPCODE_MAPPING,
-    ast::{AddressingMode, Instruction, Node, Operand, AST},
+    ast::{AddressingMode, Directive, Instruction, Node, Operand, AST},
 };
 
 use thiserror::Error;
@@ -28,6 +28,8 @@ pub enum CompilerError {
     InvalidOpcode(Instruction),
     #[error("Program too large")]
     ProgramOverflow,
+    #[error(".org directives not specified in ascending order, address: {0}")]
+    OrgDirectiveNotInAscendingOrder(u16),
 }
 
 /// Compiler for the 6502 CPU.
@@ -36,22 +38,43 @@ pub enum CompilerError {
 #[derive(Debug)]
 pub struct Compiler {
     symbol_table: SymbolTable,
-    program_offset: u16,
 }
 
 impl Default for Compiler {
     fn default() -> Compiler {
-        Compiler::new(0x0000)
+        Compiler::new()
     }
 }
 
 impl Compiler {
     #[tracing::instrument]
-    pub fn new(program_offset: u16) -> Compiler {
+    pub fn new() -> Compiler {
         Compiler {
             symbol_table: SymbolTable::new(),
-            program_offset,
         }
+    }
+
+    fn verify_org_directives(ast: &mut AST) -> Result<(), CompilerError> {
+        // The address must be within the range 0x0000-0xffff does not need to be verified
+        // since the address is stored in a u16.
+
+        // Warn about org directives that are not specified in ascending order
+        let mut prev_org_addr = 0;
+        for node in ast.iter() {
+            if let Node::Directive(directive) = node {
+                match directive {
+                    Directive::Origin(org_addr) => {
+                        if *org_addr < prev_org_addr {
+                            return Err(CompilerError::OrgDirectiveNotInAscendingOrder(*org_addr));
+                        }
+
+                        prev_org_addr = *org_addr;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn resolve_label_to_addr(
@@ -68,11 +91,7 @@ impl Compiler {
             if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
                 match ins.addr_mode {
                     AddressingMode::Absolute => {
-                        let address = (absolute_offset_in_program as u16)
-                            .checked_add(self.program_offset)
-                            .expect("Overflow error"); // TODO: Return compiler error saying that
-                                                       // the label is too far away from the current address
-                        ins.operand = Operand::Absolute(address);
+                        ins.operand = Operand::Absolute(absolute_offset_in_program as u16);
                     }
                     AddressingMode::Relative => {
                         let offset_addr = (absolute_offset_in_program as u16)
@@ -170,6 +189,8 @@ impl Compiler {
     /// This pass resolves labels and constants and verifies that all symbols are valid.
     #[tracing::instrument]
     fn pass_1(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
+        Compiler::verify_org_directives(ast)?;
+
         // We need to resolve constants before the label are resolved.
         // This is due to the fact constants alter memory offsets which labels are dependent on.
         symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
@@ -202,7 +223,7 @@ impl Compiler {
             Operand::ZeroPage(address) => vec![address],
             Operand::Relative(offset) => vec![offset as u8],
             Operand::Implied => vec![],
-            // TODO: Return compiler errors
+            // TODO: Return compiler crash
             Operand::Label(_) => panic!("Label should have been resolved to a relative offset"),
             Operand::Constant(_) => panic!("Constant should have been resolved to its value"),
         });
@@ -212,21 +233,41 @@ impl Compiler {
 
     /// Pass 2 of the compiler.
     ///
-    /// This pass generates machine code from the AST. The AST is assumed to have been resolved
-    /// and all labels and constants have been replaced with their respective addresses and
-    /// values.
+    /// This pass generates machine code from the AST.
+    /// The AST is assumed to have been resolved and all labels and constants used by different
+    /// instructions have been replaced with their respective addresses and values.
     #[tracing::instrument]
     fn pass_2(&mut self, ast: &mut AST) -> Result<Vec<u8>, CompilerError> {
-        ast.iter()
-            .filter_map(|node| match node {
-                Node::Instruction(ins) => Some(ins),
-                _ => None,
-            })
-            .try_fold(Vec::new(), |mut acc, ins| {
-                let bytes = Compiler::instruction_to_bytes(ins)?;
-                acc.extend(bytes);
-                Ok(acc)
-            })
+        let mut bytes = vec![];
+        for node in ast.iter() {
+            match node {
+                Node::Instruction(ins) => {
+                    let ins_bytes = Compiler::instruction_to_bytes(ins)?;
+                    bytes.extend(ins_bytes);
+                }
+                Node::Directive(directive) => match directive {
+                    Directive::Origin(org_addr) => {
+                        // The .org directive should be possible to specify the address and the
+                        // compiler should then insert padding bytes to fill the gap between the
+                        // current address and the address specified in the .org directive.
+                        // The current implementation assumes that the .org directives are
+                        // specified in ascending order.
+                        //
+                        // Here we insert padding bytes to fill the gap between the current
+                        // address and the address specified in the .org directive.
+
+                        // TODO: Warn about overlapping org directives, i.e. the address of the
+                        // current org directive does not overlap with the block of code generated
+                        // by the previous org directive.
+
+                        bytes.resize(*org_addr as usize, 0x00);
+                    }
+                },
+                _ => (),
+            }
+        }
+
+        Ok(bytes)
     }
 
     /// Compile the AST to machine code.
@@ -394,79 +435,19 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_program_offset() -> Result<(), CompilerError> {
-        let ast = vec![
-            Node::new_instruction(
-                Mnemonic::LDX,
-                AddressingMode::Immediate,
-                Operand::Immediate(0x08),
-            ),
-            Node::Label("loop".to_string()),
-            Node::new_instruction(
-                Mnemonic::LDA,
-                AddressingMode::Immediate,
-                Operand::Immediate(0x01),
-            ),
-            Node::new_instruction(
-                Mnemonic::JMP,
-                AddressingMode::Absolute,
-                Operand::Label("end".to_string()),
-            ),
-            Node::new_instruction(
-                Mnemonic::STA,
-                AddressingMode::Absolute,
-                Operand::Absolute(0x0200),
-            ),
-            Node::new_instruction(
-                Mnemonic::BNE,
-                AddressingMode::Relative,
-                Operand::Label("loop".to_string()),
-            ),
-            Node::Label("end".to_string()),
-            Node::new_instruction(Mnemonic::BRK, AddressingMode::Implied, Operand::Implied),
-        ];
-
-        let tests = vec![
-            (
-                0x0000,
-                vec![
-                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
-                    0x0C, 0x00, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
-                    /* BRK */ 0x00,
-                ],
-            ),
-            (
-                0x0600,
-                vec![
-                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
-                    0x0C, 0x06, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
-                    /* BRK */ 0x00,
-                ],
-            ),
-            (
-                0x8000,
-                vec![
-                    /* LDX */ 0xA2, 0x08, /* LDA */ 0xA9, 0x01, /* JMP */ 0x4C,
-                    0x0C, 0x80, /* STA */ 0x8D, 0x00, 0x02, /* BNE */ 0xD0, 0xF6,
-                    /* BRK */ 0x00,
-                ],
-            ),
-        ];
-
-        for (program_offset, expected) in tests {
-            let mut compiler = Compiler::new(program_offset);
-            let bytes = compiler.compile(ast.clone())?;
-            assert_eq!(bytes, expected);
-        }
-
-        Ok(())
-    }
+    // TODO: Add test for .org directive
 
     #[test]
     fn test_compile_errors() {
         let tests = vec![
-            // TODO
+            // Test ascending order of .org directives
+            (
+                vec![
+                    Node::Directive(Directive::Origin(0x0200)),
+                    Node::Directive(Directive::Origin(0x0100)),
+                ],
+                CompilerError::OrgDirectiveNotInAscendingOrder(0x0100),
+            ),
         ];
 
         for (ast, expected) in tests {

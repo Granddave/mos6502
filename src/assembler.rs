@@ -28,12 +28,13 @@ pub enum AssemblerError {
 
 /// Utility function for generating machine code from an assembly program.
 #[tracing::instrument]
-pub fn compile_code(input: &str, program_start: u16) -> Result<Vec<u8>, AssemblerError> {
+pub fn compile_code(input: &str, _program_start: u16) -> Result<Vec<u8>, AssemblerError> {
+    // TODO: Remove _program_start
     let mut lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(&mut lexer)?;
     let ast = parser.parse_program()?;
 
-    let mut compiler = compiler::Compiler::new(program_start);
+    let mut compiler = compiler::Compiler::new();
     let program = compiler.compile(ast)?;
 
     Ok(program)
