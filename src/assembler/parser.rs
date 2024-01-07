@@ -414,6 +414,32 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // (u16) or - absolute indirect where u16 is a word or a constant
+    #[tracing::instrument]
+    fn parse_indirect_absolute(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
+        // Absolute indirect, i.e. ($BEEF)
+        if let Some(word) = self.try_parse_hex_u16() {
+            // Hex
+            self.next_token()?; // Consume the closing parenthesis
+            Ok((AddressingMode::Indirect, Operand::Absolute(word)))
+        } else if let Some(word) = self.try_parse_binary_u16() {
+            // Binary
+            self.next_token()?; // Consume the closing parenthesis
+            Ok((AddressingMode::Indirect, Operand::Absolute(word)))
+        } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
+            // Decimal
+            self.next_token()?; // Consume the closing parenthesis
+            Ok((AddressingMode::Indirect, Operand::Absolute(word)))
+        } else if self.current_token_is(TokenType::Identifier) {
+            // Constant
+            let identifier = self.current_token.literal.clone();
+            self.next_token()?; // Consume the identifier
+            Ok((AddressingMode::Indirect, Operand::Constant(identifier)))
+        } else {
+            Err(invalid_token!(self, "invalid indirect operand"))
+        }
+    }
+
     // (u8,X) or (u8),Y - indirect indexed where u8 is a byte or a constant
     // or
     // (u16) or - absolute indirect where u16 is a word or a constant
@@ -424,27 +450,7 @@ impl<'a> Parser<'a> {
         if let Some(indirect_indexed) = self.try_parse_indirect_indexed()? {
             Ok(indirect_indexed)
         } else {
-            // Absolute indirect, i.e. ($BEEF)
-            if let Some(word) = self.try_parse_hex_u16() {
-                // Hex
-                self.next_token()?; // Consume the closing parenthesis
-                Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-            } else if let Some(word) = self.try_parse_binary_u16() {
-                // Binary
-                self.next_token()?; // Consume the closing parenthesis
-                Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-            } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
-                // Decimal
-                self.next_token()?; // Consume the closing parenthesis
-                Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-            } else if self.current_token_is(TokenType::Identifier) {
-                // Constant
-                let identifier = self.current_token.literal.clone();
-                self.next_token()?; // Consume the identifier
-                Ok((AddressingMode::Indirect, Operand::Constant(identifier)))
-            } else {
-                Err(invalid_token!(self, "invalid indirect operand"))
-            }
+            self.parse_indirect_absolute()
         }
     }
 
@@ -552,7 +558,7 @@ impl<'a> Parser<'a> {
             } else if let Some(word) = self.try_parse_hex_u16() {
                 Ok(Constant::new_word(identifier, word))
             } else {
-                Err(invalid_token!(self, "expected hex constant"))
+                Err(invalid_token!(self, "expected hex literal"))
             }
         } else if self.current_token_is(TokenType::Binary) {
             if let Some(byte) = self.try_parse_binary_u8() {
@@ -560,7 +566,7 @@ impl<'a> Parser<'a> {
             } else if let Some(word) = self.try_parse_binary_u16() {
                 Ok(Constant::new_word(identifier, word))
             } else {
-                Err(invalid_token!(self, "expected hex constant"))
+                Err(invalid_token!(self, "expected binary literal"))
             }
         } else if self.current_token_is(TokenType::Decimal) {
             if let Ok(byte) = self.current_token.literal.parse::<u8>() {
@@ -568,12 +574,12 @@ impl<'a> Parser<'a> {
             } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
                 Ok(Constant::new_word(identifier, word))
             } else {
-                Err(invalid_token!(self, "expected decimal constant"))
+                Err(invalid_token!(self, "expected decimal literal"))
             }
         } else {
             Err(invalid_token!(
                 self,
-                "constant expression, expected hex, binary or decimal"
+                "integer literal, expected hex, binary or decimal"
             ))
         }
     }
@@ -1178,8 +1184,6 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let mut parser = Parser::new(&mut lexer)?;
-            // eprintln!("-----");
-            // eprintln!("input: \n\n{}\n", input);
             assert_eq!(parser.parse_program()?, expected);
         }
         Ok(())
