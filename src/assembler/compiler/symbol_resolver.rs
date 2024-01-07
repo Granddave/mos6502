@@ -48,64 +48,62 @@ impl SymbolTable {
     pub fn find_symbol(&self, name: &str) -> Option<&Symbol> {
         self.symbols.iter().find(|symbol| symbol.name == name)
     }
+
+    #[tracing::instrument]
+    pub fn new_symbol(&mut self, symbol: Symbol) -> Result<(), CompilerError> {
+        if self.find_symbol(&symbol.name).is_some() {
+            return Err(CompilerError::SymbolAlreadyDefined(symbol.name));
+        }
+        self.symbols.push(symbol);
+        Ok(())
+    }
 }
 
 /// Resolve labels in the AST to the symbol table.
 #[tracing::instrument]
-pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) {
+pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CompilerError> {
     let mut current_addr = 0;
 
-    ast.iter().for_each(|node| match node {
-        Node::Instruction(ins) => {
-            current_addr += ins.size();
+    for node in ast.iter() {
+        match node {
+            Node::Instruction(ins) => {
+                current_addr += ins.size();
+            }
+            Node::Label(label) => symbol_table.new_symbol(Symbol {
+                // TODO: Refactor out to helper function that also checks if label is already defined
+                name: label.clone(),
+                symbol: SymbolType::Label(current_addr),
+            })?,
+            Node::Directive(directive) => match directive {
+                Directive::Origin(org_addr) => current_addr = *org_addr as usize,
+            },
+            _ => (),
         }
-        Node::Label(label) => symbol_table.symbols.push(Symbol {
-            // TODO: Refactor out to helper function that also checks if label is already defined
-            name: label.clone(),
-            symbol: SymbolType::Label(current_addr),
-        }),
-        Node::Directive(directive) => match directive {
-            Directive::Origin(org_addr) => current_addr = *org_addr as usize,
-        },
-        _ => (),
-    })
+    }
+
+    Ok(())
 }
 
 /// Resolve constants in the AST to the symbol table.
 #[tracing::instrument]
-pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) {
-    ast.iter().for_each(|node| {
+pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CompilerError> {
+    for node in ast.iter() {
         if let Node::Constant(constant) = node {
-            symbol_table.symbols.push(Symbol {
+            symbol_table.new_symbol(Symbol {
                 // TODO: Refactor out to helper function that also checks if constant is already defined
                 name: constant.identifier.clone(),
                 symbol: match constant.value {
                     ConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
                     ConstantValue::Word(word) => SymbolType::ConstantWord(word),
                 },
-            });
-        }
-    })
-}
-
-/// Verify that
-///   - no symbol is defined multiple times
-///   - all symbols used in the AST are defined
-#[tracing::instrument]
-pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CompilerError> {
-    // Verify that no symbol is defined multiple times
-    for outer in &symbol_table.symbols {
-        let mut count = 0;
-        for inner in &symbol_table.symbols {
-            if inner.name == outer.name {
-                count += 1;
-            }
-            if count > 1 {
-                return Err(CompilerError::SymbolAlreadyDefined(inner.name.clone()));
-            }
+            })?;
         }
     }
+    Ok(())
+}
 
+#[tracing::instrument]
+pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CompilerError> {
     // Verify that all symbols used in the AST are defined
     for node in ast {
         if let Node::Instruction(ins) = node {
@@ -191,12 +189,12 @@ mod tests {
 
     // ** Happy path cases **
     #[test]
-    fn test_resolve_symbols() {
+    fn test_resolve_symbols() -> Result<(), CompilerError> {
         let mut symbol_table = SymbolTable::new();
         let ast = example_ast();
 
-        resolve_labels(&ast, &mut symbol_table);
-        resolve_constants(&ast, &mut symbol_table);
+        resolve_labels(&ast, &mut symbol_table)?;
+        resolve_constants(&ast, &mut symbol_table)?;
         let res = verify_symbols(&ast, &mut symbol_table);
         assert!(res.is_ok());
         assert_eq!(symbol_table.symbols.len(), 4);
@@ -220,12 +218,14 @@ mod tests {
             symbol_table.symbols[3].symbol,
             SymbolType::ConstantWord(0x1234)
         );
+
+        Ok(())
     }
 
     // ** Error cases **
     // Undefined symbols
     #[test]
-    fn test_undefined_label() {
+    fn test_undefined_label() -> Result<(), CompilerError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![Node::new_instruction(
             Mnemonic::BNE,
@@ -233,16 +233,17 @@ mod tests {
             Operand::Label("undefined".to_string()),
         )];
 
-        resolve_labels(&ast, &mut symbol_table);
+        resolve_labels(&ast, &mut symbol_table)?;
         let res = verify_symbols(&ast, &mut symbol_table);
         assert_eq!(
             res,
             Err(CompilerError::UndefinedSymbol("undefined".to_string()))
         );
+        Ok(())
     }
 
     #[test]
-    fn test_undefined_constant() {
+    fn test_undefined_constant() -> Result<(), CompilerError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![Node::new_instruction(
             Mnemonic::LDX,
@@ -250,41 +251,44 @@ mod tests {
             Operand::Constant("zero".to_string()),
         )];
 
-        resolve_constants(&ast, &mut symbol_table);
+        resolve_constants(&ast, &mut symbol_table)?;
         let res = verify_symbols(&ast, &mut symbol_table);
         assert_eq!(res, Err(CompilerError::UndefinedSymbol("zero".to_string())));
+
+        Ok(())
     }
 
     // Double definitions
     #[test]
-    fn test_double_label_definition() {
+    fn test_double_label_definition() -> Result<(), CompilerError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
             Node::Label("label".to_string()),
+            Node::Label("some_other".to_string()),
             Node::Label("label".to_string()),
         ];
 
-        resolve_labels(&ast, &mut symbol_table);
-        let res = verify_symbols(&ast, &mut symbol_table);
         assert_eq!(
-            res,
+            resolve_labels(&ast, &mut symbol_table),
             Err(CompilerError::SymbolAlreadyDefined("label".to_string()))
         );
+        Ok(())
     }
 
     #[test]
-    fn test_double_constant_definition() {
+    fn test_double_constant_definition() -> Result<(), CompilerError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
             Node::Constant(Constant::new_byte("my_byte".to_string(), 0x12)),
-            Node::Constant(Constant::new_byte("my_byte".to_string(), 0x12)),
+            Node::Constant(Constant::new_byte("my_word".to_string(), 0x12)),
+            Node::Constant(Constant::new_byte("my_byte".to_string(), 0x34)),
         ];
 
-        resolve_constants(&ast, &mut symbol_table);
-        let res = verify_symbols(&ast, &mut symbol_table);
         assert_eq!(
-            res,
+            resolve_constants(&ast, &mut symbol_table),
             Err(CompilerError::SymbolAlreadyDefined("my_byte".to_string()))
         );
+
+        Ok(())
     }
 }

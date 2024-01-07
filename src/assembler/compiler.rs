@@ -193,10 +193,10 @@ impl Compiler {
 
         // We need to resolve constants before the label are resolved.
         // This is due to the fact constants alter memory offsets which labels are dependent on.
-        symbol_resolver::resolve_constants(ast, &mut self.symbol_table);
+        symbol_resolver::resolve_constants(ast, &mut self.symbol_table)?;
         self.resolve_constants_to_values(ast)?;
 
-        symbol_resolver::resolve_labels(ast, &mut self.symbol_table);
+        symbol_resolver::resolve_labels(ast, &mut self.symbol_table)?;
         self.resolve_labels_to_addr(ast)?;
 
         // Verify that all symbols are valid before proceeding to the next pass
