@@ -11,8 +11,8 @@ pub mod tui;
 /// Runs the emulator with the given program bytes and program start address.
 pub fn run(program_bytes: &[u8], program_start: u16) -> anyhow::Result<()> {
     let mut memory = Memory::new();
-    memory.write_word(cpu::RESET_VECTOR, program_start);
-    memory.load(program_start, program_bytes);
+    memory.write_word(cpu::RESET_VECTOR, program_start); // TODO: Include in the program
+    memory.load(0x0000, program_bytes);
     let mut cpu = Cpu::new();
     cpu.reset();
     cpu.run(&mut memory, RunOption::StopOnBreakInstruction);

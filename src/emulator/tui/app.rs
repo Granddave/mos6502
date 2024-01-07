@@ -48,19 +48,20 @@ impl App {
         // turn a Vec<Instruction> into a Vec<(usize, String)>
         // where the usize is the memory address of the instruction.
         // TODO: Refactor this into a function
-        let disassembly: Vec<(usize, String)> = disassemble_code(program)
-            .iter()
-            .scan(0, |acc, ins| {
-                let addr = *acc;
-                *acc += ins.size();
-                Some((addr, ins.clone()))
-            })
-            .map(|(addr, node)| {
-                let memory_addr = program_start as usize + addr;
-                let line = listing::generate_line(memory_addr, &node);
-                (memory_addr, line)
-            })
-            .collect();
+        let disassembly: Vec<(usize, String)> =
+            disassemble_code(&program[program_start as usize..])
+                .iter()
+                .scan(0, |acc, ins| {
+                    let addr = *acc;
+                    *acc += ins.size();
+                    Some((addr, ins.clone()))
+                })
+                .map(|(addr, node)| {
+                    let memory_addr = program_start as usize + addr;
+                    let line = listing::generate_line(memory_addr, &node);
+                    (memory_addr, line)
+                })
+                .collect();
 
         let mut app = Self {
             program: program.to_vec(),
@@ -82,8 +83,8 @@ impl App {
     pub fn reset(&mut self) {
         self.memory = Memory::new();
         self.memory
-            .write_word(cpu::RESET_VECTOR, self.program_start);
-        self.memory.load(self.program_start, &self.program);
+            .write_word(cpu::RESET_VECTOR, self.program_start); // TODO: Include in the program
+        self.memory.load(0x0000, &self.program);
 
         self.cpu = Cpu::new();
         self.cpu.reset();

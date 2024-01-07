@@ -8,28 +8,7 @@ use mos6502::{
     emulator::{self, tui},
 };
 
-fn demo() -> &'static str {
-    "
-  define zero $00
-  LDX #zero
-  LDY #$00
-firstloop:
-  TXA
-  STA $0200,Y
-  PHA
-  INX
-  INY
-  CPY #$10
-  BNE firstloop ;loop until Y is $10
-secondloop:
-  PLA
-  STA $0200,Y
-  INY
-  CPY #$20      ;loop until Y is $20
-  BNE secondloop
-"
-}
-
+// TODO: Either pass this as an argument, or check 0xfffc...?
 const PROGRAM_START: u16 = 0x8000;
 
 fn get_program_bytes() -> anyhow::Result<Vec<u8>> {
@@ -45,7 +24,7 @@ fn get_program_bytes() -> anyhow::Result<Vec<u8>> {
             return Err(anyhow::anyhow!("Unknown file type. Allowed: .bin, .asm"));
         }
     } else {
-        compile_code(demo(), PROGRAM_START).with_context(|| "Compilation failed")
+        Err(anyhow::anyhow!("No file specified. Allowed: .bin, .asm"))
     }
 }
 
