@@ -41,12 +41,12 @@ pub fn generate(program_addr: usize, ast: AST) -> String {
                 string.push_str("*\n");
                 first_double = false;
             } else if !same_as_last {
-                string.push_str(generate_line(current_address, &ins).as_str());
+                string.push_str(generate_line(current_address, ins).as_str());
             }
             current_address += ins.size();
         }
 
-        last_node = Some(&node);
+        last_node = Some(node);
     }
 
     string.clone()
