@@ -23,15 +23,30 @@ pub fn generate(program_addr: usize, ast: AST) -> String {
     let mut string = String::new();
     string.push_str(" Addr  Hexdump   Instructions\n");
     string.push_str("-----------------------------\n");
-    //                 $8000  20 06 80  JSR $8006
+    //               $8000  20 06 80  JSR $8006
 
     let mut current_address = program_addr;
+    let mut last_node: Option<&Node> = None;
+    let mut first_double = true;
     for node in &ast {
+        let same_as_last = if let Some(last_node) = last_node {
+            last_node == node
+        } else {
+            false
+        };
+
         // TODO: Add support for other AST nodes
-        if let Node::Instruction(ins) = node {
-            string.push_str(generate_line(current_address, ins).as_str());
+        if let Node::Instruction(ins) = &node {
+            if same_as_last && first_double {
+                string.push_str("*\n");
+                first_double = false;
+            } else if !same_as_last {
+                string.push_str(generate_line(current_address, &ins).as_str());
+            }
             current_address += ins.size();
         }
+
+        last_node = Some(&node);
     }
 
     string.clone()

@@ -18,7 +18,7 @@ pub fn disassemble(args: &DisassemblyArgs) -> Result<()> {
         .into_iter()
         .map(Node::Instruction)
         .collect();
-    println!("{}", listing::generate(0, ast));
+    println!("{}", listing::generate(0x0000, ast));
     Ok(())
 }
 
