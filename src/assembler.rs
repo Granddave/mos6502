@@ -1,3 +1,6 @@
+use anyhow::{Context, Result};
+use clap::Args;
+
 /// Lexes code into tokens.
 ///
 /// Converts a string into tokens. For example, the string `LDA #$10` would be
@@ -26,6 +29,13 @@ pub enum AssemblerError {
     Compile(#[from] compiler::CompilerError),
 }
 
+#[derive(Args, Debug)]
+pub struct AssemblyArgs {
+    input: String,
+    #[clap(short, value_name = "FILENAME", default_value = "a.bin")]
+    output: String,
+}
+
 /// Utility function for generating machine code from an assembly program.
 #[tracing::instrument]
 pub fn compile_code(input: &str, _program_start: u16) -> Result<Vec<u8>, AssemblerError> {
@@ -38,4 +48,14 @@ pub fn compile_code(input: &str, _program_start: u16) -> Result<Vec<u8>, Assembl
     let program = compiler.compile(ast)?;
 
     Ok(program)
+}
+
+#[tracing::instrument]
+pub fn assemble(args: &AssemblyArgs) -> Result<()> {
+    const PROGRAM_START: u16 = 0x8000;
+    let input_source =
+        std::fs::read_to_string(&args.input).with_context(|| "Unable to read file")?;
+    let bytes = compile_code(&input_source, PROGRAM_START).with_context(|| "Compilation failed")?;
+    std::fs::write(&args.output, bytes).with_context(|| "Unable to write file")?;
+    Ok(())
 }

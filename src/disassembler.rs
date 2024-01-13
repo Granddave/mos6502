@@ -1,6 +1,25 @@
-use crate::ast::{AddressingMode, Instruction, Mnemonic, Operand};
+use anyhow::{Context, Result};
+use clap::Args;
+
+use crate::ast::{AddressingMode, Instruction, Mnemonic, Node, Operand};
 
 pub mod listing;
+
+#[derive(Args, Debug)]
+pub struct DisassemblyArgs {
+    input: String,
+}
+
+#[tracing::instrument]
+pub fn disassemble(args: &DisassemblyArgs) -> Result<()> {
+    let bytes = std::fs::read(&args.input).with_context(|| "Unable to read file")?;
+    let ast = disassemble_code(&bytes)
+        .into_iter()
+        .map(Node::Instruction)
+        .collect();
+    println!("{}", listing::generate(0x8000, ast));
+    Ok(())
+}
 
 #[tracing::instrument]
 fn decode_operand(input: &[u8], curr_ix: usize, addressing_mode: AddressingMode) -> Operand {
