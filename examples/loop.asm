@@ -23,3 +23,4 @@ done:
   rts               ; Return back to main
 
 exit:
+  jmp exit          ; Infinite loop
