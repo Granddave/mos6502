@@ -1,7 +1,7 @@
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::prelude::*;
 
-/// Enable tracing to chrome://tracing
+/// Enable tracing to chrome://tracing or https://ui.perfetto.dev/
 ///
 /// Make sure to store the guard in a variable in the scope to be instrumented, otherwise the trace
 /// will be disabled immediately.
