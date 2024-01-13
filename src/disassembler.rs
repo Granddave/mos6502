@@ -7,6 +7,7 @@ pub mod listing;
 
 #[derive(Args, Debug)]
 pub struct DisassemblyArgs {
+    #[clap(help = "Input file to disassemble")]
     input: String,
 }
 

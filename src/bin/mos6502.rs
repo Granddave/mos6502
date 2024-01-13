@@ -14,6 +14,10 @@ use mos6502::{
 #[command(propagate_version = true)]
 struct Cli {
     #[clap(long)]
+    #[clap(help = "Enable chrome tracing")]
+    #[clap(long_help = "Enable chrome tracing which on program exit will generate
+a json file to be opened with a chrome tracing compatible
+viewer.")]
     trace: bool,
     #[command(subcommand)]
     command: Command,
@@ -21,8 +25,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[clap(about = "Assemble a program")]
+    #[clap(aliases = &["a", "asm"])]
     Assemble(AssemblyArgs),
+    #[clap(about = "Disassemble a binary file")]
+    #[clap(aliases = &["d", "dis"])]
     Disassemble(DisassemblyArgs),
+    #[clap(about = "Run a program in the emulator")]
+    #[clap(aliases = &["e", "emu"])]
     Emulate(EmulationArgs),
 }
 

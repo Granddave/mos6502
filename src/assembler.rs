@@ -31,7 +31,10 @@ pub enum AssemblerError {
 
 #[derive(Args, Debug)]
 pub struct AssemblyArgs {
+    #[clap(help = "Input file")]
     input: String,
+    #[clap(help = "Output file")]
+    #[clap(long_help = "Output file.")]
     #[clap(short, value_name = "FILENAME", default_value = "a.bin")]
     output: String,
 }
