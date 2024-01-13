@@ -36,3 +36,6 @@ pub mod emulator;
 
 /// Hexdump utility
 pub mod hexdump;
+
+/// Instrumentation utilities
+pub mod instrumentation;

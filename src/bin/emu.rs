@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
 
-use tracing_chrome::ChromeLayerBuilder;
-use tracing_subscriber::prelude::*;
-
 use mos6502::{
     assembler::compile_code,
     emulator::{self, tui},
@@ -29,8 +26,7 @@ fn get_program_bytes() -> anyhow::Result<Vec<u8>> {
 }
 
 fn main() -> Result<()> {
-    let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
-    tracing_subscriber::registry().with(chrome_layer).init();
+    let _trace_guard = mos6502::instrumentation::trace();
 
     let program_bytes = get_program_bytes()?;
 
