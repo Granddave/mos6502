@@ -21,7 +21,7 @@ fn test_loop_program() {
     memory.write_word(cpu::RESET_VECTOR, program_start); // TODO: Include in the program
 
     cpu.reset();
-    cpu.run(&mut memory, RunOption::StopOnBreakInstruction);
+    cpu.run(&mut memory, RunOption::UntilCycles(200));
 
     assert_eq!(memory.read_byte(0x0000), 0x0a);
 }
