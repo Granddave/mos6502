@@ -6,17 +6,35 @@ This is a toy project where I've created an emulator, assembler and a disassembl
 
 ![Screenshot of TUI emulator](resources/screenshot.png)
 
+```sh
+$ ./mos6502
+Usage: mos6502 [OPTIONS] <COMMAND>
+
+Commands:
+  assemble     Assemble a program
+  disassemble  Disassemble a binary file
+  emulate      Run a program in the emulator
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --trace    Enable chrome tracing
+  -h, --help     Print help (see more with '--help')
+  -V, --version  Print version
+```
+
 ## Assembling
 
 ### Example program
 
 The assembler supports the syntax found at Nick Morgan's [Easy6502](https://skilldrick.github.io/easy6502/) which looks something like the program below.
 
-Here's a program which increments memory address 0x00 ten times.
+Here's a program which increments memory address `0x00` ten times.
 
 ```asm
 define counter $00  ; Address of counter
 define max 10       ; Num of times to loop
+
+.org $8000
 
 main:
   jsr init          ; Initialize counter
@@ -38,61 +56,61 @@ done:
   rts               ; Return back to main
 
 exit:
+  jmp exit          ; Infinite loop
 ```
 
-To assemble the program into machine code we can run it through the `asm` binary:
+To assemble the program into machine code we can run it through the assembler:
 
 ```bash
-$ cargo run -r --bin asm -- examples/loop.asm
+$ cargo run -r -- assemble examples/loop.asm -o loop.bin
+```
+
+
+## Disassembling
+
+The disassembler can parse the assembled binary and list the instructions in the program.
+
+```bash
+$ cargo run -r -- disassemble loop.bin
    Compiling mos6502 v0.1.0 (/home/david/Dev/mos6502)
-    Finished release [optimized] target(s) in 0.37s
-     Running `target/release/asm examples/loop.asm`
-
-8000: 20 09 80 20 0e 80 4c 1a 80 a9 00 85 00 60 a5 00
-8010: c9 0a f0 05 e6 00 4c 0e 80 60
-```
-
-The program is assembled to a binary (`a.bin`) and its contents are shown.
-
-
-### Disassembling
-
-The disassembler `disasm` can parse the assembled binary and list the instructions in the program.
-
-```bash
-$ cargo run -r --bin disasm -- a.bin
-    Finished release [optimized] target(s) in 0.01s
-     Running `target/release/disasm a.bin`
+    Finished release [optimized] target(s) in 0.07s
+     Running `target/release/mos6502 disassemble loop.bin`
  Addr  Hexdump   Instructions
 -----------------------------
-$8000  20 09 80  JSR $8009
-$8003  20 0E 80  JSR $800E
-$8006  4C 1A 80  JMP $801A
-$8009  A9 00     LDA #$00
-$800B  85 00     STA $00
-$800D  60        RTS
-$800E  A5 00     LDA $00
-$8010  C9 0A     CMP #$0A
-$8012  F0 05     BEQ $05
-$8014  E6 00     INC $00
-$8016  4C 0E 80  JMP $800E
-$8019  60        RTS
+0x0000  00        BRK
+*
+0x8000  20 09 80  JSR $8009
+0x8003  20 0e 80  JSR $800E
+0x8006  4c 1a 80  JMP $801A
+0x8009  a9 00     LDA #$00
+0x800b  85 00     STA $00
+0x800d  60        RTS
+0x800e  a5 00     LDA $00
+0x8010  c9 0a     CMP #$0A
+0x8012  f0 05     BEQ $05
+0x8014  e6 00     INC $00
+0x8016  4c 0e 80  JMP $800E
+0x8019  60        RTS
+0x801a  4c 1a 80  JMP $801A
 ```
 
 
-### Emulating
+## Emulation
 
-To run the assembled program we can invoke the emulator, `emu`. By providing the `--tui` flag a graphical interface is opened (See screenshot up above).
+To run the assembled program we can invoke the emulator command.
+By default a graphical interface is opened (See screenshot up above).
 
 ```bash
-$ cargo run -r --bin emu -- a.bin --tui
+$ cargo run -r -- emulate loop.bin
 ```
 
-If the file passed to `emu` is a file with assembly code, the program will be assembled and run automatically.
+If the file passed to the emulator is a file with assembly code, the program will be assembled and run automatically.
 
 
 ## Supported assembler syntax
 
+- Instructions: `JSR main`
+- Comments: `; A comment`
 - Literals (8 bit bytes and 16 bit words)
     - Hex: `$ff`
     - Binary: `%1101`
@@ -117,8 +135,6 @@ If the file passed to `emu` is a file with assembly code, the program will be as
 - **TUI**
     - Load file with `l`
     - Centered disassembler view
-- **CLI**
-    - Better argparsing
 
 
 ## References
