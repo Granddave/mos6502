@@ -19,14 +19,14 @@ pub mod lexer;
 pub mod parser;
 
 /// Generates machine code from an AST.
-pub mod compiler;
+pub mod codegen;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AssemblerError {
     #[error("Parser error: {0}")]
     Parse(#[from] parser::ParseError),
-    #[error("Compiler error: {0}")]
-    Compile(#[from] compiler::CompilerError),
+    #[error("Code generation error: {0}")]
+    CodeGen(#[from] codegen::CodeGenError),
 }
 
 #[derive(Args, Debug)]
@@ -41,14 +41,14 @@ pub struct AssemblyArgs {
 
 /// Utility function for generating machine code from an assembly program.
 #[tracing::instrument]
-pub fn compile_code(input: &str, _program_start: u16) -> Result<Vec<u8>, AssemblerError> {
+pub fn assemble_code(input: &str, _program_start: u16) -> Result<Vec<u8>, AssemblerError> {
     // TODO: Remove _program_start
     let mut lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(&mut lexer)?;
     let ast = parser.parse_program()?;
 
-    let mut compiler = compiler::Compiler::new();
-    let program = compiler.compile(ast)?;
+    let mut generator = codegen::Generator::new();
+    let program = generator.generate(ast)?;
 
     Ok(program)
 }
@@ -58,7 +58,8 @@ pub fn assemble(args: &AssemblyArgs) -> Result<()> {
     const PROGRAM_START: u16 = 0x8000;
     let input_source =
         std::fs::read_to_string(&args.input).with_context(|| "Unable to read file")?;
-    let bytes = compile_code(&input_source, PROGRAM_START).with_context(|| "Compilation failed")?;
+    let bytes =
+        assemble_code(&input_source, PROGRAM_START).with_context(|| "Compilation failed")?;
     std::fs::write(&args.output, bytes).with_context(|| "Unable to write file")?;
     Ok(())
 }

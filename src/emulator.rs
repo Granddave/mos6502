@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 
 use crate::{
-    assembler::compile_code,
+    assembler::assemble_code,
     emulator::{
         cpu::{Cpu, RunOption},
         memory::{Bus, Memory},
@@ -51,7 +51,7 @@ pub fn emulate(args: &EmulationArgs) -> Result<()> {
         // Read assembly file
         let input_source =
             std::fs::read_to_string(&args.input).with_context(|| "Unable to read file")?;
-        compile_code(&input_source, PROGRAM_START).with_context(|| "Compilation failed")?
+        assemble_code(&input_source, PROGRAM_START).with_context(|| "Compilation failed")?
     } else {
         return Err(anyhow::anyhow!("Unknown file type. Allowed: .bin, .asm"));
     };

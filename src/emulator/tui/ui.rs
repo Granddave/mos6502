@@ -252,6 +252,7 @@ fn render_bottom_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
             "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
             "Press `s` to step and `c` to run continuously until BRK instruction".into(),
             "Press `r` to reset the CPU and memory".into(),
+            // TODO: Add more instructions
         ])
         .style(Style::default().fg(Color::Yellow).dim())
         .alignment(Alignment::Left),

@@ -1,5 +1,5 @@
 use crate::{
-    assembler::compiler::Compiler,
+    assembler::codegen::Generator,
     ast::{Instruction, Node, AST},
 };
 
@@ -8,7 +8,7 @@ use crate::{
 /// E.g. `$8000  20 06 80  JSR $8006`
 #[tracing::instrument]
 pub fn generate_line(addr: usize, ins: &Instruction) -> String {
-    let bytes_str = Compiler::instruction_to_bytes(ins)
+    let bytes_str = Generator::instruction_to_bytes(ins)
         .expect("Failed to convert instruction to bytes") // TODO: Return result
         .iter()
         .map(|b| format!("{:02x}", b))

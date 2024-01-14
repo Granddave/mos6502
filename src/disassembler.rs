@@ -57,7 +57,7 @@ fn decode_operand(input: &[u8], curr_ix: usize, addressing_mode: AddressingMode)
 
 #[tracing::instrument]
 fn decode_opcode(opcode: u8) -> (Mnemonic, AddressingMode) {
-    crate::assembler::compiler::opcode::OPCODE_MAPPING
+    crate::assembler::codegen::opcode::OPCODE_MAPPING
         .find_instruction(opcode)
         .unwrap_or_else(|| panic!("Invalid opcode: '{:#04x}'", opcode))
 }

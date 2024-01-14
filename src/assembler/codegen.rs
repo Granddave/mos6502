@@ -1,6 +1,6 @@
 use self::symbol_resolver::{SymbolTable, SymbolType};
 use crate::{
-    assembler::compiler::opcode::OPCODE_MAPPING,
+    assembler::codegen::opcode::OPCODE_MAPPING,
     ast::{AddressingMode, Directive, Instruction, Node, Operand, AST},
 };
 
@@ -13,7 +13,7 @@ pub mod opcode;
 mod symbol_resolver;
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub enum CompilerError {
+pub enum CodeGenError {
     #[error("Symbol not found: {0}")]
     SymbolNotFound(String),
     #[error("Symbol already defined: {0}")]
@@ -32,29 +32,29 @@ pub enum CompilerError {
     OrgDirectiveNotInAscendingOrder(u16),
 }
 
-/// Compiler for the 6502 CPU.
+/// Code generator for the 6502 CPU.
 ///
 /// The compiler compiles the [AST] into machine code.
 #[derive(Debug)]
-pub struct Compiler {
+pub struct Generator {
     symbol_table: SymbolTable,
 }
 
-impl Default for Compiler {
-    fn default() -> Compiler {
-        Compiler::new()
+impl Default for Generator {
+    fn default() -> Generator {
+        Generator::new()
     }
 }
 
-impl Compiler {
+impl Generator {
     #[tracing::instrument]
-    pub fn new() -> Compiler {
-        Compiler {
+    pub fn new() -> Generator {
+        Generator {
             symbol_table: SymbolTable::new(),
         }
     }
 
-    fn verify_org_directives(ast: &mut AST) -> Result<(), CompilerError> {
+    fn verify_org_directives(ast: &mut AST) -> Result<(), CodeGenError> {
         // The address must be within the range 0x0000-0xffff does not need to be verified
         // since the address is stored in a u16.
 
@@ -65,7 +65,7 @@ impl Compiler {
                 match directive {
                     Directive::Origin(org_addr) => {
                         if *org_addr < prev_org_addr {
-                            return Err(CompilerError::OrgDirectiveNotInAscendingOrder(*org_addr));
+                            return Err(CodeGenError::OrgDirectiveNotInAscendingOrder(*org_addr));
                         }
 
                         prev_org_addr = *org_addr;
@@ -81,11 +81,11 @@ impl Compiler {
         &mut self,
         ins: &mut Instruction,
         current_addr: usize,
-    ) -> Result<(), CompilerError> {
+    ) -> Result<(), CodeGenError> {
         if let Operand::Label(label_operand) = &ins.operand {
             let label_symbol = match self.symbol_table.find_symbol(label_operand) {
                 Some(symbol) => symbol,
-                None => return Err(CompilerError::SymbolNotFound(label_operand.clone())),
+                None => return Err(CodeGenError::SymbolNotFound(label_operand.clone())),
             };
 
             if let SymbolType::Label(absolute_offset_in_program) = label_symbol.symbol {
@@ -100,7 +100,7 @@ impl Compiler {
                         ins.operand = Operand::Relative(offset_addr);
                     }
                     _ => {
-                        return Err(CompilerError::InvalidAddressingMode(ins.clone()));
+                        return Err(CodeGenError::InvalidAddressingMode(ins.clone()));
                     }
                 }
             }
@@ -112,7 +112,7 @@ impl Compiler {
     /// Resolve labels to absolute and relative addresses. This is done by looking up the label in
     /// the symbol table and replacing the label with the address of the label.
     #[tracing::instrument]
-    fn resolve_labels_to_addr(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
+    fn resolve_labels_to_addr(&mut self, ast: &mut AST) -> Result<(), CodeGenError> {
         let mut current_addr = 0;
 
         for ins in ast.iter_mut().filter_map(|node| node.get_instruction()) {
@@ -130,13 +130,13 @@ impl Compiler {
     }
 
     #[tracing::instrument]
-    fn resolve_constants_to_values(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
+    fn resolve_constants_to_values(&mut self, ast: &mut AST) -> Result<(), CodeGenError> {
         for ins in ast.iter_mut().filter_map(|node| node.get_instruction()) {
             if let Operand::Constant(constant) = &ins.operand {
                 let symbol = match self.symbol_table.find_symbol(constant) {
                     Some(symbol) => symbol,
                     None => {
-                        return Err(CompilerError::SymbolNotFound(constant.clone()));
+                        return Err(CodeGenError::SymbolNotFound(constant.clone()));
                     }
                 };
 
@@ -158,7 +158,7 @@ impl Compiler {
                             ins.addr_mode = AddressingMode::ZeroPage;
                         }
                         _ => {
-                            return Err(CompilerError::InvalidAddressingMode(ins.clone()));
+                            return Err(CodeGenError::InvalidAddressingMode(ins.clone()));
                         }
                     },
                     SymbolType::ConstantWord(word) => match ins.addr_mode {
@@ -169,11 +169,11 @@ impl Compiler {
                             ins.addr_mode = AddressingMode::Absolute;
                         }
                         _ => {
-                            return Err(CompilerError::InvalidAddressingMode(ins.clone()));
+                            return Err(CodeGenError::InvalidAddressingMode(ins.clone()));
                         }
                     },
                     _ => {
-                        return Err(CompilerError::InvalidSymbolTypeForConstantOperand(
+                        return Err(CodeGenError::InvalidSymbolTypeForConstantOperand(
                             ins.clone(),
                         ))
                     }
@@ -188,8 +188,8 @@ impl Compiler {
     ///
     /// This pass resolves labels and constants and verifies that all symbols are valid.
     #[tracing::instrument]
-    fn pass_1(&mut self, ast: &mut AST) -> Result<(), CompilerError> {
-        Compiler::verify_org_directives(ast)?;
+    fn pass_1(&mut self, ast: &mut AST) -> Result<(), CodeGenError> {
+        Generator::verify_org_directives(ast)?;
 
         // We need to resolve constants before the label are resolved.
         // This is due to the fact constants alter memory offsets which labels are dependent on.
@@ -207,13 +207,13 @@ impl Compiler {
 
     /// Compile a single instruction to machine code.
     #[tracing::instrument]
-    pub fn instruction_to_bytes(ins: &Instruction) -> Result<Vec<u8>, CompilerError> {
+    pub fn instruction_to_bytes(ins: &Instruction) -> Result<Vec<u8>, CodeGenError> {
         let mut bytes = vec![];
 
         bytes.push(
             match OPCODE_MAPPING.find_opcode((ins.mnemonic, ins.addr_mode)) {
                 Some(bytes) => bytes,
-                None => return Err(CompilerError::InvalidOpcode(ins.clone())),
+                None => return Err(CodeGenError::InvalidOpcode(ins.clone())),
             },
         );
 
@@ -237,12 +237,12 @@ impl Compiler {
     /// The AST is assumed to have been resolved and all labels and constants used by different
     /// instructions have been replaced with their respective addresses and values.
     #[tracing::instrument]
-    fn pass_2(&mut self, ast: &mut AST) -> Result<Vec<u8>, CompilerError> {
+    fn pass_2(&mut self, ast: &mut AST) -> Result<Vec<u8>, CodeGenError> {
         let mut bytes = vec![];
         for node in ast.iter() {
             match node {
                 Node::Instruction(ins) => {
-                    let ins_bytes = Compiler::instruction_to_bytes(ins)?;
+                    let ins_bytes = Generator::instruction_to_bytes(ins)?;
                     bytes.extend(ins_bytes);
                 }
                 Node::Directive(directive) => match directive {
@@ -276,13 +276,13 @@ impl Compiler {
     /// 1. Resolve labels and constants
     /// 2. Generate machine code
     #[tracing::instrument]
-    pub fn compile(&mut self, ast: AST) -> Result<Vec<u8>, CompilerError> {
+    pub fn generate(&mut self, ast: AST) -> Result<Vec<u8>, CodeGenError> {
         let mut ast = ast;
         self.pass_1(&mut ast)?;
         let bytes = self.pass_2(&mut ast)?;
 
         if bytes.len() > 0xffff {
-            return Err(CompilerError::ProgramOverflow);
+            return Err(CodeGenError::ProgramOverflow);
         }
 
         Ok(bytes)
@@ -298,7 +298,7 @@ mod tests {
 
     // Test that the compiler can compile single instructions
     #[test]
-    fn test_compile_ast() -> Result<(), CompilerError> {
+    fn test_compile_ast() -> Result<(), CodeGenError> {
         // TODO: Test more instructions
         let tests = vec![
             (
@@ -348,8 +348,8 @@ mod tests {
         ];
 
         for (ast, expected) in tests {
-            let mut compiler = Compiler::default();
-            let bytes = compiler.compile(ast)?;
+            let mut generator = Generator::default();
+            let bytes = generator.generate(ast)?;
             assert_eq!(bytes, expected);
         }
 
@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compile_program() -> Result<(), CompilerError> {
+    fn test_compile_program() -> Result<(), CodeGenError> {
         let tests = vec![
             // test for relative branch instructions that verifies that the compiler can correctly
             // calculate the relative offset. Both forward and backward branches are tested.
@@ -427,8 +427,8 @@ mod tests {
         ];
 
         for (ast, expected) in tests {
-            let mut compiler = Compiler::default();
-            let bytes = compiler.compile(ast)?;
+            let mut generator = Generator::default();
+            let bytes = generator.generate(ast)?;
             assert_eq!(bytes, expected);
         }
 
@@ -446,13 +446,13 @@ mod tests {
                     Node::Directive(Directive::Origin(0x0200)),
                     Node::Directive(Directive::Origin(0x0100)),
                 ],
-                CompilerError::OrgDirectiveNotInAscendingOrder(0x0100),
+                CodeGenError::OrgDirectiveNotInAscendingOrder(0x0100),
             ),
         ];
 
         for (ast, expected) in tests {
-            let mut compiler = Compiler::default();
-            let output = compiler.compile(ast);
+            let mut generator = Generator::default();
+            let output = generator.generate(ast);
             assert_eq!(output, Err(expected));
         }
     }

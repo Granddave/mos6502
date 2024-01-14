@@ -23,7 +23,7 @@ pub mod ast;
 /// The steps are:
 /// 1. **[Lexing][assembler::lexer::Lexer]** - converting a string into tokens
 /// 2. **[Parsing][assembler::parser::Parser]** - converting tokens into an AST
-/// 3. **[Compiling][assembler::compiler::Compiler]** - converting an AST into machine code in multiple passes
+/// 3. **[Compiling][assembler::codegen::Generator]** - converting an AST into machine code in multiple passes
 ///     - Pass 1: Symbol resolution - resolving labels
 ///     - Pass 2: Code generation - generating machine code
 pub mod assembler;

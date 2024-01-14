@@ -1,6 +1,6 @@
 use mos6502::emulator::cpu::RunOption;
 use mos6502::{
-    assembler::compile_code,
+    assembler::assemble_code,
     emulator::{
         cpu,
         cpu::Cpu,
@@ -13,7 +13,7 @@ fn test_loop_program() {
     let program_start = 0x8000;
 
     let source = include_str!("../examples/loop.asm");
-    let bytes = compile_code(source, 0).unwrap();
+    let bytes = assemble_code(source, 0).unwrap();
 
     let mut cpu = Cpu::new();
     let mut memory = Memory::new();

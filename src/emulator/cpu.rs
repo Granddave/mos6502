@@ -1,7 +1,7 @@
 use self::registers::{Register, Registers, Status};
 use super::memory::Memory;
 use crate::{
-    assembler::compiler::opcode::OPCODE_MAPPING,
+    assembler::codegen::opcode::OPCODE_MAPPING,
     ast::{AddressingMode, Instruction, Mnemonic, Operand},
     emulator::memory::Bus,
 };
@@ -1261,7 +1261,7 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assembler::compile_code, emulator::memory::Memory};
+    use crate::{assembler::assemble_code, emulator::memory::Memory};
 
     use pretty_assertions::assert_eq;
 
@@ -1305,7 +1305,7 @@ mod tests {
             // Arrange
             let mut cpu = Cpu::new();
             let mut memory = Memory::new();
-            let bytes = compile_code(self.code, PROGRAM_START).expect("Failed to compile code");
+            let bytes = assemble_code(self.code, PROGRAM_START).expect("Failed to compile code");
             memory.load(PROGRAM_START, &bytes);
             if let Some(init_memory_fn) = self.init_memory_fn {
                 init_memory_fn(&mut memory);
