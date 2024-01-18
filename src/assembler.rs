@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
+use self::{codegen::generate, symbols::resolve_symbols};
+
 /// Lexes code into tokens.
 ///
 /// Converts a string into tokens. For example, the string `LDA #$10` would be
@@ -18,6 +20,9 @@ pub mod lexer;
 /// Parses tokens into an AST.
 pub mod parser;
 
+/// Resolves symbols in an AST.
+pub mod symbols;
+
 /// Generates machine code from an AST.
 pub mod codegen;
 
@@ -25,6 +30,8 @@ pub mod codegen;
 pub enum AssemblerError {
     #[error("Parser error: {0}")]
     Parse(#[from] parser::ParseError),
+    #[error("Symbol resolution error: {0}")]
+    Symbol(#[from] symbols::SymbolError),
     #[error("Code generation error: {0}")]
     CodeGen(#[from] codegen::CodeGenError),
 }
@@ -43,12 +50,12 @@ pub struct AssemblyArgs {
 #[tracing::instrument]
 pub fn assemble_code(input: &str, _program_start: u16) -> Result<Vec<u8>, AssemblerError> {
     // TODO: Remove _program_start
+
     let mut lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(&mut lexer)?;
-    let ast = parser.parse_program()?;
-
-    let mut generator = codegen::Generator::new();
-    let program = generator.generate(ast)?;
+    let mut ast = parser.parse_program()?;
+    resolve_symbols(&mut ast)?;
+    let program = generate(ast)?;
 
     Ok(program)
 }

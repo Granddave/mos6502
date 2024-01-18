@@ -1,67 +1,9 @@
+use super::{Symbol, SymbolError, SymbolTable, SymbolType};
 use crate::ast::{ConstantValue, Directive, Node, Operand, AST};
 
-use std::fmt;
-
-use super::CodeGenError;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolType {
-    /// Label with an absolute offset into the program
-    Label(usize),
-    ConstantByte(u8),
-    ConstantWord(u16),
-}
-
-impl fmt::Display for SymbolType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SymbolType::Label(offset) => write!(f, "Label({:#x})", offset),
-            SymbolType::ConstantByte(byte) => write!(f, "ConstantByte({:#x})", byte),
-            SymbolType::ConstantWord(word) => write!(f, "ConstantWord({:#x})", word),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Symbol {
-    /// Name of the symbol
-    pub name: String,
-    /// Symbol type with data
-    pub symbol: SymbolType,
-}
-
-/// The symbol table is used to resolve labels and constants.
-#[derive(Debug)]
-pub struct SymbolTable {
-    pub symbols: Vec<Symbol>,
-}
-
-impl SymbolTable {
-    #[tracing::instrument]
-    pub fn new() -> SymbolTable {
-        SymbolTable {
-            symbols: Vec::new(),
-        }
-    }
-
-    #[tracing::instrument]
-    pub fn find_symbol(&self, name: &str) -> Option<&Symbol> {
-        self.symbols.iter().find(|symbol| symbol.name == name)
-    }
-
-    #[tracing::instrument]
-    pub fn new_symbol(&mut self, symbol: Symbol) -> Result<(), CodeGenError> {
-        if self.find_symbol(&symbol.name).is_some() {
-            return Err(CodeGenError::SymbolAlreadyDefined(symbol.name));
-        }
-        self.symbols.push(symbol);
-        Ok(())
-    }
-}
-
-/// Resolve labels in the AST to the symbol table.
+/// Find and add labels in the AST to the symbol table.
 #[tracing::instrument]
-pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CodeGenError> {
+pub fn index_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), SymbolError> {
     let mut current_addr = 0;
 
     for node in ast.iter() {
@@ -70,7 +12,6 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), C
                 current_addr += ins.size();
             }
             Node::Label(label) => symbol_table.new_symbol(Symbol {
-                // TODO: Refactor out to helper function that also checks if label is already defined
                 name: label.clone(),
                 symbol: SymbolType::Label(current_addr),
             })?,
@@ -84,13 +25,12 @@ pub fn resolve_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), C
     Ok(())
 }
 
-/// Resolve constants in the AST to the symbol table.
+/// Find and add constants in the AST to the symbol table.
 #[tracing::instrument]
-pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CodeGenError> {
+pub fn index_constants(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), SymbolError> {
     for node in ast.iter() {
         if let Node::Constant(constant) = node {
             symbol_table.new_symbol(Symbol {
-                // TODO: Refactor out to helper function that also checks if constant is already defined
                 name: constant.identifier.clone(),
                 symbol: match constant.value {
                     ConstantValue::Byte(byte) => SymbolType::ConstantByte(byte),
@@ -99,23 +39,26 @@ pub fn resolve_constants(ast: &AST, symbol_table: &mut SymbolTable) -> Result<()
             })?;
         }
     }
+
     Ok(())
 }
 
+/// Verify that all symbols used in the AST are defined
 #[tracing::instrument]
-pub fn verify_symbols(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), CodeGenError> {
-    // Verify that all symbols used in the AST are defined
+pub fn verify_symbols(ast: &AST, symbol_table: &SymbolTable) -> Result<(), SymbolError> {
     for node in ast {
         if let Node::Instruction(ins) = node {
             match &ins.operand {
-                Operand::Label(label_str) => match symbol_table.find_symbol(label_str) {
-                    Some(_) => (),
-                    None => return Err(CodeGenError::UndefinedSymbol(label_str.clone())),
-                },
-                Operand::Constant(constant_str) => match symbol_table.find_symbol(constant_str) {
-                    Some(_) => (),
-                    None => return Err(CodeGenError::UndefinedSymbol(constant_str.clone())),
-                },
+                Operand::Label(label_str) => {
+                    symbol_table
+                        .find_symbol(label_str)
+                        .ok_or_else(|| SymbolError::UndefinedSymbol(label_str.clone()))?;
+                }
+                Operand::Constant(constant_str) => {
+                    symbol_table
+                        .find_symbol(constant_str)
+                        .ok_or_else(|| SymbolError::UndefinedSymbol(constant_str.clone()))?;
+                }
                 _ => (),
             }
         }
@@ -189,13 +132,13 @@ mod tests {
 
     // ** Happy path cases **
     #[test]
-    fn test_resolve_symbols() -> Result<(), CodeGenError> {
+    fn test_resolve_symbols() -> Result<(), SymbolError> {
         let mut symbol_table = SymbolTable::new();
         let ast = example_ast();
 
-        resolve_labels(&ast, &mut symbol_table)?;
-        resolve_constants(&ast, &mut symbol_table)?;
-        let res = verify_symbols(&ast, &mut symbol_table);
+        index_labels(&ast, &mut symbol_table)?;
+        index_constants(&ast, &mut symbol_table)?;
+        let res = verify_symbols(&ast, &symbol_table);
         assert!(res.is_ok());
         assert_eq!(symbol_table.symbols.len(), 4);
         assert_eq!(symbol_table.symbols[0].name, "firstloop");
@@ -225,7 +168,7 @@ mod tests {
     // ** Error cases **
     // Undefined symbols
     #[test]
-    fn test_undefined_label() -> Result<(), CodeGenError> {
+    fn test_undefined_label() -> Result<(), SymbolError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![Node::new_instruction(
             Mnemonic::BNE,
@@ -233,17 +176,17 @@ mod tests {
             Operand::Label("undefined".to_string()),
         )];
 
-        resolve_labels(&ast, &mut symbol_table)?;
-        let res = verify_symbols(&ast, &mut symbol_table);
+        index_labels(&ast, &mut symbol_table)?;
+        let res = verify_symbols(&ast, &symbol_table);
         assert_eq!(
             res,
-            Err(CodeGenError::UndefinedSymbol("undefined".to_string()))
+            Err(SymbolError::UndefinedSymbol("undefined".to_string()))
         );
         Ok(())
     }
 
     #[test]
-    fn test_undefined_constant() -> Result<(), CodeGenError> {
+    fn test_undefined_constant() -> Result<(), SymbolError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![Node::new_instruction(
             Mnemonic::LDX,
@@ -251,16 +194,16 @@ mod tests {
             Operand::Constant("zero".to_string()),
         )];
 
-        resolve_constants(&ast, &mut symbol_table)?;
-        let res = verify_symbols(&ast, &mut symbol_table);
-        assert_eq!(res, Err(CodeGenError::UndefinedSymbol("zero".to_string())));
+        index_constants(&ast, &mut symbol_table)?;
+        let res = verify_symbols(&ast, &symbol_table);
+        assert_eq!(res, Err(SymbolError::UndefinedSymbol("zero".to_string())));
 
         Ok(())
     }
 
     // Double definitions
     #[test]
-    fn test_double_label_definition() -> Result<(), CodeGenError> {
+    fn test_double_label_definition() -> Result<(), SymbolError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
             Node::Label("label".to_string()),
@@ -269,14 +212,14 @@ mod tests {
         ];
 
         assert_eq!(
-            resolve_labels(&ast, &mut symbol_table),
-            Err(CodeGenError::SymbolAlreadyDefined("label".to_string()))
+            index_labels(&ast, &mut symbol_table),
+            Err(SymbolError::SymbolAlreadyDefined("label".to_string()))
         );
         Ok(())
     }
 
     #[test]
-    fn test_double_constant_definition() -> Result<(), CodeGenError> {
+    fn test_double_constant_definition() -> Result<(), SymbolError> {
         let mut symbol_table = SymbolTable::new();
         let ast = vec![
             Node::Constant(Constant::new_byte("my_byte".to_string(), 0x12)),
@@ -285,8 +228,8 @@ mod tests {
         ];
 
         assert_eq!(
-            resolve_constants(&ast, &mut symbol_table),
-            Err(CodeGenError::SymbolAlreadyDefined("my_byte".to_string()))
+            index_constants(&ast, &mut symbol_table),
+            Err(SymbolError::SymbolAlreadyDefined("my_byte".to_string()))
         );
 
         Ok(())
