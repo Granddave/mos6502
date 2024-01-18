@@ -10,7 +10,7 @@ use clap::Args;
 /// [
 ///     Token { token: TokenType::Identifier, literal: "LDA", line_number: 1, },
 ///     Token { token: TokenType::LiteralNumber, literal: "#", line_number: 1, },
-///     Token { token: TokenType::Hex, literal: "C8", line_number: 1, },
+///     Token { token: TokenType::Hex, literal: "10", line_number: 1, },
 ///     Token { token: TokenType::Eof, literal: "".to_string(), line_number: 2, },
 /// ]
 pub mod lexer;
