@@ -123,7 +123,7 @@ If the file passed to the emulator is a file with assembly code, the program wil
 
 - **Assembler**
     - dot directives
-        - `.org $8000`
+        - ~`.org $8000`~
         - `.byte 42`
         - `.word $8000`
     - `#"A"`
@@ -135,6 +135,7 @@ If the file passed to the emulator is a file with assembly code, the program wil
 - **TUI**
     - Load file with `l`
     - Centered disassembler view
+    - Contiuous run with screen update
 
 
 ## References
