@@ -37,10 +37,10 @@ enum Command {
 }
 
 pub fn trace() -> FlushGuard {
-    let (chrome_layer, _guard) = ChromeLayerBuilder::new().build();
+    let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
     tracing_subscriber::registry().with(chrome_layer).init();
 
-    _guard
+    guard
 }
 
 fn main() -> Result<()> {
