@@ -10,12 +10,14 @@
 ///
 /// For example, `LDA #$C8` is represented as:
 ///
-/// ```text
-/// Instruction::new(
+/// ```
+/// # use mos6502::ast::{Instruction, Mnemonic, AddressingMode, Operand};
+/// let instruction = Instruction::new(
 ///     Mnemonic::LDA,
 ///     AddressingMode::Immediate,
 ///     Operand::Immediate(0xC8),
-/// ),
+/// );
+/// ```
 pub mod ast;
 
 /// Transforms 6502 assembly code to machine code.
@@ -23,12 +25,28 @@ pub mod ast;
 /// The steps are:
 /// 1. **[Lexing][assembler::lexer::Lexer]** - converting a string into tokens
 /// 2. **[Parsing][assembler::parser::Parser]** - converting tokens into an AST
-/// 3. **[Compiling][assembler::codegen::Generator]** - converting an AST into machine code in multiple passes
-///     - Pass 1: Symbol resolution - resolving labels
-///     - Pass 2: Code generation - generating machine code
+/// 3. **[Symbol resolution][assembler::symbols]** - resolving symbols like constants and labels in the AST
+/// 4. **[Code generator][assembler::codegen]** - converting an AST into machine code
 pub mod assembler;
 
-/// Transforms machine code to assembly code.
+/// Transforms machine code to its AST (Abstract Syntax Tree) representation.
+///
+/// Usage:
+/// ```
+/// use mos6502::{
+///     ast::{AddressingMode, Instruction, Mnemonic, Operand},
+///     disassembler::disassemble_code,
+/// };
+///
+/// assert_eq!(
+///     disassemble_code(&[0xA9, 0xC8]),
+///     vec![Instruction::new(
+///         Mnemonic::LDA,
+///         AddressingMode::Immediate,
+///         Operand::Immediate(0xC8)
+///     )]
+/// );
+/// ```
 pub mod disassembler;
 
 /// 6502 CPU emulator
