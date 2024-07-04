@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Error, Debug)]
 pub enum ParseError {
-    #[error("Invalid token - {0}:\n{1:#?}")]
+    #[error("Invalid token - {0}:\n{1}")]
     InvalidToken(String, Token),
     #[error(transparent)]
     LexingError(#[from] LexerError),
@@ -113,11 +113,7 @@ impl<'a> Parser<'a> {
     #[tracing::instrument]
     fn parse_mnemonic(&mut self) -> Result<Mnemonic, ParseError> {
         Mnemonic::from_str(self.current_token.literal.to_uppercase().as_str()).map_err(|_| {
-            invalid_token!(
-                self,
-                "Invalid instruction mnemonic '{}'",
-                self.current_token.literal
-            )
+            invalid_token!(self, "Invalid instruction mnemonic: {}", self.current_token)
         })
     }
 

@@ -1,3 +1,5 @@
+use super::source_position::SourcePositionSpan;
+
 /// TokenType definies the types of tokens that are found in source code.
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
@@ -46,23 +48,21 @@ pub struct Token {
     /// Literal string of token, e.g. `"LDA"`, `"00"`, `":"` etc.
     pub literal: String,
     /// Line number in file where token is found
-    pub line_number: usize,
+    pub span: SourcePositionSpan,
 }
 
 impl Token {
     #[tracing::instrument]
-    pub fn new(token: TokenType, literal: &str, line_number: usize) -> Self {
+    pub fn new(token: TokenType, literal: &str, span: SourcePositionSpan) -> Self {
         Self {
             token,
             literal: literal.to_owned(),
-            line_number,
+            span,
         }
     }
-}
 
-impl ToString for Token {
     #[tracing::instrument]
-    fn to_string(&self) -> String {
+    fn literal_str(&self) -> String {
         match self.token {
             TokenType::Dot => ".".to_owned(),
             TokenType::LiteralNumber => self.literal.to_owned(),
@@ -78,5 +78,17 @@ impl ToString for Token {
             TokenType::Identifier => self.literal.to_owned(),
             TokenType::Eof => "<eof>".to_owned(),
         }
+    }
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}: {:?} '{}'",
+            self.span,
+            self.token,
+            self.literal_str()
+        )
     }
 }

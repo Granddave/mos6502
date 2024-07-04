@@ -1,13 +1,18 @@
 use thiserror::Error;
 
-use self::token::{Token, TokenType};
+use self::{
+    source_position::SourcePositionSpan,
+    token::{Token, TokenType},
+};
+use source_position::SourcePosition;
 
+pub mod source_position;
 pub mod token;
 
 #[derive(Error, Debug)]
 pub enum LexerError {
-    #[error("Unexpected character on line {0}: '{1}'")]
-    UnexpectedCharacter(usize, char),
+    #[error("Unexpected character at {0}: '{1}'")]
+    UnexpectedCharacter(SourcePosition, char),
 }
 
 /// Lexer is used to tokenize source code.
@@ -21,8 +26,8 @@ pub struct Lexer<'a> {
     read_position: usize,
     /// Current char under examination
     ch: Option<char>,
-    /// Current line number in source code
-    line_number: usize,
+    /// Current line and column number in source code
+    current_source_position: SourcePosition,
 }
 
 impl<'a> Lexer<'a> {
@@ -33,7 +38,7 @@ impl<'a> Lexer<'a> {
             position: 0,
             read_position: 0,
             ch: None,
-            line_number: 1,
+            current_source_position: SourcePosition::default(),
         };
         lexer.read_char();
         lexer
@@ -42,31 +47,21 @@ impl<'a> Lexer<'a> {
     #[tracing::instrument]
     #[inline(always)]
     fn read_char(&mut self) {
-        if self.read_position >= self.src.len() {
-            self.ch = None;
-        } else {
-            self.ch = Some(
-                self.src
-                    .chars()
-                    .nth(self.read_position)
-                    .expect("Index should be valid"),
-            );
-        }
+        self.ch = self.src.chars().nth(self.read_position);
         self.position = self.read_position;
+        self.current_source_position.increment_column();
+        if self.ch == Some('\n') {
+            self.current_source_position.increment_line();
+        }
         self.read_position += 1;
     }
 
     #[tracing::instrument]
     #[inline(always)]
     fn skip_whitespace(&mut self) {
-        while self.ch.is_some() {
-            let ch = self.ch.expect("ch should be some");
+        while let Some(ch) = self.ch {
             if !ch.is_whitespace() {
                 break;
-            }
-
-            if ch == '\n' {
-                self.line_number += 1;
             }
 
             self.read_char();
@@ -82,37 +77,66 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
-    fn read_while_condition(&mut self, condition: fn(char) -> bool) -> String {
+    fn read_while_condition(&mut self, condition: fn(char) -> bool) -> (&str, SourcePositionSpan) {
         let position = self.position;
+        let source_position = SourcePosition {
+            line: self.current_source_position.line,
+            column: self.current_source_position.column - 1,
+        };
         while self.ch.is_some() && condition(self.ch.expect("ch should be some")) {
             self.read_char();
         }
-        self.src[position..self.position].to_string()
+        (
+            &self.src[position..self.position],
+            SourcePositionSpan::new(
+                source_position,
+                SourcePosition::new(
+                    self.current_source_position.line,
+                    self.current_source_position.column - 1,
+                ),
+            ),
+        )
     }
 
     #[tracing::instrument]
-    fn read_string(&mut self) -> String {
+    fn read_one_char(&mut self) -> (&str, SourcePositionSpan) {
+        let position = self.position;
+        let source_position = SourcePosition {
+            line: self.current_source_position.line,
+            column: self.current_source_position.column - 1,
+        };
+        if self.ch.is_some() {
+            self.read_char();
+        }
+        (
+            &self.src[position..self.position],
+            SourcePositionSpan::new(
+                source_position,
+                SourcePosition::new(
+                    self.current_source_position.line,
+                    self.current_source_position.column - 1,
+                ),
+            ),
+        )
+    }
+    #[tracing::instrument]
+    fn read_string(&mut self) -> (&str, SourcePositionSpan) {
         self.read_while_condition(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_')
     }
 
     #[tracing::instrument]
-    fn read_hex(&mut self) -> String {
+    fn read_hex(&mut self) -> (&str, SourcePositionSpan) {
         self.read_while_condition(|ch| ch.is_ascii_hexdigit())
     }
 
     #[tracing::instrument]
-    fn read_binary(&mut self) -> String {
+    fn read_binary(&mut self) -> (&str, SourcePositionSpan) {
         self.read_while_condition(|ch| ch == '0' || ch == '1')
     }
 
     #[tracing::instrument]
-    fn read_decimal(&mut self) -> String {
+    fn read_decimal(&mut self) -> (&str, SourcePositionSpan) {
         self.read_while_condition(|ch| ch.is_ascii_digit())
-    }
-
-    #[tracing::instrument]
-    fn create_token(&mut self, token: TokenType, literal: &str) -> Token {
-        Token::new(token, literal, self.line_number)
     }
 
     #[tracing::instrument]
@@ -121,62 +145,81 @@ impl<'a> Lexer<'a> {
         let token = match self.ch {
             Some(ch) => match ch {
                 ';' => {
+                    // TODO: Add comments as tokens instead of skipping them
                     self.skip_comment();
                     self.next_token()?
                 }
                 '.' => {
-                    self.read_char();
-                    Some(self.create_token(TokenType::Dot, "."))
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::Dot, text, span))
                 }
                 '$' => {
-                    self.read_char();
-                    let hex = self.read_hex();
-                    Some(self.create_token(TokenType::Hex, &hex))
+                    let (_, span_1) = self.read_one_char();
+                    let (text, span_2) = self.read_hex();
+                    Some(Token::new(
+                        TokenType::Hex,
+                        text,
+                        SourcePositionSpan::new(span_1.start, span_2.end),
+                    ))
                 }
                 '%' => {
-                    self.read_char();
-                    let binary = self.read_binary();
-                    Some(self.create_token(TokenType::Binary, &binary))
+                    let (_, span_1) = self.read_one_char();
+                    let (text, span_2) = self.read_binary();
+                    Some(Token::new(
+                        TokenType::Binary,
+                        text,
+                        SourcePositionSpan::new(span_1.start, span_2.end),
+                    ))
                 }
                 '0'..='9' => {
-                    let decimal = self.read_decimal();
-                    Some(self.create_token(TokenType::Decimal, &decimal))
+                    let (text, span) = self.read_decimal();
+                    Some(Token::new(TokenType::Decimal, text, span))
                 }
                 '#' => {
-                    self.read_char();
-                    Some(self.create_token(TokenType::LiteralNumber, "#"))
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::LiteralNumber, text, span))
                 }
                 ':' => {
-                    self.read_char();
-                    Some(self.create_token(TokenType::Colon, ":"))
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::Colon, text, span))
                 }
                 ',' => {
-                    self.read_char();
-                    Some(self.create_token(TokenType::Comma, ","))
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::Comma, text, span))
                 }
                 '(' => {
-                    self.read_char();
-                    Some(self.create_token(TokenType::ParenLeft, "("))
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::ParenLeft, text, span))
                 }
                 ')' => {
-                    self.read_char();
-                    Some(self.create_token(TokenType::ParenRight, ")"))
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::ParenRight, text, span))
                 }
                 'A'..='Z' | 'a'..='z' | '_' => {
-                    let identifier = self.read_string();
-                    if identifier == "define" {
-                        Some(self.create_token(TokenType::Define, &identifier))
-                    } else if identifier == "org" {
-                        Some(self.create_token(TokenType::OrgDirective, &identifier))
+                    let (text, span) = self.read_string();
+                    if text == "define" {
+                        Some(Token::new(TokenType::Define, text, span))
+                    } else if text == "org" {
+                        Some(Token::new(TokenType::OrgDirective, text, span))
                     } else {
-                        Some(self.create_token(TokenType::Identifier, &identifier))
+                        Some(Token::new(TokenType::Identifier, text, span))
                     }
                 }
                 _ => {
-                    return Err(LexerError::UnexpectedCharacter(self.line_number, ch));
+                    return Err(LexerError::UnexpectedCharacter(
+                        SourcePosition {
+                            line: self.current_source_position.line,
+                            column: self.current_source_position.column - 1,
+                        },
+                        ch,
+                    ));
                 }
             },
-            None => Some(self.create_token(TokenType::Eof, "")),
+            None => Some(Token::new(
+                TokenType::Eof,
+                "",
+                SourcePositionSpan::new(self.current_source_position, self.current_source_position),
+            )),
         };
         Ok(token)
     }
@@ -266,22 +309,34 @@ mod tests {
                     Token {
                         token: TokenType::Identifier,
                         literal: "LDA".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 1),
+                            SourcePosition::new(1, 4),
+                        ),
                     },
                     Token {
                         token: TokenType::LiteralNumber,
                         literal: "#".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 5),
+                            SourcePosition::new(1, 6),
+                        ),
                     },
                     Token {
                         token: TokenType::Hex,
                         literal: "00".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 6),
+                            SourcePosition::new(1, 9),
+                        ),
                     },
                     Token {
                         token: TokenType::Eof,
                         literal: "".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 10),
+                            SourcePosition::new(1, 10),
+                        ),
                     },
                 ],
             ),
@@ -291,22 +346,34 @@ mod tests {
                     Token {
                         token: TokenType::Identifier,
                         literal: "LDA".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 1),
+                            SourcePosition::new(1, 4),
+                        ),
                     },
                     Token {
                         token: TokenType::LiteralNumber,
                         literal: "#".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 5),
+                            SourcePosition::new(1, 6),
+                        ),
                     },
                     Token {
                         token: TokenType::Binary,
                         literal: "01010101".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 6),
+                            SourcePosition::new(1, 15),
+                        ),
                     },
                     Token {
                         token: TokenType::Eof,
                         literal: "".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 16),
+                            SourcePosition::new(1, 16),
+                        ),
                     },
                 ],
             ),
@@ -316,22 +383,34 @@ mod tests {
                     Token {
                         token: TokenType::Identifier,
                         literal: "LDA".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 1),
+                            SourcePosition::new(1, 4),
+                        ),
                     },
                     Token {
                         token: TokenType::LiteralNumber,
                         literal: "#".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 5),
+                            SourcePosition::new(1, 6),
+                        ),
                     },
                     Token {
                         token: TokenType::Decimal,
                         literal: "255".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 6),
+                            SourcePosition::new(1, 9),
+                        ),
                     },
                     Token {
                         token: TokenType::Eof,
                         literal: "".to_string(),
-                        line_number: 1,
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 10),
+                            SourcePosition::new(1, 10),
+                        ),
                     },
                 ],
             ),
@@ -358,17 +437,23 @@ mod tests {
             Token {
                 token: TokenType::Identifier,
                 literal: "my_label".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(SourcePosition::new(1, 1), SourcePosition::new(1, 9)),
             },
             Token {
                 token: TokenType::Colon,
                 literal: ":".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 9),
+                    SourcePosition::new(1, 10),
+                ),
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 11),
+                    SourcePosition::new(1, 11),
+                ),
             },
         ];
         let mut lexer = Lexer::new(input);
@@ -386,27 +471,36 @@ mod tests {
 
     #[test]
     fn test_define() -> anyhow::Result<()> {
-        let input = "define my_constant $FE";
+        let input = "define   my_constant $FE";
         let result = vec![
             Token {
                 token: TokenType::Define,
                 literal: "define".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(SourcePosition::new(1, 1), SourcePosition::new(1, 7)),
             },
             Token {
                 token: TokenType::Identifier,
                 literal: "my_constant".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 10),
+                    SourcePosition::new(1, 21),
+                ),
             },
             Token {
                 token: TokenType::Hex,
                 literal: "FE".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 22),
+                    SourcePosition::new(1, 25),
+                ),
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 26),
+                    SourcePosition::new(1, 26),
+                ),
             },
         ];
         let mut lexer = Lexer::new(input);
@@ -431,22 +525,25 @@ LDA #$00 ; Another one
             Token {
                 token: TokenType::Identifier,
                 literal: "LDA".to_string(),
-                line_number: 2,
+                span: SourcePositionSpan::new(SourcePosition::new(2, 1), SourcePosition::new(2, 4)),
             },
             Token {
                 token: TokenType::LiteralNumber,
                 literal: "#".to_string(),
-                line_number: 2,
+                span: SourcePositionSpan::new(SourcePosition::new(2, 5), SourcePosition::new(2, 6)),
             },
             Token {
                 token: TokenType::Hex,
                 literal: "00".to_string(),
-                line_number: 2,
+                span: SourcePositionSpan::new(SourcePosition::new(2, 6), SourcePosition::new(2, 9)),
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
-                line_number: 3,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(3, 11),
+                    SourcePosition::new(3, 11),
+                ),
             },
         ];
         let mut lexer = Lexer::new(input);
@@ -469,37 +566,49 @@ LDA #$00 ; Another one
             Token {
                 token: TokenType::Identifier,
                 literal: "LDA".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(SourcePosition::new(1, 1), SourcePosition::new(1, 4)),
             },
             Token {
                 token: TokenType::ParenLeft,
                 literal: "(".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(SourcePosition::new(1, 5), SourcePosition::new(1, 6)),
             },
             Token {
                 token: TokenType::Hex,
                 literal: "D2".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(SourcePosition::new(1, 6), SourcePosition::new(1, 9)),
             },
             Token {
                 token: TokenType::Comma,
                 literal: ",".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 9),
+                    SourcePosition::new(1, 10),
+                ),
             },
             Token {
                 token: TokenType::Identifier,
                 literal: "X".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 10),
+                    SourcePosition::new(1, 11),
+                ),
             },
             Token {
                 token: TokenType::ParenRight,
                 literal: ")".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 11),
+                    SourcePosition::new(1, 12),
+                ),
             },
             Token {
                 token: TokenType::Eof,
                 literal: "".to_string(),
-                line_number: 1,
+                span: SourcePositionSpan::new(
+                    SourcePosition::new(1, 13),
+                    SourcePosition::new(1, 13),
+                ),
             },
         ];
         let mut lexer = Lexer::new(input);
