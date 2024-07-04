@@ -182,7 +182,7 @@ fn render_disassembly_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     let mut scrollbar_state = ScrollbarState::new(num_lines).position(scroll_pos);
     frame.render_stateful_widget(
         Scrollbar::default().orientation(ScrollbarOrientation::VerticalRight),
-        layout.inner(&Margin::new(1, 0)),
+        layout.inner(Margin::new(1, 0)),
         &mut scrollbar_state,
     );
 }
