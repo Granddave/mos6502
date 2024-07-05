@@ -274,23 +274,29 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let app_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Max(20),        // Registers and Stack
-            Constraint::Max(40),        // Disassembled code
-            Constraint::Percentage(20), // Memory viewer
+            Constraint::Max(20), // Registers and Stack
+            Constraint::Fill(1), // Disassembled code
+            Constraint::Max(48), // Memory viewer
         ])
         .split(main_layout[1]);
     let left_app_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Max(9),         // Registers
-            Constraint::Percentage(50), // Stack
+            Constraint::Max(9),  // Registers
+            Constraint::Fill(1), // Stack
         ])
         .split(app_layout[0]);
+    let right_app_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Max(18), // Memory viewer
+        ])
+        .split(app_layout[2]);
 
     render_top_bar(app, frame, main_layout[0]);
     render_registers_widget(app, frame, left_app_layout[0]);
     render_stack_widget(app, frame, left_app_layout[1]);
     render_disassembly_widget(app, frame, app_layout[1]);
-    render_memory_widget(app, frame, app_layout[2]);
+    render_memory_widget(app, frame, right_app_layout[0]);
     render_bottom_bar(app, frame, main_layout[2])
 }
