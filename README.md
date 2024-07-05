@@ -4,7 +4,7 @@
 
 This is a toy project where I've created an emulator, assembler and a disassembler for the 1975 8-bit MOS 6502 CPU.
 
-![Screenshot of TUI emulator](resources/screenshot.png)
+[![asciicast of TUI emulator](https://asciinema.org/a/NXcEza2NQAWhok6PgxQD3omvk.svg)](https://asciinema.org/a/NXcEza2NQAWhok6PgxQD3omvk)
 
 ```sh
 $ ./mos6502
