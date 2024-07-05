@@ -32,7 +32,7 @@ pub struct App {
     pub disassembly_frame_height: usize,
 
     pub memory_page_to_display: usize,
-    pub memory_frame_height: usize,
+    pub _memory_frame_height: usize,
 
     /// State of the CPU
     state: EmulationState,

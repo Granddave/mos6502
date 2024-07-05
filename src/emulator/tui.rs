@@ -34,8 +34,8 @@ pub fn exec(bytes: &[u8], program_start: u16) -> anyhow::Result<()> {
         match tui.events.next()? {
             Event::Tick => {}
             Event::Key(key_event) => update(&mut app, key_event),
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
+            Event::Mouse(_mouse_event) => {}
+            Event::Resize(_w, _h) => {}
         };
     }
 
