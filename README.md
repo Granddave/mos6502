@@ -17,9 +17,16 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
-      --trace    Enable chrome tracing
-  -h, --help     Print help (see more with '--help')
-  -V, --version  Print version
+      --trace
+          Enable chrome tracing which on program exit will generate
+          a json file to be opened with a chrome tracing compatible
+          viewer.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```
 
 ## Assembling
@@ -98,7 +105,7 @@ $ cargo run -r -- disassemble loop.bin
 ## Emulation
 
 To run the assembled program we can invoke the emulator command.
-By default a graphical interface is opened (See screenshot up above).
+By default a graphical interface is opened (See screencast up above).
 
 ```bash
 $ cargo run -r -- emulate loop.bin
@@ -109,14 +116,17 @@ If the file passed to the emulator is a file with assembly code, the program wil
 
 ## Supported assembler syntax
 
-- Instructions: `JSR main`
-- Comments: `; A comment`
-- Literals (8 bit bytes and 16 bit words)
-    - Hex: `$ff`
-    - Binary: `%1101`
-    - Decimal `42`
-- Labels: `main:`
-- Constants: `define max $ff`
+| Syntax type                           | Example                                    |
+|---------------------------------------|--------------------------------------------|
+| Instructions (Mnemonic with operands) | `JSR main`, `LDA $00`                      |
+| Comments                              | `; A comment`                              |
+| Hex literals                          | `$ff`, `$8000`                             |
+| Binary literals                       | `%1101`, `%10110000`                       |
+| Decimal literals                      | `42`, `4096`                               |
+| Immediate values                      | `#42`, `cmp #max`                          |
+| Labels                                | `main:`                                    |
+| Constants                             | `define max $ff`, `define screen_width 40` |
+| Org directives                        | `.org $8000`                               |
 
 
 ## Future development
