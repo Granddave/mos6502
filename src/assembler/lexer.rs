@@ -18,16 +18,19 @@ pub enum LexerError {
 /// Lexer is used to tokenize source code.
 #[derive(Debug)]
 pub struct Lexer<'a> {
+    // TODO: Add filename here?
     /// Source code to lex
     src: &'a str,
-    /// Index of current position in source code (points to current char)
-    position: usize,
-    /// Index of current reading position in source code (after current char)
-    read_position: usize,
     /// Current char under examination
     ch: Option<char>,
+    /// Index of current position in source code (points to current char)
+    current_src_index: usize,
+    /// Index of current reading position in source code (after current char)
+    next_src_index: usize,
     /// Current line and column number in source code
     current_source_position: SourcePosition,
+    /// Next line and column number in source code
+    next_source_position: SourcePosition,
 }
 
 impl<'a> Lexer<'a> {
@@ -35,10 +38,11 @@ impl<'a> Lexer<'a> {
     pub fn new(src: &'a str) -> Self {
         let mut lexer = Self {
             src,
-            position: 0,
-            read_position: 0,
             ch: None,
+            current_src_index: 0,
+            next_src_index: 0,
             current_source_position: SourcePosition::default(),
+            next_source_position: SourcePosition::default(),
         };
         lexer.read_char();
         lexer
@@ -47,13 +51,14 @@ impl<'a> Lexer<'a> {
     #[tracing::instrument]
     #[inline(always)]
     fn read_char(&mut self) {
-        self.ch = self.src.chars().nth(self.read_position);
-        self.position = self.read_position;
-        self.current_source_position.increment_column();
+        self.ch = self.src.chars().nth(self.next_src_index);
+        self.current_src_index = self.next_src_index;
+        self.current_source_position = self.next_source_position;
+        self.next_source_position.increment_column();
         if self.ch == Some('\n') {
-            self.current_source_position.increment_line();
+            self.next_source_position.increment_line();
         }
-        self.read_position += 1;
+        self.next_src_index += 1;
     }
 
     #[tracing::instrument]
@@ -77,66 +82,48 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
-    fn read_while_condition(&mut self, condition: fn(char) -> bool) -> (&str, SourcePositionSpan) {
-        let position = self.position;
-        let source_position = SourcePosition {
-            line: self.current_source_position.line,
-            column: self.current_source_position.column - 1,
-        };
+    fn read_while(&mut self, condition: fn(char) -> bool) -> (&str, SourcePositionSpan) {
+        let start_src_index = self.current_src_index;
+        let start_position = self.current_source_position;
         while self.ch.is_some() && condition(self.ch.expect("ch should be some")) {
             self.read_char();
         }
         (
-            &self.src[position..self.position],
-            SourcePositionSpan::new(
-                source_position,
-                SourcePosition::new(
-                    self.current_source_position.line,
-                    self.current_source_position.column - 1,
-                ),
-            ),
+            &self.src[start_src_index..self.current_src_index],
+            SourcePositionSpan::new(start_position, self.current_source_position),
         )
     }
 
     #[tracing::instrument]
     fn read_one_char(&mut self) -> (&str, SourcePositionSpan) {
-        let position = self.position;
-        let source_position = SourcePosition {
-            line: self.current_source_position.line,
-            column: self.current_source_position.column - 1,
-        };
+        let start_src_index = self.current_src_index;
+        let start_position = self.current_source_position;
         if self.ch.is_some() {
             self.read_char();
         }
         (
-            &self.src[position..self.position],
-            SourcePositionSpan::new(
-                source_position,
-                SourcePosition::new(
-                    self.current_source_position.line,
-                    self.current_source_position.column - 1,
-                ),
-            ),
+            &self.src[start_src_index..self.current_src_index],
+            SourcePositionSpan::new(start_position, self.current_source_position),
         )
     }
     #[tracing::instrument]
     fn read_string(&mut self) -> (&str, SourcePositionSpan) {
-        self.read_while_condition(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_')
+        self.read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_')
     }
 
     #[tracing::instrument]
     fn read_hex(&mut self) -> (&str, SourcePositionSpan) {
-        self.read_while_condition(|ch| ch.is_ascii_hexdigit())
+        self.read_while(|ch| ch.is_ascii_hexdigit())
     }
 
     #[tracing::instrument]
     fn read_binary(&mut self) -> (&str, SourcePositionSpan) {
-        self.read_while_condition(|ch| ch == '0' || ch == '1')
+        self.read_while(|ch| ch == '0' || ch == '1')
     }
 
     #[tracing::instrument]
     fn read_decimal(&mut self) -> (&str, SourcePositionSpan) {
-        self.read_while_condition(|ch| ch.is_ascii_digit())
+        self.read_while(|ch| ch.is_ascii_digit())
     }
 
     #[tracing::instrument]
@@ -207,10 +194,7 @@ impl<'a> Lexer<'a> {
                 }
                 _ => {
                     return Err(LexerError::UnexpectedCharacter(
-                        SourcePosition {
-                            line: self.current_source_position.line,
-                            column: self.current_source_position.column - 1,
-                        },
+                        self.current_source_position,
                         ch,
                     ));
                 }
@@ -334,8 +318,8 @@ mod tests {
                         token: TokenType::Eof,
                         literal: "".to_string(),
                         span: SourcePositionSpan::new(
-                            SourcePosition::new(1, 10),
-                            SourcePosition::new(1, 10),
+                            SourcePosition::new(1, 9),
+                            SourcePosition::new(1, 9),
                         ),
                     },
                 ],
@@ -371,8 +355,8 @@ mod tests {
                         token: TokenType::Eof,
                         literal: "".to_string(),
                         span: SourcePositionSpan::new(
-                            SourcePosition::new(1, 16),
-                            SourcePosition::new(1, 16),
+                            SourcePosition::new(1, 15),
+                            SourcePosition::new(1, 15),
                         ),
                     },
                 ],
@@ -408,8 +392,8 @@ mod tests {
                         token: TokenType::Eof,
                         literal: "".to_string(),
                         span: SourcePositionSpan::new(
-                            SourcePosition::new(1, 10),
-                            SourcePosition::new(1, 10),
+                            SourcePosition::new(1, 9),
+                            SourcePosition::new(1, 9),
                         ),
                     },
                 ],
@@ -451,8 +435,8 @@ mod tests {
                 token: TokenType::Eof,
                 literal: "".to_string(),
                 span: SourcePositionSpan::new(
-                    SourcePosition::new(1, 11),
-                    SourcePosition::new(1, 11),
+                    SourcePosition::new(1, 10),
+                    SourcePosition::new(1, 10),
                 ),
             },
         ];
@@ -498,8 +482,8 @@ mod tests {
                 token: TokenType::Eof,
                 literal: "".to_string(),
                 span: SourcePositionSpan::new(
-                    SourcePosition::new(1, 26),
-                    SourcePosition::new(1, 26),
+                    SourcePosition::new(1, 25),
+                    SourcePosition::new(1, 25),
                 ),
             },
         ];
@@ -541,8 +525,8 @@ LDA #$00 ; Another one
                 token: TokenType::Eof,
                 literal: "".to_string(),
                 span: SourcePositionSpan::new(
-                    SourcePosition::new(3, 11),
-                    SourcePosition::new(3, 11),
+                    SourcePosition::new(3, 10),
+                    SourcePosition::new(3, 10),
                 ),
             },
         ];
@@ -606,8 +590,8 @@ LDA #$00 ; Another one
                 token: TokenType::Eof,
                 literal: "".to_string(),
                 span: SourcePositionSpan::new(
-                    SourcePosition::new(1, 13),
-                    SourcePosition::new(1, 13),
+                    SourcePosition::new(1, 12),
+                    SourcePosition::new(1, 12),
                 ),
             },
         ];
