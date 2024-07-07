@@ -14,18 +14,14 @@ pub struct DisassemblyArgs {
 #[tracing::instrument]
 pub fn disassemble(args: &DisassemblyArgs) -> Result<()> {
     let bytes = std::fs::read(&args.input).with_context(|| "Unable to read file")?;
-    let ast = disassemble_code(&bytes)
-        .into_iter()
-        .map(Node::Instruction)
-        .collect();
+    let instructions = disassemble_code(&bytes);
+    let ast = instructions.into_iter().map(Node::Instruction).collect();
     println!("{}", listing::generate(0x0000, ast));
     Ok(())
 }
 
 #[tracing::instrument]
-fn decode_operand(input: &[u8], curr_ix: usize, addressing_mode: AddressingMode) -> Operand {
-    let ix = curr_ix;
-
+fn decode_operand(input: &[u8], ix: usize, addressing_mode: AddressingMode) -> Operand {
     macro_rules! byte {
         () => {{
             input[ix]
@@ -75,12 +71,12 @@ fn decode_instruction(input: &[u8], ix: usize) -> Instruction {
 
 pub fn disassemble_code(input: &[u8]) -> Vec<Instruction> {
     let mut code = vec![];
-    let mut curr_ix = 0;
+    let mut ix = 0;
 
-    while curr_ix < input.len() {
-        let node = decode_instruction(input, curr_ix);
+    while ix < input.len() {
+        let node = decode_instruction(input, ix);
         code.push(node.clone());
-        curr_ix += node.size();
+        ix += node.size();
     }
 
     code
