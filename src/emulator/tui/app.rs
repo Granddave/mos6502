@@ -5,6 +5,7 @@ use crate::{
         cpu::{self, Cpu, RunOption, STACK_BASE, STACK_PAGE},
     },
 };
+use anyhow::Result;
 
 use self::{state::EmulationState, widget::AppWidget};
 
@@ -44,12 +45,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(program: &[u8], program_start: u16) -> Self {
+    pub fn new(program: &[u8], program_start: u16) -> Result<Self> {
         // turn a Vec<Instruction> into a Vec<(usize, String)>
         // where the usize is the memory address of the instruction.
         // TODO: Refactor this into a function
         let disassembly: Vec<(usize, String)> =
-            disassemble_code(&program[program_start as usize..])
+            disassemble_code(&program[program_start as usize..])?
                 .iter()
                 .scan(0, |acc, ins| {
                     let addr = *acc;
@@ -73,7 +74,7 @@ impl App {
         };
 
         app.reset();
-        app
+        Ok(app)
     }
 
     pub fn should_quit(&self) -> bool {

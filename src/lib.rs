@@ -39,7 +39,7 @@ pub mod assembler;
 /// };
 ///
 /// assert_eq!(
-///     disassemble_code(&[0xA9, 0xC8]),
+///     disassemble_code(&[0xA9, 0xC8]).unwrap(),
 ///     vec![Instruction::new(
 ///         Mnemonic::LDA,
 ///         AddressingMode::Immediate,

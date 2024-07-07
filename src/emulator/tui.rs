@@ -20,7 +20,7 @@ mod ui;
 mod update;
 
 pub fn exec(bytes: &[u8], program_start: u16) -> anyhow::Result<()> {
-    let mut app = App::new(bytes, program_start);
+    let mut app = App::new(bytes, program_start)?;
 
     let backend = CrosstermBackend::new(std::io::stderr());
     let terminal = Terminal::new(backend)?;
