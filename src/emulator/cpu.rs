@@ -1,9 +1,9 @@
 use self::registers::{Register, Registers, Status};
-use super::memory::Memory;
+
 use crate::{
     assembler::codegen::opcode::OPCODE_MAPPING,
     ast::{AddressingMode, Instruction, Mnemonic, Operand},
-    emulator::memory::Bus,
+    emulator::bus::{Bus, Readable, Writeable},
 };
 
 pub mod registers;
@@ -64,7 +64,7 @@ impl Cpu {
 
     /// Fetches and decodes the next instruction from memory.
     #[tracing::instrument]
-    fn fetch_and_decode(&mut self, memory: &mut Memory) -> Instruction {
+    fn fetch_and_decode(&mut self, memory: &mut Bus) -> Instruction {
         let opcode = memory.read_byte(self.regs.pc);
         let (mnemonic, addr_mode) = OPCODE_MAPPING
             .find_instruction(opcode)
@@ -92,7 +92,7 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn execute_instruction(&mut self, ins: &Instruction, memory: &mut Memory) -> usize {
+    fn execute_instruction(&mut self, ins: &Instruction, memory: &mut Bus) -> usize {
         match (&ins.mnemonic, &ins.addr_mode, &ins.operand) {
             (Mnemonic::ADC, _, Operand::Immediate(value)) => {
                 self.add_with_carry(*value);
@@ -982,12 +982,12 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn indexed_indirect_x(&self, memory: &mut Memory, zp_addr: u8) -> u16 {
+    fn indexed_indirect_x(&self, memory: &mut Bus, zp_addr: u8) -> u16 {
         memory.read_word((zp_addr + self.regs.x) as u16) & 0xff
     }
 
     #[tracing::instrument]
-    fn indexed_indirect_y(&self, memory: &mut Memory, zp_addr: u8) -> (bool, u16) {
+    fn indexed_indirect_y(&self, memory: &mut Bus, zp_addr: u8) -> (bool, u16) {
         let indirect_addr = memory.read_word(zp_addr as u16);
         self.indexed_indirect(Register::Y, indirect_addr)
     }
@@ -1109,7 +1109,7 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn store_register(&mut self, register: Register, addr: u16, memory: &mut Memory) {
+    fn store_register(&mut self, register: Register, addr: u16, memory: &mut Bus) {
         let value = match register {
             Register::A => self.regs.a,
             Register::X => self.regs.x,
@@ -1119,13 +1119,13 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn push_to_stack(&mut self, memory: &mut Memory, value: u8) {
+    fn push_to_stack(&mut self, memory: &mut Bus, value: u8) {
         memory.write_byte(STACK_PAGE + self.regs.sp as u16, value);
         self.regs.sp = self.regs.sp.wrapping_sub(1);
     }
 
     #[tracing::instrument]
-    fn pop_from_stack(&mut self, memory: &mut Memory) -> u8 {
+    fn pop_from_stack(&mut self, memory: &mut Bus) -> u8 {
         self.regs.sp = self.regs.sp.wrapping_add(1);
         memory.read_byte(STACK_PAGE + self.regs.sp as u16)
     }
@@ -1136,7 +1136,7 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn handle_interrupt(&mut self, memory: &mut Memory, vector: u16) -> usize {
+    fn handle_interrupt(&mut self, memory: &mut Bus, vector: u16) -> usize {
         let return_addr = self.regs.pc;
         self.push_to_stack(memory, (return_addr >> 8) as u8);
         self.push_to_stack(memory, return_addr as u8);
@@ -1148,7 +1148,7 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn handle_reset(&mut self, memory: &mut Memory) -> usize {
+    fn handle_reset(&mut self, memory: &mut Bus) -> usize {
         self.regs.a = 0;
         self.regs.x = 0;
         self.regs.y = 0;
@@ -1163,7 +1163,7 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn handle_interrupt_request(&mut self, memory: &mut Memory) {
+    fn handle_interrupt_request(&mut self, memory: &mut Bus) {
         if self.reset_interrupt_pending {
             self.reset_interrupt_pending = false;
             self.cycles_left_for_instruction = self.handle_reset(memory);
@@ -1201,7 +1201,7 @@ impl Cpu {
 
     /// Ticks the clock of the CPU.
     #[tracing::instrument]
-    pub fn clock(&mut self, memory: &mut Memory) {
+    pub fn clock(&mut self, memory: &mut Bus) {
         if self.cycles_left_for_instruction > 0 {
             // Processing current instruction
             self.cycles_left_for_instruction -= 1;
@@ -1225,7 +1225,7 @@ impl Cpu {
 
     /// Steps the CPU by one instruction.
     #[tracing::instrument]
-    pub fn step(&mut self, memory: &mut Memory) {
+    pub fn step(&mut self, memory: &mut Bus) {
         // Fetch and decode the instruction
         self.clock(memory);
 
@@ -1237,7 +1237,7 @@ impl Cpu {
 
     /// Runs the CPU until the given run condition is met.
     #[tracing::instrument]
-    pub fn run(&mut self, memory: &mut Memory, run_option: RunOption) {
+    pub fn run(&mut self, memory: &mut Bus, run_option: RunOption) {
         match run_option {
             RunOption::UntilCycles(cycles_to_run) => {
                 for _ in 0..cycles_to_run {
@@ -1277,7 +1277,7 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assembler::assemble_code, emulator::memory::Memory};
+    use crate::{assembler::assemble_code, emulator::bus::Bus};
 
     use pretty_assertions::assert_eq;
 
@@ -1299,9 +1299,9 @@ mod tests {
         /// Expected number of cpu cycles to run.
         expected_cycles: usize,
         /// Optional function to initialize the memory before running the test.
-        init_memory_fn: Option<fn(&mut Memory)>,
+        init_memory_fn: Option<fn(&mut Bus)>,
         /// Optional function to assert the memory after running the test.
-        expected_memory_fn: Option<fn(&Memory)>,
+        expected_memory_fn: Option<fn(&Bus)>,
     }
 
     impl Default for TestCase {
@@ -1320,16 +1320,16 @@ mod tests {
         pub fn run_test(&self) {
             // Arrange
             let mut cpu = Cpu::new();
-            let mut memory = Memory::new();
+            let mut bus = Bus::new();
             let bytes = assemble_code(self.code, PROGRAM_START).expect("Failed to compile code");
-            memory.load(PROGRAM_START, &bytes);
+            bus.load(PROGRAM_START, &bytes);
             if let Some(init_memory_fn) = self.init_memory_fn {
-                init_memory_fn(&mut memory);
+                init_memory_fn(&mut bus);
             }
             cpu.set_program_counter(PROGRAM_START);
 
             // Act
-            cpu.run(&mut memory, RunOption::UntilCycles(self.expected_cycles));
+            cpu.run(&mut bus, RunOption::UntilCycles(self.expected_cycles));
 
             // Assert
             assert_eq!(cpu.regs.a, self.expected_cpu.regs.a);
@@ -1340,7 +1340,7 @@ mod tests {
             assert_eq!(cpu.regs.status, self.expected_cpu.regs.status);
 
             if let Some(expected_memory_fn) = self.expected_memory_fn {
-                expected_memory_fn(&memory);
+                expected_memory_fn(&bus);
             }
         }
     }

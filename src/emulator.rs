@@ -4,13 +4,13 @@ use clap::Args;
 use crate::{
     assembler::assemble_code,
     emulator::{
+        bus::{Bus, Writeable},
         cpu::{Cpu, RunOption},
-        memory::{Bus, Memory},
     },
 };
 
+pub mod bus;
 pub mod cpu;
-pub mod memory;
 pub mod tui;
 
 #[derive(Args, Debug)]
@@ -29,7 +29,7 @@ The program will run until it encounters a break instruction.")]
 /// Runs the emulator with the given program bytes and program start address.
 #[tracing::instrument]
 pub fn run_headless(program_bytes: &[u8], program_start: u16) -> Result<()> {
-    let mut memory = Memory::new();
+    let mut memory = Bus::new();
     memory.write_word(cpu::RESET_VECTOR, program_start); // TODO: Include in the program
     memory.load(0x0000, program_bytes);
     let mut cpu = Cpu::new();

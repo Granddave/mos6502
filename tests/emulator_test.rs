@@ -2,9 +2,8 @@ use mos6502::emulator::cpu::RunOption;
 use mos6502::{
     assembler::assemble_code,
     emulator::{
-        cpu,
-        cpu::Cpu,
-        memory::{Bus, Memory},
+        bus::{Bus, Readable, Writeable},
+        cpu::{self, Cpu},
     },
 };
 
@@ -16,7 +15,7 @@ fn test_loop_program() {
     let bytes = assemble_code(source, 0).unwrap();
 
     let mut cpu = Cpu::new();
-    let mut memory = Memory::new();
+    let mut memory = Bus::new();
     memory.load(0x0000, &bytes);
     memory.write_word(cpu::RESET_VECTOR, program_start); // TODO: Include in the program
 

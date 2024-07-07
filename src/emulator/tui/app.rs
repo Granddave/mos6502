@@ -1,8 +1,8 @@
 use crate::{
     disassembler::{disassemble_code, listing},
     emulator::{
+        bus::{Bus, Readable, Writeable},
         cpu::{self, Cpu, RunOption, STACK_BASE, STACK_PAGE},
-        memory::{Bus, Memory},
     },
 };
 
@@ -19,7 +19,7 @@ pub struct App {
     /// Emulated CPU
     cpu: Cpu,
     /// Emulated memory
-    memory: Memory,
+    memory: Bus,
 
     /// The program to run.
     program: Vec<u8>,
@@ -68,6 +68,7 @@ impl App {
             program_start,
             disassembled_program: disassembly,
             selected_widget: AppWidget::Disassembly,
+            memory: Bus::new(),
             ..Default::default()
         };
 
@@ -81,7 +82,7 @@ impl App {
 
     /// Resets the application with the provided program.
     pub fn reset(&mut self) {
-        self.memory = Memory::new();
+        self.memory = Bus::new();
         self.memory
             .write_word(cpu::RESET_VECTOR, self.program_start); // TODO: Include in the program
         self.memory.load(0x0000, &self.program);
@@ -129,7 +130,7 @@ impl App {
     }
 
     pub fn memory_slice(&self, start: usize, end: usize) -> &[u8] {
-        self.memory.slice(start, end)
+        self.memory.data()[start..end].as_ref()
     }
 
     pub fn stack_memory(&self) -> &[u8] {
