@@ -1,5 +1,8 @@
 use std::fmt;
 
+/// Represents a position in the source code.
+///
+/// The line and column are 1-based.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct SourcePosition {
     pub line: usize,
@@ -29,10 +32,13 @@ impl Default for SourcePosition {
 
 impl fmt::Display for SourcePosition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.column)
+        write!(f, "[{}, {}]", self.line, self.column)
     }
 }
 
+/// Represents a span of positions in the source code.
+///
+/// The start position is inclusive, while the end position is exclusive.
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct SourcePositionSpan {
     pub start: SourcePosition,
