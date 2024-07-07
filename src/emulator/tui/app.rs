@@ -104,8 +104,7 @@ impl App {
 
     /// Run CPU execution until a break instruction is reached.
     pub fn continue_execution(&mut self) {
-        self.cpu
-            .run(&mut self.memory, RunOption::StopOnBreakInstruction);
+        self.cpu.run(&mut self.memory, RunOption::StopOnJumpToSelf);
     }
 
     /// Get the last and current state of the emulation

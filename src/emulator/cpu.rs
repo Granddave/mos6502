@@ -29,8 +29,10 @@ pub const INTERRUPT_VECTOR: u16 = 0xfffe;
 pub enum RunOption {
     /// Run until the given number of cycles has been reached.
     UntilCycles(usize),
-    /// Run until the program executes a BRK instruction.
+    /// Run until BRK instruction is encountered.
     StopOnBreakInstruction,
+    /// Run until the CPU gets stuck in a jump to itself (infinite loop).
+    StopOnJumpToSelf,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -1233,7 +1235,7 @@ impl Cpu {
         }
     }
 
-    /// Runs the CPU until the given number of cycles has been reached.
+    /// Runs the CPU until the given run condition is met.
     #[tracing::instrument]
     pub fn run(&mut self, memory: &mut Memory, run_option: RunOption) {
         match run_option {
@@ -1243,12 +1245,26 @@ impl Cpu {
                 }
             }
             RunOption::StopOnBreakInstruction => loop {
+                // Break if the last instruction was a BRK
                 if let Some(ins) = &self.last_instruction {
                     if ins.mnemonic == Mnemonic::BRK {
                         break;
                     }
                 }
-                self.clock(memory);
+                self.step(memory);
+            },
+            RunOption::StopOnJumpToSelf => loop {
+                let last_instruction = self.last_instruction.clone();
+                self.step(memory);
+
+                // Break if the last instruction was a jump to itself
+                if let Some(ins) = last_instruction {
+                    if ins.mnemonic == Mnemonic::JMP
+                        && ins.operand == Operand::Absolute(self.regs.pc)
+                    {
+                        break;
+                    }
+                }
             },
         }
     }
