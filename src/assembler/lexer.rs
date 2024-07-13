@@ -136,10 +136,32 @@ impl<'a> Lexer<'a> {
                     self.skip_comment();
                     self.next_token()?
                 }
+                // Single character tokens
                 '.' => {
                     let (text, span) = self.read_one_char();
                     Some(Token::new(TokenType::Dot, text, span))
                 }
+                ':' => {
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::Colon, text, span))
+                }
+                ',' => {
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::Comma, text, span))
+                }
+                '(' => {
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::ParenLeft, text, span))
+                }
+                ')' => {
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::ParenRight, text, span))
+                }
+                '#' => {
+                    let (text, span) = self.read_one_char();
+                    Some(Token::new(TokenType::Pound, text, span))
+                }
+                // Number literals
                 '$' => {
                     let (_, span_1) = self.read_one_char();
                     let (text, span_2) = self.read_hex();
@@ -162,26 +184,7 @@ impl<'a> Lexer<'a> {
                     let (text, span) = self.read_decimal();
                     Some(Token::new(TokenType::DecimalNumber, text, span))
                 }
-                '#' => {
-                    let (text, span) = self.read_one_char();
-                    Some(Token::new(TokenType::LiteralNumber, text, span))
-                }
-                ':' => {
-                    let (text, span) = self.read_one_char();
-                    Some(Token::new(TokenType::Colon, text, span))
-                }
-                ',' => {
-                    let (text, span) = self.read_one_char();
-                    Some(Token::new(TokenType::Comma, text, span))
-                }
-                '(' => {
-                    let (text, span) = self.read_one_char();
-                    Some(Token::new(TokenType::ParenLeft, text, span))
-                }
-                ')' => {
-                    let (text, span) = self.read_one_char();
-                    Some(Token::new(TokenType::ParenRight, text, span))
-                }
+                // Identifiers and keywords
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let (text, span) = self.read_string();
                     if text == "define" {
@@ -299,7 +302,7 @@ mod tests {
                         ),
                     },
                     Token {
-                        token: TokenType::LiteralNumber,
+                        token: TokenType::Pound,
                         lexeme: "#".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 5),
@@ -336,7 +339,7 @@ mod tests {
                         ),
                     },
                     Token {
-                        token: TokenType::LiteralNumber,
+                        token: TokenType::Pound,
                         lexeme: "#".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 5),
@@ -373,7 +376,7 @@ mod tests {
                         ),
                     },
                     Token {
-                        token: TokenType::LiteralNumber,
+                        token: TokenType::Pound,
                         lexeme: "#".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 5),
@@ -512,7 +515,7 @@ LDA #$00 ; Another one
                 span: SourcePositionSpan::new(SourcePosition::new(2, 1), SourcePosition::new(2, 4)),
             },
             Token {
-                token: TokenType::LiteralNumber,
+                token: TokenType::Pound,
                 lexeme: "#".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(2, 5), SourcePosition::new(2, 6)),
             },

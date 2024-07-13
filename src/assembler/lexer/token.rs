@@ -14,15 +14,15 @@ pub enum TokenType {
     ParenLeft,
     /// `)`
     ParenRight,
+    /// `#` Literal number prefix character
+    Pound,
 
     // --- Literals ---
-    /// `#` Literal number prefix character
-    LiteralNumber,
     /// `$` Hex prefix including hex number
     HexNumber,
     /// `%` Binary prefix including binary number
     BinaryNumber,
-    /// Decimal number
+    /// Decimal number (no prefix)
     DecimalNumber,
     /// Instruction mnemonic, label or constant definition.
     ///
@@ -75,7 +75,7 @@ impl Token {
             TokenType::Comma => ",".to_owned(),
             TokenType::ParenLeft => "(".to_owned(),
             TokenType::ParenRight => ")".to_owned(),
-            TokenType::LiteralNumber => self.lexeme.to_owned(),
+            TokenType::Pound => "#".to_owned(),
             TokenType::HexNumber => "$".to_string() + &self.lexeme,
             TokenType::BinaryNumber => "%".to_string() + &self.lexeme,
             TokenType::DecimalNumber => self.lexeme.to_owned(),

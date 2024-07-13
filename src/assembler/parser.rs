@@ -515,7 +515,7 @@ impl<'a> Parser<'a> {
         self.next_token()?;
 
         match self.current_token.token {
-            TokenType::LiteralNumber => self.parse_literal_number(),
+            TokenType::Pound => self.parse_literal_number(),
             TokenType::HexNumber => self.parse_hex_operand(mnemonic),
             TokenType::BinaryNumber => self.parse_binary_operand(mnemonic),
             TokenType::DecimalNumber => self.parse_decimal_operand(mnemonic),
@@ -673,13 +673,13 @@ mod tests {
 
         // Check that current token and lookahead tokens are loaded correctly
         assert_eq!(parser.current_token.token, TokenType::Identifier);
-        assert_eq!(parser.peek_token(0).token, TokenType::LiteralNumber);
-        assert!(parser.peek_token_is(0, TokenType::LiteralNumber));
+        assert_eq!(parser.peek_token(0).token, TokenType::Pound);
+        assert!(parser.peek_token_is(0, TokenType::Pound));
         assert_eq!(parser.peek_token(1).token, TokenType::HexNumber);
         assert!(parser.peek_token_is(1, TokenType::HexNumber));
 
         parser.next_token()?; // Consume the LDA token
-        assert_eq!(parser.current_token.token, TokenType::LiteralNumber);
+        assert_eq!(parser.current_token.token, TokenType::Pound);
         assert_eq!(parser.peek_token(0).token, TokenType::HexNumber);
         assert_eq!(parser.peek_token(1).token, TokenType::Identifier);
 
