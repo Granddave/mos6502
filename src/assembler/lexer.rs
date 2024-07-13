@@ -187,12 +187,10 @@ impl<'a> Lexer<'a> {
                 // Identifiers and keywords
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let (text, span) = self.read_string();
-                    if text == "define" {
-                        Some(Token::new(TokenType::Define, text, span))
-                    } else if text == "org" {
-                        Some(Token::new(TokenType::OrgDirective, text, span))
-                    } else {
-                        Some(Token::new(TokenType::Identifier, text, span))
+                    match text {
+                        "define" => Some(Token::new(TokenType::Define, text, span)),
+                        "org" => Some(Token::new(TokenType::OrgDirective, text, span)),
+                        _ => Some(Token::new(TokenType::Identifier, text, span)),
                     }
                 }
                 _ => {
