@@ -182,7 +182,7 @@ impl<'a> Parser<'a> {
     ///
     /// The literal number is denoted by the following tokens:
     /// - Hex: #$xx
-    /// - Binary: %xx
+    /// - Binary: #%xx
     /// - Decimal: #xx
     /// - Identifier: #some_constant
     #[tracing::instrument]

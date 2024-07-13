@@ -106,6 +106,7 @@ impl<'a> Lexer<'a> {
             SourcePositionSpan::new(start_position, self.current_source_position),
         )
     }
+
     #[tracing::instrument]
     fn read_string(&mut self) -> (&str, SourcePositionSpan) {
         self.read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_')
