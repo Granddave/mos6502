@@ -15,26 +15,25 @@ pub enum TokenType {
     /// `)`
     ParenRight,
 
-    // --- Number tokens ---
+    // --- Literals ---
     /// `#` Literal number prefix character
     LiteralNumber,
     /// `$` Hex prefix including hex number
-    Hex,
+    HexNumber,
     /// `%` Binary prefix including binary number
-    Binary,
+    BinaryNumber,
     /// Decimal number
-    Decimal,
+    DecimalNumber,
+    /// Instruction mnemonic, label or constant definition.
+    ///
+    /// Basically anything that starts with a letter or underscore.
+    Identifier,
 
     // --- Keywords ---
     /// Constant definition keyword
     Define,
     /// Org directive keyword
     OrgDirective,
-
-    /// Instruction mnemonic, label or constant definition.
-    ///
-    /// Basically anything that starts with a letter or underscore.
-    Identifier,
 
     /// Eof marks the end of file
     Eof,
@@ -77,12 +76,12 @@ impl Token {
             TokenType::ParenLeft => "(".to_owned(),
             TokenType::ParenRight => ")".to_owned(),
             TokenType::LiteralNumber => self.lexeme.to_owned(),
-            TokenType::Hex => "$".to_string() + &self.lexeme,
-            TokenType::Binary => "%".to_string() + &self.lexeme,
-            TokenType::Decimal => self.lexeme.to_owned(),
+            TokenType::HexNumber => "$".to_string() + &self.lexeme,
+            TokenType::BinaryNumber => "%".to_string() + &self.lexeme,
+            TokenType::DecimalNumber => self.lexeme.to_owned(),
+            TokenType::Identifier => self.lexeme.to_owned(),
             TokenType::Define => "define".to_owned(),
             TokenType::OrgDirective => "org".to_owned(),
-            TokenType::Identifier => self.lexeme.to_owned(),
             TokenType::Eof => "<eof>".to_owned(),
         }
     }

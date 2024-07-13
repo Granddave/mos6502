@@ -189,21 +189,21 @@ impl<'a> Parser<'a> {
     fn parse_literal_number(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
         self.next_token()?;
         match self.current_token.token {
-            TokenType::Hex => {
+            TokenType::HexNumber => {
                 if let Some(byte) = self.try_parse_hex_u8() {
                     Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
                 } else {
                     Err(invalid_token!(self, "invalid hex byte"))
                 }
             }
-            TokenType::Binary => {
+            TokenType::BinaryNumber => {
                 if let Some(byte) = self.try_parse_binary_u8() {
                     Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
                 } else {
                     Err(invalid_token!(self, "invalid binary byte"))
                 }
             }
-            TokenType::Decimal => {
+            TokenType::DecimalNumber => {
                 if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
                     Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
                 } else {
@@ -516,9 +516,9 @@ impl<'a> Parser<'a> {
 
         match self.current_token.token {
             TokenType::LiteralNumber => self.parse_literal_number(),
-            TokenType::Hex => self.parse_hex_operand(mnemonic),
-            TokenType::Binary => self.parse_binary_operand(mnemonic),
-            TokenType::Decimal => self.parse_decimal_operand(mnemonic),
+            TokenType::HexNumber => self.parse_hex_operand(mnemonic),
+            TokenType::BinaryNumber => self.parse_binary_operand(mnemonic),
+            TokenType::DecimalNumber => self.parse_decimal_operand(mnemonic),
             TokenType::ParenLeft => self.parse_indirect(),
             TokenType::Identifier => self.parse_operand_with_identifier(mnemonic),
             _ => Err(invalid_token!(self, "invalid operand")),
@@ -548,7 +548,7 @@ impl<'a> Parser<'a> {
         let identifier = self.current_token.lexeme.clone();
         self.next_token()?; // Consume the identifier
 
-        if self.current_token_is(TokenType::Hex) {
+        if self.current_token_is(TokenType::HexNumber) {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Ok(Constant::new_byte(identifier, byte))
             } else if let Some(word) = self.try_parse_hex_u16() {
@@ -556,7 +556,7 @@ impl<'a> Parser<'a> {
             } else {
                 Err(invalid_token!(self, "expected hex literal"))
             }
-        } else if self.current_token_is(TokenType::Binary) {
+        } else if self.current_token_is(TokenType::BinaryNumber) {
             if let Some(byte) = self.try_parse_binary_u8() {
                 Ok(Constant::new_byte(identifier, byte))
             } else if let Some(word) = self.try_parse_binary_u16() {
@@ -564,7 +564,7 @@ impl<'a> Parser<'a> {
             } else {
                 Err(invalid_token!(self, "expected binary literal"))
             }
-        } else if self.current_token_is(TokenType::Decimal) {
+        } else if self.current_token_is(TokenType::DecimalNumber) {
             if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
                 Ok(Constant::new_byte(identifier, byte))
             } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
@@ -585,19 +585,19 @@ impl<'a> Parser<'a> {
         self.next_token()?; // Consume the org keyword
 
         // TODO: Refactor this into a function
-        if self.current_token_is(TokenType::Hex) {
+        if self.current_token_is(TokenType::HexNumber) {
             if let Some(word) = self.try_parse_hex_u16() {
                 Ok(Directive::Origin(word))
             } else {
                 Err(invalid_token!(self, "invalid hex literal"))
             }
-        } else if self.current_token_is(TokenType::Binary) {
+        } else if self.current_token_is(TokenType::BinaryNumber) {
             if let Some(word) = self.try_parse_binary_u16() {
                 Ok(Directive::Origin(word))
             } else {
                 Err(invalid_token!(self, "invalid binary literal"))
             }
-        } else if self.current_token_is(TokenType::Decimal) {
+        } else if self.current_token_is(TokenType::DecimalNumber) {
             if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
                 Ok(Directive::Origin(word))
             } else {
@@ -675,22 +675,22 @@ mod tests {
         assert_eq!(parser.current_token.token, TokenType::Identifier);
         assert_eq!(parser.peek_token(0).token, TokenType::LiteralNumber);
         assert!(parser.peek_token_is(0, TokenType::LiteralNumber));
-        assert_eq!(parser.peek_token(1).token, TokenType::Hex);
-        assert!(parser.peek_token_is(1, TokenType::Hex));
+        assert_eq!(parser.peek_token(1).token, TokenType::HexNumber);
+        assert!(parser.peek_token_is(1, TokenType::HexNumber));
 
         parser.next_token()?; // Consume the LDA token
         assert_eq!(parser.current_token.token, TokenType::LiteralNumber);
-        assert_eq!(parser.peek_token(0).token, TokenType::Hex);
+        assert_eq!(parser.peek_token(0).token, TokenType::HexNumber);
         assert_eq!(parser.peek_token(1).token, TokenType::Identifier);
 
         parser.next_token()?; // Consume the literal number token
         parser.next_token()?; // Consume the hex token
         assert_eq!(parser.current_token.token, TokenType::Identifier);
-        assert_eq!(parser.peek_token(0).token, TokenType::Hex);
+        assert_eq!(parser.peek_token(0).token, TokenType::HexNumber);
         assert_eq!(parser.peek_token(1).token, TokenType::Eof);
 
         parser.next_token()?; // Consume the STA token
-        assert_eq!(parser.current_token.token, TokenType::Hex);
+        assert_eq!(parser.current_token.token, TokenType::HexNumber);
         assert_eq!(parser.peek_token(0).token, TokenType::Eof);
         assert_eq!(parser.peek_token(1).token, TokenType::Eof);
 

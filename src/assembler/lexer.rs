@@ -144,7 +144,7 @@ impl<'a> Lexer<'a> {
                     let (_, span_1) = self.read_one_char();
                     let (text, span_2) = self.read_hex();
                     Some(Token::new(
-                        TokenType::Hex,
+                        TokenType::HexNumber,
                         text,
                         SourcePositionSpan::new(span_1.start, span_2.end),
                     ))
@@ -153,14 +153,14 @@ impl<'a> Lexer<'a> {
                     let (_, span_1) = self.read_one_char();
                     let (text, span_2) = self.read_binary();
                     Some(Token::new(
-                        TokenType::Binary,
+                        TokenType::BinaryNumber,
                         text,
                         SourcePositionSpan::new(span_1.start, span_2.end),
                     ))
                 }
                 '0'..='9' => {
                     let (text, span) = self.read_decimal();
-                    Some(Token::new(TokenType::Decimal, text, span))
+                    Some(Token::new(TokenType::DecimalNumber, text, span))
                 }
                 '#' => {
                     let (text, span) = self.read_one_char();
@@ -230,7 +230,7 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
-            assert_eq!(token.token, TokenType::Hex);
+            assert_eq!(token.token, TokenType::HexNumber);
             assert_eq!(token.lexeme, expected);
         }
         Ok(())
@@ -248,7 +248,7 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
-            assert_eq!(token.token, TokenType::Binary);
+            assert_eq!(token.token, TokenType::BinaryNumber);
             assert_eq!(token.lexeme, expected);
         }
         Ok(())
@@ -266,7 +266,7 @@ mod tests {
         for (input, expected) in tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
-            assert_eq!(token.token, TokenType::Decimal);
+            assert_eq!(token.token, TokenType::DecimalNumber);
             assert_eq!(token.lexeme, expected);
         }
         Ok(())
@@ -307,7 +307,7 @@ mod tests {
                         ),
                     },
                     Token {
-                        token: TokenType::Hex,
+                        token: TokenType::HexNumber,
                         lexeme: "00".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 6),
@@ -344,7 +344,7 @@ mod tests {
                         ),
                     },
                     Token {
-                        token: TokenType::Binary,
+                        token: TokenType::BinaryNumber,
                         lexeme: "01010101".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 6),
@@ -381,7 +381,7 @@ mod tests {
                         ),
                     },
                     Token {
-                        token: TokenType::Decimal,
+                        token: TokenType::DecimalNumber,
                         lexeme: "255".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 6),
@@ -471,7 +471,7 @@ mod tests {
                 ),
             },
             Token {
-                token: TokenType::Hex,
+                token: TokenType::HexNumber,
                 lexeme: "FE".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 22),
@@ -517,7 +517,7 @@ LDA #$00 ; Another one
                 span: SourcePositionSpan::new(SourcePosition::new(2, 5), SourcePosition::new(2, 6)),
             },
             Token {
-                token: TokenType::Hex,
+                token: TokenType::HexNumber,
                 lexeme: "00".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(2, 6), SourcePosition::new(2, 9)),
             },
@@ -558,7 +558,7 @@ LDA #$00 ; Another one
                 span: SourcePositionSpan::new(SourcePosition::new(1, 5), SourcePosition::new(1, 6)),
             },
             Token {
-                token: TokenType::Hex,
+                token: TokenType::HexNumber,
                 lexeme: "D2".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(1, 6), SourcePosition::new(1, 9)),
             },
