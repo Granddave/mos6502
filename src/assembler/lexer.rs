@@ -231,7 +231,7 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Hex);
-            assert_eq!(token.literal, expected);
+            assert_eq!(token.lexeme, expected);
         }
         Ok(())
     }
@@ -249,7 +249,7 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Binary);
-            assert_eq!(token.literal, expected);
+            assert_eq!(token.lexeme, expected);
         }
         Ok(())
     }
@@ -267,7 +267,7 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Decimal);
-            assert_eq!(token.literal, expected);
+            assert_eq!(token.lexeme, expected);
         }
         Ok(())
     }
@@ -279,7 +279,7 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::Identifier);
-            assert_eq!(token.literal, expected);
+            assert_eq!(token.lexeme, expected);
         }
         Ok(())
     }
@@ -292,7 +292,7 @@ mod tests {
                 vec![
                     Token {
                         token: TokenType::Identifier,
-                        literal: "LDA".to_string(),
+                        lexeme: "LDA".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 1),
                             SourcePosition::new(1, 4),
@@ -300,7 +300,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::LiteralNumber,
-                        literal: "#".to_string(),
+                        lexeme: "#".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 5),
                             SourcePosition::new(1, 6),
@@ -308,7 +308,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::Hex,
-                        literal: "00".to_string(),
+                        lexeme: "00".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 6),
                             SourcePosition::new(1, 9),
@@ -316,7 +316,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::Eof,
-                        literal: "".to_string(),
+                        lexeme: "".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 9),
                             SourcePosition::new(1, 9),
@@ -329,7 +329,7 @@ mod tests {
                 vec![
                     Token {
                         token: TokenType::Identifier,
-                        literal: "LDA".to_string(),
+                        lexeme: "LDA".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 1),
                             SourcePosition::new(1, 4),
@@ -337,7 +337,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::LiteralNumber,
-                        literal: "#".to_string(),
+                        lexeme: "#".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 5),
                             SourcePosition::new(1, 6),
@@ -345,7 +345,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::Binary,
-                        literal: "01010101".to_string(),
+                        lexeme: "01010101".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 6),
                             SourcePosition::new(1, 15),
@@ -353,7 +353,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::Eof,
-                        literal: "".to_string(),
+                        lexeme: "".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 15),
                             SourcePosition::new(1, 15),
@@ -366,7 +366,7 @@ mod tests {
                 vec![
                     Token {
                         token: TokenType::Identifier,
-                        literal: "LDA".to_string(),
+                        lexeme: "LDA".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 1),
                             SourcePosition::new(1, 4),
@@ -374,7 +374,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::LiteralNumber,
-                        literal: "#".to_string(),
+                        lexeme: "#".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 5),
                             SourcePosition::new(1, 6),
@@ -382,7 +382,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::Decimal,
-                        literal: "255".to_string(),
+                        lexeme: "255".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 6),
                             SourcePosition::new(1, 9),
@@ -390,7 +390,7 @@ mod tests {
                     },
                     Token {
                         token: TokenType::Eof,
-                        literal: "".to_string(),
+                        lexeme: "".to_string(),
                         span: SourcePositionSpan::new(
                             SourcePosition::new(1, 9),
                             SourcePosition::new(1, 9),
@@ -420,12 +420,12 @@ mod tests {
         let result = vec![
             Token {
                 token: TokenType::Identifier,
-                literal: "my_label".to_string(),
+                lexeme: "my_label".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(1, 1), SourcePosition::new(1, 9)),
             },
             Token {
                 token: TokenType::Colon,
-                literal: ":".to_string(),
+                lexeme: ":".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 9),
                     SourcePosition::new(1, 10),
@@ -433,7 +433,7 @@ mod tests {
             },
             Token {
                 token: TokenType::Eof,
-                literal: "".to_string(),
+                lexeme: "".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 10),
                     SourcePosition::new(1, 10),
@@ -459,12 +459,12 @@ mod tests {
         let result = vec![
             Token {
                 token: TokenType::Define,
-                literal: "define".to_string(),
+                lexeme: "define".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(1, 1), SourcePosition::new(1, 7)),
             },
             Token {
                 token: TokenType::Identifier,
-                literal: "my_constant".to_string(),
+                lexeme: "my_constant".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 10),
                     SourcePosition::new(1, 21),
@@ -472,7 +472,7 @@ mod tests {
             },
             Token {
                 token: TokenType::Hex,
-                literal: "FE".to_string(),
+                lexeme: "FE".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 22),
                     SourcePosition::new(1, 25),
@@ -480,7 +480,7 @@ mod tests {
             },
             Token {
                 token: TokenType::Eof,
-                literal: "".to_string(),
+                lexeme: "".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 25),
                     SourcePosition::new(1, 25),
@@ -508,22 +508,22 @@ LDA #$00 ; Another one
         let result = vec![
             Token {
                 token: TokenType::Identifier,
-                literal: "LDA".to_string(),
+                lexeme: "LDA".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(2, 1), SourcePosition::new(2, 4)),
             },
             Token {
                 token: TokenType::LiteralNumber,
-                literal: "#".to_string(),
+                lexeme: "#".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(2, 5), SourcePosition::new(2, 6)),
             },
             Token {
                 token: TokenType::Hex,
-                literal: "00".to_string(),
+                lexeme: "00".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(2, 6), SourcePosition::new(2, 9)),
             },
             Token {
                 token: TokenType::Eof,
-                literal: "".to_string(),
+                lexeme: "".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(3, 10),
                     SourcePosition::new(3, 10),
@@ -549,22 +549,22 @@ LDA #$00 ; Another one
         let result = vec![
             Token {
                 token: TokenType::Identifier,
-                literal: "LDA".to_string(),
+                lexeme: "LDA".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(1, 1), SourcePosition::new(1, 4)),
             },
             Token {
                 token: TokenType::ParenLeft,
-                literal: "(".to_string(),
+                lexeme: "(".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(1, 5), SourcePosition::new(1, 6)),
             },
             Token {
                 token: TokenType::Hex,
-                literal: "D2".to_string(),
+                lexeme: "D2".to_string(),
                 span: SourcePositionSpan::new(SourcePosition::new(1, 6), SourcePosition::new(1, 9)),
             },
             Token {
                 token: TokenType::Comma,
-                literal: ",".to_string(),
+                lexeme: ",".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 9),
                     SourcePosition::new(1, 10),
@@ -572,7 +572,7 @@ LDA #$00 ; Another one
             },
             Token {
                 token: TokenType::Identifier,
-                literal: "X".to_string(),
+                lexeme: "X".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 10),
                     SourcePosition::new(1, 11),
@@ -580,7 +580,7 @@ LDA #$00 ; Another one
             },
             Token {
                 token: TokenType::ParenRight,
-                literal: ")".to_string(),
+                lexeme: ")".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 11),
                     SourcePosition::new(1, 12),
@@ -588,7 +588,7 @@ LDA #$00 ; Another one
             },
             Token {
                 token: TokenType::Eof,
-                literal: "".to_string(),
+                lexeme: "".to_string(),
                 span: SourcePositionSpan::new(
                     SourcePosition::new(1, 12),
                     SourcePosition::new(1, 12),

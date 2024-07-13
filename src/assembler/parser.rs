@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
     #[tracing::instrument]
     fn parse_label(&mut self) -> Result<String, ParseError> {
         if self.current_token_is(TokenType::Identifier) && self.peek_token_is(0, TokenType::Colon) {
-            let label = self.current_token.literal.clone();
+            let label = self.current_token.lexeme.clone();
             self.next_token()?; // Consume the colon
             Ok(label)
         } else {
@@ -112,14 +112,14 @@ impl<'a> Parser<'a> {
 
     #[tracing::instrument]
     fn parse_mnemonic(&mut self) -> Result<Mnemonic, ParseError> {
-        Mnemonic::from_str(self.current_token.literal.to_uppercase().as_str()).map_err(|_| {
+        Mnemonic::from_str(self.current_token.lexeme.to_uppercase().as_str()).map_err(|_| {
             invalid_token!(self, "Invalid instruction mnemonic: {}", self.current_token)
         })
     }
 
     #[tracing::instrument]
     fn try_parse_hex_u8(&mut self) -> Option<u8> {
-        let operand = self.current_token.literal.clone();
+        let operand = self.current_token.lexeme.clone();
         let operand = operand.trim_start_matches('$');
         if operand.len() > 2 {
             return None;
@@ -132,7 +132,7 @@ impl<'a> Parser<'a> {
 
     #[tracing::instrument]
     fn try_parse_hex_u16(&mut self) -> Option<u16> {
-        let operand = self.current_token.literal.clone();
+        let operand = self.current_token.lexeme.clone();
         let operand = operand.trim_start_matches('$');
         if operand.len() < 2 || operand.len() > 4 {
             return None;
@@ -145,7 +145,7 @@ impl<'a> Parser<'a> {
 
     #[tracing::instrument]
     fn try_parse_binary_u8(&mut self) -> Option<u8> {
-        let operand = self.current_token.literal.clone();
+        let operand = self.current_token.lexeme.clone();
         let operand = operand.trim_start_matches('%');
         if operand.len() > 8 {
             return None;
@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
 
     #[tracing::instrument]
     fn try_parse_binary_u16(&mut self) -> Option<u16> {
-        let operand = self.current_token.literal.clone();
+        let operand = self.current_token.lexeme.clone();
         let operand = operand.trim_start_matches('%');
         if operand.len() < 8 || operand.len() > 16 {
             return None;
@@ -172,7 +172,7 @@ impl<'a> Parser<'a> {
     #[tracing::instrument]
     fn try_parse_identifier(&mut self) -> Option<String> {
         if self.current_token_is(TokenType::Identifier) {
-            Some(self.current_token.literal.clone())
+            Some(self.current_token.lexeme.clone())
         } else {
             None
         }
@@ -204,7 +204,7 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenType::Decimal => {
-                if let Ok(byte) = self.current_token.literal.parse::<u8>() {
+                if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
                     Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
                 } else {
                     Err(invalid_token!(self, "invalid decimal byte"))
@@ -234,7 +234,7 @@ impl<'a> Parser<'a> {
                 return Err(invalid_token!(self, "invalid ZeroPageX/Y operand"));
             }
             self.next_token()?;
-            match self.current_token.literal.to_uppercase().as_str() {
+            match self.current_token.lexeme.to_uppercase().as_str() {
                 "X" => Ok((AddressingMode::ZeroPageX, Operand::ZeroPage(byte))),
                 "Y" => Ok((AddressingMode::ZeroPageY, Operand::ZeroPage(byte))),
                 _ => Err(invalid_token!(self, "invalid ZeroPageX/Y operand")),
@@ -255,7 +255,7 @@ impl<'a> Parser<'a> {
                 return Err(invalid_token!(self, "invalid hex operand"));
             }
             self.next_token()?;
-            match self.current_token.literal.to_uppercase().as_str() {
+            match self.current_token.lexeme.to_uppercase().as_str() {
                 "X" => Ok((AddressingMode::AbsoluteX, Operand::Absolute(word))),
                 "Y" => Ok((AddressingMode::AbsoluteY, Operand::Absolute(word))),
                 _ => Err(invalid_token!(self, "invalid X/Y operand")),
@@ -299,9 +299,9 @@ impl<'a> Parser<'a> {
         &mut self,
         mnemonic: &Mnemonic,
     ) -> Result<(AddressingMode, Operand), ParseError> {
-        if let Ok(byte) = self.current_token.literal.parse::<u8>() {
+        if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
             self.parse_byte_operand(byte, mnemonic)
-        } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
+        } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
             self.parse_word_operand(word)
         } else {
             Err(invalid_token!(self, "invalid decimal operand"))
@@ -323,7 +323,7 @@ impl<'a> Parser<'a> {
             ));
         }
         self.next_token()?; // Consume the 'X'
-        let operand = match self.current_token.literal.to_uppercase().as_str() {
+        let operand = match self.current_token.lexeme.to_uppercase().as_str() {
             "X" => Ok((
                 AddressingMode::IndirectIndexedX,
                 if let Some(byte) = byte {
@@ -356,7 +356,7 @@ impl<'a> Parser<'a> {
         }
         self.next_token()?; // Consume the comma
         self.next_token()?; // Consume the 'Y' identifier
-        match self.current_token.literal.to_uppercase().as_str() {
+        match self.current_token.lexeme.to_uppercase().as_str() {
             "Y" => Ok((
                 AddressingMode::IndirectIndexedY,
                 if let Some(byte) = byte {
@@ -385,7 +385,7 @@ impl<'a> Parser<'a> {
                 Some(byte)
             } else if let Some(byte) = self.try_parse_binary_u8() {
                 Some(byte)
-            } else if let Ok(byte) = self.current_token.literal.parse::<u8>() {
+            } else if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
                 Some(byte)
             } else {
                 None
@@ -422,13 +422,13 @@ impl<'a> Parser<'a> {
             // Binary
             self.next_token()?; // Consume the closing parenthesis
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-        } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
+        } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
             // Decimal
             self.next_token()?; // Consume the closing parenthesis
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
         } else if self.current_token_is(TokenType::Identifier) {
             // Constant
-            let identifier = self.current_token.literal.clone();
+            let identifier = self.current_token.lexeme.clone();
             self.next_token()?; // Consume the identifier
             Ok((AddressingMode::Indirect, Operand::Constant(identifier)))
         } else {
@@ -468,14 +468,14 @@ impl<'a> Parser<'a> {
         if mnemonic.is_branching_instruction() || mnemonic.is_jumping_instruction() {
             Ok((
                 self.addressing_mode_for_label(mnemonic),
-                Operand::Label(self.current_token.literal.clone()),
+                Operand::Label(self.current_token.lexeme.clone()),
             ))
         } else if self.peek_token_is(0, TokenType::Comma) {
             // ZeroPageX/Y with constant
-            let constant = self.current_token.literal.clone();
+            let constant = self.current_token.lexeme.clone();
             self.next_token()?; // Consume the comma
             self.next_token()?; // Consume the 'X' or 'Y'
-            match self.current_token.literal.to_uppercase().as_str() {
+            match self.current_token.lexeme.to_uppercase().as_str() {
                 "X" => Ok((AddressingMode::ZeroPageX, Operand::Constant(constant))),
                 "Y" => Ok((AddressingMode::ZeroPageY, Operand::Constant(constant))),
                 _ => Err(invalid_token!(self, "invalid ZeroPageX/Y identifier")),
@@ -487,14 +487,14 @@ impl<'a> Parser<'a> {
                 // The compiler will later determine the size of the constant and switch to the
                 // correct addressing mode, i.e. Absolute or ZeroPage.
                 AddressingMode::Constant,
-                Operand::Constant(self.current_token.literal.clone()),
+                Operand::Constant(self.current_token.lexeme.clone()),
             ))
         }
     }
 
     #[tracing::instrument]
     fn peek_token_is_mnemonic(&self, peek_ahead: usize) -> bool {
-        Mnemonic::from_str(self.peek_token(peek_ahead).literal.to_uppercase().as_str()).is_ok()
+        Mnemonic::from_str(self.peek_token(peek_ahead).lexeme.to_uppercase().as_str()).is_ok()
     }
 
     #[tracing::instrument]
@@ -545,7 +545,7 @@ impl<'a> Parser<'a> {
 
         self.next_token()?; // Consume the define keyword
 
-        let identifier = self.current_token.literal.clone();
+        let identifier = self.current_token.lexeme.clone();
         self.next_token()?; // Consume the identifier
 
         if self.current_token_is(TokenType::Hex) {
@@ -565,9 +565,9 @@ impl<'a> Parser<'a> {
                 Err(invalid_token!(self, "expected binary literal"))
             }
         } else if self.current_token_is(TokenType::Decimal) {
-            if let Ok(byte) = self.current_token.literal.parse::<u8>() {
+            if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
                 Ok(Constant::new_byte(identifier, byte))
-            } else if let Ok(word) = self.current_token.literal.parse::<u16>() {
+            } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
                 Ok(Constant::new_word(identifier, word))
             } else {
                 Err(invalid_token!(self, "expected decimal literal"))
@@ -598,7 +598,7 @@ impl<'a> Parser<'a> {
                 Err(invalid_token!(self, "invalid binary literal"))
             }
         } else if self.current_token_is(TokenType::Decimal) {
-            if let Ok(word) = self.current_token.literal.parse::<u16>() {
+            if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
                 Ok(Directive::Origin(word))
             } else {
                 Err(invalid_token!(self, "invalid decimal literal"))

@@ -8,12 +8,13 @@ use self::{codegen::generate, symbols::resolve_symbols};
 /// Converts a string into tokens. For example, the string `LDA #$10` would be
 /// converted into the following tokens:
 ///
+/// TODO: Update this example
 /// ```text
 /// [
-///     Token { token: TokenType::Identifier, literal: "LDA", line_number: 1, },
-///     Token { token: TokenType::LiteralNumber, literal: "#", line_number: 1, },
-///     Token { token: TokenType::Hex, literal: "10", line_number: 1, },
-///     Token { token: TokenType::Eof, literal: "".to_string(), line_number: 2, },
+///     Token { token: TokenType::Identifier, lexeme: "LDA", line_number: 1, },
+///     Token { token: TokenType::LiteralNumber, lexeme: "#", line_number: 1, },
+///     Token { token: TokenType::Hex, lexeme: "10", line_number: 1, },
+///     Token { token: TokenType::Eof, lexeme: "".to_string(), line_number: 2, },
 /// ]
 pub mod lexer;
 
