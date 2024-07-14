@@ -177,6 +177,24 @@ impl<'a> Parser<'a> {
         self.current_token.lexeme.parse::<u16>().ok()
     }
 
+    fn try_parse_u8(&mut self) -> Option<u8> {
+        match self.current_token.token {
+            TokenType::HexNumber => self.try_parse_hex_u8(),
+            TokenType::BinaryNumber => self.try_parse_binary_u8(),
+            TokenType::DecimalNumber => self.try_parse_decimal_u8(),
+            _ => None,
+        }
+    }
+
+    fn try_parse_u16(&mut self) -> Option<u16> {
+        match self.current_token.token {
+            TokenType::HexNumber => self.try_parse_hex_u16(),
+            TokenType::BinaryNumber => self.try_parse_binary_u16(),
+            TokenType::DecimalNumber => self.try_parse_decimal_u16(),
+            _ => None,
+        }
+    }
+
     #[tracing::instrument]
     fn try_parse_identifier(&mut self) -> Option<String> {
         if self.current_token_is(TokenType::Identifier) {
@@ -196,36 +214,12 @@ impl<'a> Parser<'a> {
     #[tracing::instrument]
     fn parse_literal_number(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
         self.next_token()?; // Consume the literal token '#'
-        match self.current_token.token {
-            TokenType::HexNumber => {
-                if let Some(byte) = self.try_parse_hex_u8() {
-                    Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
-                } else {
-                    Err(invalid_token!(self, "invalid hex byte"))
-                }
-            }
-            TokenType::BinaryNumber => {
-                if let Some(byte) = self.try_parse_binary_u8() {
-                    Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
-                } else {
-                    Err(invalid_token!(self, "invalid binary byte"))
-                }
-            }
-            TokenType::DecimalNumber => {
-                if let Some(byte) = self.try_parse_decimal_u8() {
-                    Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
-                } else {
-                    Err(invalid_token!(self, "invalid decimal byte"))
-                }
-            }
-            TokenType::Identifier => {
-                if let Some(identifier) = self.try_parse_identifier() {
-                    Ok((AddressingMode::Immediate, Operand::Constant(identifier)))
-                } else {
-                    Err(invalid_token!(self, "invalid constant identifier"))
-                }
-            }
-            _ => Err(invalid_token!(self, "invalid literal number/constant")),
+        if let Some(byte) = self.try_parse_u8() {
+            Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
+        } else if let Some(identifier) = self.try_parse_identifier() {
+            Ok((AddressingMode::Immediate, Operand::Constant(identifier)))
+        } else {
+            Err(invalid_token!(self, "invalid literal u8 or constant"))
         }
     }
 
@@ -390,17 +384,7 @@ impl<'a> Parser<'a> {
         // Note: open parenthesis is already consumed
 
         // The operand can be a byte or a constant
-        let byte = {
-            if let Some(byte) = self.try_parse_hex_u8() {
-                Some(byte)
-            } else if let Some(byte) = self.try_parse_binary_u8() {
-                Some(byte)
-            } else if let Some(byte) = self.try_parse_decimal_u8() {
-                Some(byte)
-            } else {
-                None
-            }
-        };
+        let byte = self.try_parse_u8();
         let constant_identifier = self.try_parse_identifier();
         if byte.is_none() && constant_identifier.is_none() {
             return Ok(None);
@@ -428,23 +412,11 @@ impl<'a> Parser<'a> {
     // (u16) - absolute indirect where u16 is a word or a constant
     #[tracing::instrument]
     fn parse_indirect_absolute(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
-        // Absolute indirect, i.e. ($BEEF)
-        if let Some(word) = self.try_parse_hex_u16() {
-            // Hex
-            self.next_token()?; // Consume the hex number
+        if let Some(word) = self.try_parse_u16() {
+            self.next_token()?; // Consume the u16
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-        } else if let Some(word) = self.try_parse_binary_u16() {
-            // Binary
-            self.next_token()?; // Consume the binary number
-            Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-        } else if let Some(word) = self.try_parse_decimal_u16() {
-            // Decimal
-            self.next_token()?; // Consume the decimal number
-            Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-        } else if self.current_token_is(TokenType::Identifier) {
-            // Constant
-            let identifier = self.current_token.lexeme.clone();
-            self.next_token()?; // Consume the identifier
+        } else if let Some(identifier) = self.try_parse_identifier() {
+            self.next_token()?; // Consume the constant
             Ok((AddressingMode::Indirect, Operand::Constant(identifier)))
         } else {
             Err(invalid_token!(self, "invalid indirect operand"))
@@ -563,36 +535,12 @@ impl<'a> Parser<'a> {
         let identifier = self.current_token.lexeme.clone();
         self.next_token()?; // Consume the identifier
 
-        // TODO: Refactor this to parse_literal_u8 and parse_literal_u16
-        if self.current_token_is(TokenType::HexNumber) {
-            if let Some(byte) = self.try_parse_hex_u8() {
-                Ok(Constant::new_byte(identifier, byte))
-            } else if let Some(word) = self.try_parse_hex_u16() {
-                Ok(Constant::new_word(identifier, word))
-            } else {
-                Err(invalid_token!(self, "expected hex literal"))
-            }
-        } else if self.current_token_is(TokenType::BinaryNumber) {
-            if let Some(byte) = self.try_parse_binary_u8() {
-                Ok(Constant::new_byte(identifier, byte))
-            } else if let Some(word) = self.try_parse_binary_u16() {
-                Ok(Constant::new_word(identifier, word))
-            } else {
-                Err(invalid_token!(self, "expected binary literal"))
-            }
-        } else if self.current_token_is(TokenType::DecimalNumber) {
-            if let Some(byte) = self.try_parse_decimal_u8() {
-                Ok(Constant::new_byte(identifier, byte))
-            } else if let Some(word) = self.try_parse_decimal_u16() {
-                Ok(Constant::new_word(identifier, word))
-            } else {
-                Err(invalid_token!(self, "expected decimal literal"))
-            }
+        if let Some(byte) = self.try_parse_u8() {
+            Ok(Constant::new_byte(identifier, byte))
+        } else if let Some(word) = self.try_parse_u16() {
+            Ok(Constant::new_word(identifier, word))
         } else {
-            Err(invalid_token!(
-                self,
-                "integer literal, expected hex, binary or decimal"
-            ))
+            Err(invalid_token!(self, "expected integer literal"))
         }
     }
 
@@ -600,30 +548,10 @@ impl<'a> Parser<'a> {
     fn parse_org_directive(&mut self) -> Result<Directive, ParseError> {
         self.next_token()?; // Consume the org keyword
 
-        // TODO: Refactor to parse_literal_u16
-        if self.current_token_is(TokenType::HexNumber) {
-            if let Some(word) = self.try_parse_hex_u16() {
-                Ok(Directive::Origin(word))
-            } else {
-                Err(invalid_token!(self, "invalid hex literal"))
-            }
-        } else if self.current_token_is(TokenType::BinaryNumber) {
-            if let Some(word) = self.try_parse_binary_u16() {
-                Ok(Directive::Origin(word))
-            } else {
-                Err(invalid_token!(self, "invalid binary literal"))
-            }
-        } else if self.current_token_is(TokenType::DecimalNumber) {
-            if let Some(word) = self.try_parse_decimal_u16() {
-                Ok(Directive::Origin(word))
-            } else {
-                Err(invalid_token!(self, "invalid decimal literal"))
-            }
+        if let Some(word) = self.try_parse_u16() {
+            Ok(Directive::Origin(word))
         } else {
-            Err(invalid_token!(
-                self,
-                "integer literal, expected hex, binary or decimal"
-            ))
+            Err(invalid_token!(self, "expected hex number"))
         }
     }
 
