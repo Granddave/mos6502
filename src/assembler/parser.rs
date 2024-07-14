@@ -100,7 +100,7 @@ impl<'a> Parser<'a> {
     fn parse_label(&mut self) -> Result<String, ParseError> {
         if self.current_token_is(TokenType::Identifier) && self.peek_token_is(0, TokenType::Colon) {
             let label = self.current_token.lexeme.clone();
-            self.next_token()?; // Consume the colon
+            self.next_token()?; // Consume the identifier
             Ok(label)
         } else {
             Err(invalid_token!(
@@ -169,6 +169,8 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // TODO: try_parse_decimal_u8 and try_parse_decimal_u16
+
     #[tracing::instrument]
     fn try_parse_identifier(&mut self) -> Option<String> {
         if self.current_token_is(TokenType::Identifier) {
@@ -187,7 +189,7 @@ impl<'a> Parser<'a> {
     /// - Identifier: #some_constant
     #[tracing::instrument]
     fn parse_literal_number(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
-        self.next_token()?;
+        self.next_token()?; // Consume the literal token '#'
         match self.current_token.token {
             TokenType::HexNumber => {
                 if let Some(byte) = self.try_parse_hex_u8() {
@@ -228,12 +230,12 @@ impl<'a> Parser<'a> {
         preceding_mnemonic: &Mnemonic,
     ) -> Result<(AddressingMode, Operand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
-            // ZeroPageX/Y
-            self.next_token()?;
+            // zp,x or zp,y
+            self.next_token()?; // Consume the byte
             if !self.peek_token_is(0, TokenType::Identifier) {
                 return Err(invalid_token!(self, "invalid ZeroPageX/Y operand"));
             }
-            self.next_token()?;
+            self.next_token()?; // Consume the comma
             match self.current_token.lexeme.to_uppercase().as_str() {
                 "X" => Ok((AddressingMode::ZeroPageX, Operand::ZeroPage(byte))),
                 "Y" => Ok((AddressingMode::ZeroPageY, Operand::ZeroPage(byte))),
@@ -249,12 +251,12 @@ impl<'a> Parser<'a> {
     #[tracing::instrument]
     fn parse_word_operand(&mut self, word: u16) -> Result<(AddressingMode, Operand), ParseError> {
         if self.peek_token_is(0, TokenType::Comma) {
-            // AbsoluteX/Y
-            self.next_token()?;
+            // a,x or a,y
+            self.next_token()?; // Consume the word
             if !self.peek_token_is(0, TokenType::Identifier) {
                 return Err(invalid_token!(self, "invalid hex operand"));
             }
-            self.next_token()?;
+            self.next_token()?; // Consume the comma
             match self.current_token.lexeme.to_uppercase().as_str() {
                 "X" => Ok((AddressingMode::AbsoluteX, Operand::Absolute(word))),
                 "Y" => Ok((AddressingMode::AbsoluteY, Operand::Absolute(word))),
@@ -308,21 +310,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // (u8,X) - where u8 is a byte or a constant
+    // (u8,X) - where u8 is a byte or an identifier
     #[tracing::instrument]
     fn parse_indirect_indexed_x(
         &mut self,
         byte: Option<u8>,
         identifier: Option<String>,
     ) -> Result<(AddressingMode, Operand), ParseError> {
-        self.next_token()?; // Consume the comma
+        self.next_token()?; // Consume byte or identifier
         if !self.peek_token_is(0, TokenType::Identifier) {
             return Err(invalid_token!(
                 self,
                 "invalid indirect indexed X operand, expected 'X'"
             ));
         }
-        self.next_token()?; // Consume the 'X'
+        self.next_token()?; // Consume comma
         let operand = match self.current_token.lexeme.to_uppercase().as_str() {
             "X" => Ok((
                 AddressingMode::IndirectIndexedX,
@@ -336,26 +338,26 @@ impl<'a> Parser<'a> {
             )),
             _ => Err(invalid_token!(self, "Invalid indirect indexed X operand")),
         };
-        self.next_token()?; // Consume the closing parenthesis
+        self.next_token()?; // Consume 'X'
         operand
     }
 
-    // (u8),Y - where u8 is a byte or a constant
+    // (u8),Y - where u8 is a byte or an identifier
     #[tracing::instrument]
     fn parse_indirect_indexed_y(
         &mut self,
         byte: Option<u8>,
         identifier: Option<String>,
     ) -> Result<(AddressingMode, Operand), ParseError> {
-        self.next_token()?; // Consume the closing parenthesis
+        self.next_token()?; // Consume byte or identifier
         if !self.peek_token_is(0, TokenType::Comma) {
             return Err(invalid_token!(
                 self,
                 "invalid indirect indexed Y operand, expected ','"
             ));
         }
+        self.next_token()?; // Consume the closing parenthesis
         self.next_token()?; // Consume the comma
-        self.next_token()?; // Consume the 'Y' identifier
         match self.current_token.lexeme.to_uppercase().as_str() {
             "Y" => Ok((
                 AddressingMode::IndirectIndexedY,
@@ -380,51 +382,59 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<(AddressingMode, Operand)>, ParseError> {
         // Note: open parenthesis is already consumed
+
+        // The operand can be a byte or a constant
         let byte = {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Some(byte)
             } else if let Some(byte) = self.try_parse_binary_u8() {
                 Some(byte)
+            // TODO: try_parse_decimal_u8
             } else if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
                 Some(byte)
             } else {
                 None
             }
         };
-        let identifier = self.try_parse_identifier(); // 'X' or 'Y'
+        let constant_identifier = self.try_parse_identifier();
+        if byte.is_none() && constant_identifier.is_none() {
+            return Ok(None);
+        }
 
-        if byte.is_some() || identifier.is_some() {
-            if self.peek_token_is(0, TokenType::Comma)
-                && self.peek_token_is(1, TokenType::Identifier)
-            {
-                Ok(Some(self.parse_indirect_indexed_x(byte, identifier)?))
-            } else if self.peek_token_is(0, TokenType::ParenRight)
-                && self.peek_token_is(1, TokenType::Comma)
-            {
-                Ok(Some(self.parse_indirect_indexed_y(byte, identifier)?))
-            } else {
-                Ok(None)
-            }
+        if self.peek_token_is(0, TokenType::Comma)
+            && self.peek_token_is(1, TokenType::Identifier /* X */)
+        {
+            // (u8,X)
+            Ok(Some(
+                self.parse_indirect_indexed_x(byte, constant_identifier)?,
+            ))
+        } else if self.peek_token_is(0, TokenType::ParenRight)
+            && self.peek_token_is(1, TokenType::Comma)
+        {
+            // (u8),Y
+            Ok(Some(
+                self.parse_indirect_indexed_y(byte, constant_identifier)?,
+            ))
         } else {
             Ok(None)
         }
     }
 
-    // (u16) or - absolute indirect where u16 is a word or a constant
+    // (u16) - absolute indirect where u16 is a word or a constant
     #[tracing::instrument]
     fn parse_indirect_absolute(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
         // Absolute indirect, i.e. ($BEEF)
         if let Some(word) = self.try_parse_hex_u16() {
             // Hex
-            self.next_token()?; // Consume the closing parenthesis
+            self.next_token()?; // Consume the hex number
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
         } else if let Some(word) = self.try_parse_binary_u16() {
             // Binary
-            self.next_token()?; // Consume the closing parenthesis
+            self.next_token()?; // Consume the binary number
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
         } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
             // Decimal
-            self.next_token()?; // Consume the closing parenthesis
+            self.next_token()?; // Consume the decimal number
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
         } else if self.current_token_is(TokenType::Identifier) {
             // Constant
@@ -471,10 +481,10 @@ impl<'a> Parser<'a> {
                 Operand::Label(self.current_token.lexeme.clone()),
             ))
         } else if self.peek_token_is(0, TokenType::Comma) {
-            // ZeroPageX/Y with constant
+            // zp,x or zp,y - where zp is a constant
             let constant = self.current_token.lexeme.clone();
+            self.next_token()?; // Consume the constant
             self.next_token()?; // Consume the comma
-            self.next_token()?; // Consume the 'X' or 'Y'
             match self.current_token.lexeme.to_uppercase().as_str() {
                 "X" => Ok((AddressingMode::ZeroPageX, Operand::Constant(constant))),
                 "Y" => Ok((AddressingMode::ZeroPageY, Operand::Constant(constant))),
@@ -512,7 +522,7 @@ impl<'a> Parser<'a> {
             return Ok((AddressingMode::Accumulator, Operand::Implied));
         }
 
-        self.next_token()?;
+        self.next_token()?; // Consume the mnemonic
 
         match self.current_token.token {
             TokenType::Pound => self.parse_literal_number(),
@@ -548,6 +558,7 @@ impl<'a> Parser<'a> {
         let identifier = self.current_token.lexeme.clone();
         self.next_token()?; // Consume the identifier
 
+        // TODO: Refactor this to parse_literal_u8 and parse_literal_u16
         if self.current_token_is(TokenType::HexNumber) {
             if let Some(byte) = self.try_parse_hex_u8() {
                 Ok(Constant::new_byte(identifier, byte))
@@ -584,7 +595,7 @@ impl<'a> Parser<'a> {
     fn parse_org_directive(&mut self) -> Result<Directive, ParseError> {
         self.next_token()?; // Consume the org keyword
 
-        // TODO: Refactor this into a function
+        // TODO: Refactor to parse_literal_u16
         if self.current_token_is(TokenType::HexNumber) {
             if let Some(word) = self.try_parse_hex_u16() {
                 Ok(Directive::Origin(word))
@@ -650,7 +661,7 @@ impl<'a> Parser<'a> {
             }
 
             ast_nodes.push(self.parse_node()?);
-            self.next_token()?;
+            self.next_token()?; // Consume the last token of the node
         }
 
         Ok(ast_nodes)
