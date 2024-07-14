@@ -169,7 +169,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // TODO: try_parse_decimal_u8 and try_parse_decimal_u16
+    fn try_parse_decimal_u8(&mut self) -> Option<u8> {
+        self.current_token.lexeme.parse::<u8>().ok()
+    }
+
+    fn try_parse_decimal_u16(&mut self) -> Option<u16> {
+        self.current_token.lexeme.parse::<u16>().ok()
+    }
 
     #[tracing::instrument]
     fn try_parse_identifier(&mut self) -> Option<String> {
@@ -206,7 +212,7 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenType::DecimalNumber => {
-                if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
+                if let Some(byte) = self.try_parse_decimal_u8() {
                     Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
                 } else {
                     Err(invalid_token!(self, "invalid decimal byte"))
@@ -301,9 +307,9 @@ impl<'a> Parser<'a> {
         &mut self,
         mnemonic: &Mnemonic,
     ) -> Result<(AddressingMode, Operand), ParseError> {
-        if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
+        if let Some(byte) = self.try_parse_decimal_u8() {
             self.parse_byte_operand(byte, mnemonic)
-        } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
+        } else if let Some(word) = self.try_parse_decimal_u16() {
             self.parse_word_operand(word)
         } else {
             Err(invalid_token!(self, "invalid decimal operand"))
@@ -389,8 +395,7 @@ impl<'a> Parser<'a> {
                 Some(byte)
             } else if let Some(byte) = self.try_parse_binary_u8() {
                 Some(byte)
-            // TODO: try_parse_decimal_u8
-            } else if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
+            } else if let Some(byte) = self.try_parse_decimal_u8() {
                 Some(byte)
             } else {
                 None
@@ -432,7 +437,7 @@ impl<'a> Parser<'a> {
             // Binary
             self.next_token()?; // Consume the binary number
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
-        } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
+        } else if let Some(word) = self.try_parse_decimal_u16() {
             // Decimal
             self.next_token()?; // Consume the decimal number
             Ok((AddressingMode::Indirect, Operand::Absolute(word)))
@@ -576,9 +581,9 @@ impl<'a> Parser<'a> {
                 Err(invalid_token!(self, "expected binary literal"))
             }
         } else if self.current_token_is(TokenType::DecimalNumber) {
-            if let Ok(byte) = self.current_token.lexeme.parse::<u8>() {
+            if let Some(byte) = self.try_parse_decimal_u8() {
                 Ok(Constant::new_byte(identifier, byte))
-            } else if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
+            } else if let Some(word) = self.try_parse_decimal_u16() {
                 Ok(Constant::new_word(identifier, word))
             } else {
                 Err(invalid_token!(self, "expected decimal literal"))
@@ -609,7 +614,7 @@ impl<'a> Parser<'a> {
                 Err(invalid_token!(self, "invalid binary literal"))
             }
         } else if self.current_token_is(TokenType::DecimalNumber) {
-            if let Ok(word) = self.current_token.lexeme.parse::<u16>() {
+            if let Some(word) = self.try_parse_decimal_u16() {
                 Ok(Directive::Origin(word))
             } else {
                 Err(invalid_token!(self, "invalid decimal literal"))
