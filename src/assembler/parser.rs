@@ -353,7 +353,7 @@ impl<'a> Parser<'a> {
         if !self.peek_token_is(0, TokenType::Comma) {
             return Err(invalid_token!(
                 self,
-                "invalid indirect indexed Y operand, expected ','"
+                "Invalid indirect indexed Y operand, expected ','"
             ));
         }
         self.next_token()?; // Consume the closing parenthesis
@@ -361,12 +361,12 @@ impl<'a> Parser<'a> {
         match self.current_token.lexeme.to_uppercase().as_str() {
             "Y" => Ok((
                 AddressingMode::IndirectIndexedY,
-                if let Some(byte) = byte {
-                    Operand::ZeroPage(byte)
-                } else if let Some(identifier) = identifier {
-                    Operand::Constant(identifier)
-                } else {
-                    return Err(invalid_token!(self, "invalid indirect indexed Y operand"));
+                match (byte, identifier) {
+                    (Some(byte), None) => Operand::ZeroPage(byte),
+                    (None, Some(identifier)) => Operand::Constant(identifier),
+                    (_, _) => {
+                        return Err(invalid_token!(self, "Invalid indirect indexed Y operand"))
+                    }
                 },
             )),
             _ => Err(invalid_token!(
@@ -390,22 +390,20 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        if self.peek_token_is(0, TokenType::Comma)
-            && self.peek_token_is(1, TokenType::Identifier /* X */)
-        {
-            // (u8,X)
-            Ok(Some(
-                self.parse_indirect_indexed_x(byte, constant_identifier)?,
-            ))
-        } else if self.peek_token_is(0, TokenType::ParenRight)
-            && self.peek_token_is(1, TokenType::Comma)
-        {
-            // (u8),Y
-            Ok(Some(
-                self.parse_indirect_indexed_y(byte, constant_identifier)?,
-            ))
-        } else {
-            Ok(None)
+        match (self.peek_token(0).token, self.peek_token(1).token) {
+            (TokenType::Comma, TokenType::Identifier) => {
+                //  (u8,X)
+                Ok(Some(
+                    self.parse_indirect_indexed_x(byte, constant_identifier)?,
+                ))
+            }
+            (TokenType::ParenRight, TokenType::Comma) => {
+                // (u8),Y
+                Ok(Some(
+                    self.parse_indirect_indexed_y(byte, constant_identifier)?,
+                ))
+            }
+            (_, _) => Ok(None),
         }
     }
 
