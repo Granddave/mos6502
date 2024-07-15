@@ -9,7 +9,7 @@ use source_position::SourcePosition;
 pub mod source_position;
 pub mod token;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum LexerError {
     #[error("Unexpected character at {0}: '{1}'")]
     UnexpectedCharacter(SourcePosition, char),
@@ -127,6 +127,38 @@ impl<'a> Lexer<'a> {
         self.read_while(|ch| ch.is_ascii_digit())
     }
 
+    fn read_binary_literal(&mut self, ch: char) -> Result<Token, LexerError> {
+        let (_, span_1) = self.read_one_char();
+        let (text, span_2) = self.read_binary();
+        if text.is_empty() {
+            return Err(LexerError::UnexpectedCharacter(
+                self.current_source_position,
+                ch,
+            ));
+        }
+        Ok(Token::new(
+            TokenType::BinaryNumber,
+            text,
+            SourcePositionSpan::new(span_1.start, span_2.end),
+        ))
+    }
+
+    fn read_hex_literal(&mut self, ch: char) -> Result<Token, LexerError> {
+        let (_, span_1) = self.read_one_char();
+        let (text, span_2) = self.read_hex();
+        if text.is_empty() {
+            return Err(LexerError::UnexpectedCharacter(
+                self.current_source_position,
+                ch,
+            ));
+        }
+        Ok(Token::new(
+            TokenType::HexNumber,
+            text,
+            SourcePositionSpan::new(span_1.start, span_2.end),
+        ))
+    }
+
     #[tracing::instrument]
     pub fn next_token(&mut self) -> Result<Option<Token>, LexerError> {
         self.skip_whitespace();
@@ -163,24 +195,8 @@ impl<'a> Lexer<'a> {
                     Some(Token::new(TokenType::Pound, text, span))
                 }
                 // Number literals
-                '$' => {
-                    let (_, span_1) = self.read_one_char();
-                    let (text, span_2) = self.read_hex();
-                    Some(Token::new(
-                        TokenType::HexNumber,
-                        text,
-                        SourcePositionSpan::new(span_1.start, span_2.end),
-                    ))
-                }
-                '%' => {
-                    let (_, span_1) = self.read_one_char();
-                    let (text, span_2) = self.read_binary();
-                    Some(Token::new(
-                        TokenType::BinaryNumber,
-                        text,
-                        SourcePositionSpan::new(span_1.start, span_2.end),
-                    ))
-                }
+                '$' => Some(self.read_hex_literal(ch)?),
+                '%' => Some(self.read_binary_literal(ch)?),
                 '0'..='9' => {
                     let (text, span) = self.read_decimal();
                     Some(Token::new(TokenType::DecimalNumber, text, span))
@@ -252,6 +268,26 @@ mod tests {
             let token = lexer.next_token()?.unwrap();
             assert_eq!(token.token, TokenType::BinaryNumber);
             assert_eq!(token.lexeme, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_hex_and_binary() -> anyhow::Result<()> {
+        let tests = vec![
+            (
+                "$",
+                LexerError::UnexpectedCharacter(SourcePosition::new(1, 2), '$'),
+            ),
+            (
+                "%",
+                LexerError::UnexpectedCharacter(SourcePosition::new(1, 2), '%'),
+            ),
+        ];
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let result = lexer.next_token();
+            assert_eq!(result, Err(expected));
         }
         Ok(())
     }
