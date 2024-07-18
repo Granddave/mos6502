@@ -36,6 +36,7 @@ pub fn exec(bytes: &[u8], program_start: u16) -> anyhow::Result<()> {
             Event::Key(key_event) => update(&mut app, key_event),
             Event::Mouse(_mouse_event) => {}
             Event::Resize(_w, _h) => {}
+            Event::Clock => app.clock(),
         };
     }
 

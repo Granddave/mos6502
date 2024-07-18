@@ -9,7 +9,7 @@ pub fn update(app: &mut App, key_event: KeyEvent) {
             if key_event.modifiers == KeyModifiers::CONTROL {
                 app.quit()
             } else {
-                app.continue_execution();
+                app.toggle_run_step_mode();
             }
         }
         KeyCode::Char('s') => app.step_cpu(),

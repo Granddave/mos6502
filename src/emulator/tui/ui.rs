@@ -2,7 +2,7 @@ use ratatui::{prelude::*, widgets::*};
 
 use crate::emulator::cpu::STACK_BASE;
 
-use super::app::{widget::AppWidget, App};
+use super::app::{widget::AppWidget, App, RunMode};
 
 fn is_selected_style(selected: AppWidget, current_widget: AppWidget) -> Style {
     if selected == current_widget {
@@ -246,7 +246,7 @@ fn render_top_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
     );
 }
 
-fn render_bottom_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
+fn render_help_text_widget(_app: &mut App, frame: &mut Frame, layout: Rect) {
     frame.render_widget(
         Paragraph::new(vec![
             "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
@@ -256,6 +256,23 @@ fn render_bottom_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
         ])
         .style(Style::default().fg(Color::Yellow).dim())
         .alignment(Alignment::Left),
+        layout,
+    );
+}
+
+fn render_simulation_state_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
+    let is_step_mode = app.run_mode == RunMode::Step;
+    let text: Vec<Line<'_>> = vec![vec![
+        Span::raw("Run mode: "),
+        Span::styled("Step", style_active_text(is_step_mode)),
+        Span::raw("/"),
+        Span::styled("Continuous", style_active_text(!is_step_mode)),
+    ]
+    .into()];
+    frame.render_widget(
+        Paragraph::new(text)
+            .style(Style::default().fg(Color::Yellow))
+            .alignment(Alignment::Left),
         layout,
     );
 }
@@ -292,11 +309,19 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             Constraint::Max(18), // Memory viewer
         ])
         .split(app_layout[2]);
+    let bottom_bar_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Fill(2), // Help text
+            Constraint::Fill(1), // Simulation state
+        ])
+        .split(main_layout[2]);
 
     render_top_bar(app, frame, main_layout[0]);
     render_registers_widget(app, frame, left_app_layout[0]);
     render_stack_widget(app, frame, left_app_layout[1]);
     render_disassembly_widget(app, frame, app_layout[1]);
     render_memory_widget(app, frame, right_app_layout[0]);
-    render_bottom_bar(app, frame, main_layout[2])
+    render_help_text_widget(app, frame, bottom_bar_layout[0]);
+    render_simulation_state_widget(app, frame, bottom_bar_layout[1]);
 }

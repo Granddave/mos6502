@@ -18,6 +18,8 @@ pub enum Event {
     Mouse(MouseEvent),
     /// Terminal resize.
     Resize(u16, u16),
+    /// Clock tick.
+    Clock,
 }
 
 /// Terminal event handler.
@@ -37,14 +39,16 @@ impl EventHandler {
     /// Constructs a new instance of [`EventHandler`].
     pub fn new(tick_rate: u64) -> Self {
         let tick_rate = Duration::from_millis(tick_rate);
+        let clock_rate = Duration::from_millis(10);
         let (sender, receiver) = mpsc::channel();
         let handler = {
             let sender = sender.clone();
             thread::spawn(move || {
                 let mut last_tick = Instant::now();
+                let mut last_clock = Instant::now();
                 loop {
-                    let timeout = tick_rate
-                        .checked_sub(last_tick.elapsed())
+                    let timeout = clock_rate
+                        .checked_sub(last_clock.elapsed())
                         .unwrap_or(tick_rate);
 
                     if event::poll(timeout).expect("unable to poll for event") {
@@ -66,6 +70,13 @@ impl EventHandler {
                     if last_tick.elapsed() >= tick_rate {
                         sender.send(Event::Tick).expect("failed to send tick event");
                         last_tick = Instant::now();
+                    }
+
+                    if last_clock.elapsed() >= clock_rate {
+                        sender
+                            .send(Event::Clock)
+                            .expect("failed to send clock event");
+                        last_clock = Instant::now();
                     }
                 }
             })

@@ -2,7 +2,7 @@ use crate::{
     disassembler::{disassemble_code, listing},
     emulator::{
         bus::{Bus, Readable, Writeable},
-        cpu::{self, Cpu, RunOption, STACK_BASE, STACK_PAGE},
+        cpu::{self, Cpu, STACK_BASE, STACK_PAGE},
     },
 };
 use anyhow::Result;
@@ -14,6 +14,13 @@ pub mod widget;
 
 const MEMORY_SCROLL_PAGE: usize = 0x10;
 const MEMORY_SCROLL_MAX: usize = 0xff;
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub enum RunMode {
+    #[default]
+    Step,
+    Run,
+}
 
 #[derive(Default)]
 pub struct App {
@@ -39,6 +46,8 @@ pub struct App {
     state: EmulationState,
 
     pub selected_widget: AppWidget,
+
+    pub run_mode: RunMode,
 
     /// If the app should quit
     should_quit: bool,
@@ -91,6 +100,8 @@ impl App {
         self.cpu = Cpu::new();
         self.cpu.reset();
         self.state.invalidate();
+
+        self.run_mode = RunMode::Step;
     }
 
     /// Quits the application.
@@ -98,15 +109,29 @@ impl App {
         self.should_quit = true;
     }
 
+    /// Clock the CPU by one cycle.
+    pub fn clock(&mut self) {
+        match self.run_mode {
+            RunMode::Run => self.step_cpu(),
+            RunMode::Step => (),
+        }
+    }
+
     /// Steps the CPU by one instruction.
     pub fn step_cpu(&mut self) {
-        self.cpu.step(&mut self.memory);
+        match self.run_mode {
+            RunMode::Run => self.cpu.clock(&mut self.memory),
+            RunMode::Step => self.cpu.step(&mut self.memory),
+        }
         self.state.invalidate();
     }
 
     /// Run CPU execution until a break instruction is reached.
-    pub fn continue_execution(&mut self) {
-        self.cpu.run(&mut self.memory, RunOption::StopOnJumpToSelf);
+    pub fn toggle_run_step_mode(&mut self) {
+        match self.run_mode {
+            RunMode::Run => self.run_mode = RunMode::Step,
+            RunMode::Step => self.run_mode = RunMode::Run,
+        }
     }
 
     /// Get the last and current state of the emulation
