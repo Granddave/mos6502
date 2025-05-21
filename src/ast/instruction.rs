@@ -57,47 +57,47 @@ impl fmt::Display for Instruction {
             match &self.operand {
                 Operand::Immediate(value) => match self.addr_mode {
                     AddressingMode::Immediate => {
-                        write!(f, "{} #${:02X}", self.mnemonic, value)
+                        write!(f, "{} #${:02x}", self.mnemonic, value)
                     }
                     AddressingMode::ZeroPage => {
-                        write!(f, "{} ${:02X}", self.mnemonic, value)
+                        write!(f, "{} ${:02x}", self.mnemonic, value)
                     }
-                    _ => write!(f, "{} #${:02X}", self.mnemonic, value),
+                    _ => write!(f, "{} #${:02x}", self.mnemonic, value),
                 },
                 Operand::Absolute(address) => match self.addr_mode {
                     AddressingMode::Absolute => {
-                        write!(f, "{} ${:04X}", self.mnemonic, address)
+                        write!(f, "{} ${:04x}", self.mnemonic, address)
                     }
                     AddressingMode::AbsoluteX => {
-                        write!(f, "{} ${:04X},X", self.mnemonic, address)
+                        write!(f, "{} ${:04x},X", self.mnemonic, address)
                     }
                     AddressingMode::AbsoluteY => {
-                        write!(f, "{} ${:04X},Y", self.mnemonic, address)
+                        write!(f, "{} ${:04x},Y", self.mnemonic, address)
                     }
                     AddressingMode::Indirect => {
-                        write!(f, "{} (${:04X})", self.mnemonic, address)
+                        write!(f, "{} (${:04x})", self.mnemonic, address)
                     }
                     _ => panic!("Invalid addressing mode for absolute address"),
                 },
                 Operand::ZeroPage(address) => match self.addr_mode {
                     AddressingMode::ZeroPage => {
-                        write!(f, "{} ${:02X}", self.mnemonic, address)
+                        write!(f, "{} ${:02x}", self.mnemonic, address)
                     }
                     AddressingMode::ZeroPageX => {
-                        write!(f, "{} ${:02X},X", self.mnemonic, address)
+                        write!(f, "{} ${:02x},X", self.mnemonic, address)
                     }
                     AddressingMode::ZeroPageY => {
-                        write!(f, "{} ${:02X},Y", self.mnemonic, address)
+                        write!(f, "{} ${:02x},Y", self.mnemonic, address)
                     }
                     AddressingMode::IndirectIndexedX => {
-                        write!(f, "{} (${:02X},X)", self.mnemonic, address)
+                        write!(f, "{} (${:02x},X)", self.mnemonic, address)
                     }
                     AddressingMode::IndirectIndexedY => {
-                        write!(f, "{} (${:02X}),Y", self.mnemonic, address)
+                        write!(f, "{} (${:02x}),Y", self.mnemonic, address)
                     }
                     _ => panic!("Invalid addressing mode for zero page address"),
                 },
-                Operand::Relative(offset) => write!(f, "{} ${:02X}", self.mnemonic, offset),
+                Operand::Relative(offset) => write!(f, "{} ${:02x}", self.mnemonic, offset),
                 Operand::Label(label) => write!(f, "{} {}", self.mnemonic, label),
                 Operand::Implied => write!(f, "{}", self.mnemonic),
                 Operand::Constant(constant) => match self.addr_mode {

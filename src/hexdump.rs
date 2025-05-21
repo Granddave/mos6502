@@ -29,7 +29,7 @@ pub fn hexdump_1(program: &[u8], addr_width: usize, stride: usize) -> String {
         if offset != 0 {
             str.push('\n');
         }
-        str.push_str(format!("{:0width$X}", offset, width = addr_width).as_str());
+        str.push_str(format!("{:0width$x}", offset, width = addr_width).as_str());
     }
 
     let mut str = String::new();
