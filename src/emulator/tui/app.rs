@@ -203,7 +203,9 @@ impl App {
     pub fn scroll_down(&mut self) {
         match self.selected_widget {
             AppWidget::Disassembly => {
-                if self.disassembly_widget_scroll < self.disassembled_program.len() - 1 {
+                if self.disassembly_widget_scroll
+                    < self.disassembled_program.len().saturating_sub(1)
+                {
                     self.disassembly_widget_scroll += 1;
                 }
             }
@@ -219,15 +221,19 @@ impl App {
     pub fn scroll_down_page(&mut self) {
         match self.selected_widget {
             AppWidget::Disassembly => {
-                let max_scroll = self.disassembled_program.len() - 1;
-                if self.disassembly_widget_scroll < max_scroll - self.disassembly_frame_height {
+                let max_scroll = self.disassembled_program.len().saturating_sub(1);
+                if self.disassembly_widget_scroll
+                    < max_scroll.saturating_sub(self.disassembly_frame_height)
+                {
                     self.disassembly_widget_scroll += self.disassembly_frame_height;
                 } else {
                     self.disassembly_widget_scroll = max_scroll;
                 }
             }
             AppWidget::Memory => {
-                if self.memory_page_to_display < MEMORY_SCROLL_MAX - MEMORY_SCROLL_PAGE {
+                if self.memory_page_to_display
+                    < MEMORY_SCROLL_MAX.saturating_sub(MEMORY_SCROLL_PAGE)
+                {
                     self.memory_page_to_display += MEMORY_SCROLL_PAGE;
                 } else {
                     self.memory_page_to_display = MEMORY_SCROLL_MAX;
