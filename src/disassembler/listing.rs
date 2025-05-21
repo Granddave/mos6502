@@ -21,9 +21,9 @@ pub fn generate_line(addr: usize, ins: &Instruction) -> String {
 #[tracing::instrument]
 pub fn generate(program_addr: usize, ast: AST) -> String {
     let mut string = String::new();
-    string.push_str(" Addr  Hexdump   Instructions\n");
-    string.push_str("-----------------------------\n");
-    //               $8000  20 06 80  JSR $8006
+    string.push_str("  Addr  Hexdump   Instructions\n");
+    string.push_str("------------------------------\n");
+    //               0x8000  20 06 80  JSR $8006
 
     let mut current_address = program_addr;
     let mut last_node: Option<&Node> = None;
@@ -85,8 +85,8 @@ mod tests {
             ),
         ];
         let listing = generate(0x8000, ast);
-        let expected = " Addr  Hexdump   Instructions
------------------------------
+        let expected = "  Addr  Hexdump   Instructions
+------------------------------
 0x8000  20 06 80  JSR $8006
 0x8003  a9 01     LDA #$01
 0x8005  ad 00 02  LDA $0200
