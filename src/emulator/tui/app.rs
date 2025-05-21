@@ -53,30 +53,39 @@ pub struct App {
     should_quit: bool,
 }
 
+/// Turn a `Vec<Instruction>` into a `Vec<(usize, String)>`
+/// where the usize is the memory address of the instruction.
+///
+/// Arguments:
+///   - `program`: The program to disassemble.
+///   - `program_start`: The start address of the program in memory.
+///
+/// Returns:
+///   - `Result<Vec<(usize, String)>>`: A vector of tuples where the first element is the memory address
+///     and the second element is the disassembled instruction as a string.
+fn disassemble_program(program: &[u8], program_start: u16) -> Result<Vec<(usize, String)>> {
+    // TODO: Don't crash if program start is before 0x8000
+    Ok(disassemble_code(&program[program_start as usize..])?
+        .iter()
+        .scan(0, |acc, ins| {
+            let addr = *acc;
+            *acc += ins.size();
+            Some((addr, ins.clone()))
+        })
+        .map(|(addr, node)| {
+            let memory_addr = program_start as usize + addr;
+            let line = listing::generate_line(memory_addr, &node);
+            (memory_addr, line)
+        })
+        .collect())
+}
+
 impl App {
     pub fn new(program: &[u8], program_start: u16) -> Result<Self> {
-        // turn a Vec<Instruction> into a Vec<(usize, String)>
-        // where the usize is the memory address of the instruction.
-        // TODO: Refactor this into a function
-        let disassembly: Vec<(usize, String)> =
-            disassemble_code(&program[program_start as usize..])?
-                .iter()
-                .scan(0, |acc, ins| {
-                    let addr = *acc;
-                    *acc += ins.size();
-                    Some((addr, ins.clone()))
-                })
-                .map(|(addr, node)| {
-                    let memory_addr = program_start as usize + addr;
-                    let line = listing::generate_line(memory_addr, &node);
-                    (memory_addr, line)
-                })
-                .collect();
-
         let mut app = Self {
             program: program.to_vec(),
             program_start,
-            disassembled_program: disassembly,
+            disassembled_program: disassemble_program(program, program_start)?,
             selected_widget: AppWidget::Disassembly,
             memory: Bus::new(),
             ..Default::default()
