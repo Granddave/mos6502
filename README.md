@@ -146,6 +146,8 @@ If the file passed to the emulator is a file with assembly code, the program wil
     - Load file with `l`
     - Centered disassembler view
     - Contiuous run with screen update
+    - Scrollable stack
+    - Disassemble memory if program memory is changed
 
 
 ## References
