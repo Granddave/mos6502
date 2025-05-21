@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use event::{Event, EventHandler};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
@@ -24,7 +26,7 @@ pub fn exec(bytes: &[u8], program_start: u16) -> anyhow::Result<()> {
 
     let backend = CrosstermBackend::new(std::io::stderr());
     let terminal = Terminal::new(backend)?;
-    let events = EventHandler::new(250);
+    let events = EventHandler::new(Duration::from_millis(250));
     let mut tui = terminal::Terminal::new(terminal, events);
     tui.enter()?;
 
