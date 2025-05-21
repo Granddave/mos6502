@@ -167,14 +167,10 @@ impl App {
     pub fn scroll_up(&mut self) {
         match self.selected_widget {
             AppWidget::Disassembly => {
-                if self.disassembly_widget_scroll > 0 {
-                    self.disassembly_widget_scroll -= 1;
-                }
+                self.disassembly_widget_scroll = self.disassembly_widget_scroll.saturating_sub(1);
             }
             AppWidget::Memory => {
-                if self.memory_page_to_display > 0 {
-                    self.memory_page_to_display -= 1;
-                }
+                self.memory_page_to_display = self.memory_page_to_display.saturating_sub(1)
             }
             _ => {}
         }
@@ -183,18 +179,14 @@ impl App {
     pub fn scroll_up_page(&mut self) {
         match self.selected_widget {
             AppWidget::Disassembly => {
-                if self.disassembly_widget_scroll > self.disassembly_frame_height {
-                    self.disassembly_widget_scroll -= self.disassembly_frame_height;
-                } else {
-                    self.disassembly_widget_scroll = 0;
-                }
+                self.disassembly_widget_scroll = self
+                    .disassembly_widget_scroll
+                    .saturating_sub(self.disassembly_frame_height)
             }
             AppWidget::Memory => {
-                if self.memory_page_to_display > MEMORY_SCROLL_PAGE {
-                    self.memory_page_to_display -= MEMORY_SCROLL_PAGE;
-                } else {
-                    self.memory_page_to_display = 0;
-                }
+                self.memory_page_to_display = self
+                    .memory_page_to_display
+                    .saturating_sub(MEMORY_SCROLL_PAGE)
             }
             _ => {}
         }
