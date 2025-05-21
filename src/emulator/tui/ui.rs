@@ -249,10 +249,10 @@ fn render_top_bar(_app: &mut App, frame: &mut Frame, layout: Rect) {
 fn render_help_text_widget(_app: &mut App, frame: &mut Frame, layout: Rect) {
     frame.render_widget(
         Paragraph::new(vec![
-            "Press `Esc`, `Ctrl-C` or `q` to stop running.".into(),
-            "Press `s` to step and `c` to run continuously until BRK instruction".into(),
-            "Press `r` to reset the CPU and memory".into(),
-            // TODO: Add more instructions
+            "Use arrow keys and page up/down to navigate panes".into(),
+            "<s> to step and <c> to run continuously until BRK instruction".into(),
+            "<r> to reset the CPU and memory".into(),
+            "<Esc>, <Ctrl-C> or <q> to stop running.".into(),
         ])
         .style(Style::default().fg(Color::Yellow).dim())
         .alignment(Alignment::Left),
@@ -283,7 +283,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .constraints([
             Constraint::Max(1), // Top bar
             Constraint::Min(1), // App layout
-            Constraint::Max(3), // Bottom bar
+            Constraint::Max(4), // Bottom bar
         ])
         .split(frame.size());
 
