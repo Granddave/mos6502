@@ -82,23 +82,23 @@ $ cargo run -r -- disassemble loop.bin
    Compiling mos6502 v0.1.0 (/home/david/Dev/mos6502)
     Finished release [optimized] target(s) in 0.07s
      Running `target/release/mos6502 disassemble loop.bin`
- Addr  Hexdump   Instructions
------------------------------
+  Addr  Hexdump   Instructions
+------------------------------
 0x0000  00        BRK
 *
 0x8000  20 09 80  JSR $8009
-0x8003  20 0e 80  JSR $800E
-0x8006  4c 1a 80  JMP $801A
+0x8003  20 0e 80  JSR $800e
+0x8006  4c 1a 80  JMP $801a
 0x8009  a9 00     LDA #$00
 0x800b  85 00     STA $00
 0x800d  60        RTS
 0x800e  a5 00     LDA $00
-0x8010  c9 0a     CMP #$0A
+0x8010  c9 0a     CMP #$0a
 0x8012  f0 05     BEQ $05
 0x8014  e6 00     INC $00
-0x8016  4c 0e 80  JMP $800E
+0x8016  4c 0e 80  JMP $800e
 0x8019  60        RTS
-0x801a  4c 1a 80  JMP $801A
+0x801a  4c 1a 80  JMP $801a
 ```
 
 
