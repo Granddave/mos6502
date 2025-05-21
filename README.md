@@ -7,7 +7,7 @@ This is a toy project where I've created an emulator, assembler and a disassembl
 [![asciicast of TUI emulator](https://asciinema.org/a/NXcEza2NQAWhok6PgxQD3omvk.svg)](https://asciinema.org/a/NXcEza2NQAWhok6PgxQD3omvk)
 
 ```sh
-$ ./mos6502
+$ ./mos6502 --help
 Usage: mos6502 [OPTIONS] <COMMAND>
 
 Commands:
