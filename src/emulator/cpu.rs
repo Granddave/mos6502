@@ -63,6 +63,12 @@ impl Cpu {
     }
 
     /// Fetches and decodes the next instruction from memory.
+    ///
+    /// Arguments:
+    ///   - `memory`: The memory bus to use for reading and writing.
+    ///
+    /// Returns:
+    ///   - The fetched instruction.
     #[tracing::instrument]
     fn fetch_and_decode(&mut self, memory: &mut Bus) -> Instruction {
         let opcode = memory.read_byte(self.regs.pc);
@@ -91,6 +97,14 @@ impl Cpu {
         Instruction::new(mnemonic, addr_mode, operand)
     }
 
+    /// Executes the given instruction.
+    ///
+    /// Arguments:
+    ///   - `ins`: The instruction to execute.
+    ///   - `memory`: The memory bus to use for reading and writing.
+    ///
+    /// Returns:
+    ///   - Number of cycles the instruction took to execute.
     #[tracing::instrument]
     fn execute_instruction(&mut self, ins: &Instruction, memory: &mut Bus) -> usize {
         match (&ins.mnemonic, &ins.addr_mode, &ins.operand) {
