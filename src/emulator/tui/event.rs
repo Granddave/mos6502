@@ -23,6 +23,9 @@ pub enum Event {
 }
 
 /// Terminal event handler.
+///
+/// Driven by a separate thread, it handles events from the terminal
+/// and emits tick events at a specified rate.
 #[derive(Debug)]
 pub struct EventHandler {
     /// Event sender channel.
@@ -37,6 +40,12 @@ pub struct EventHandler {
 
 impl EventHandler {
     /// Constructs a new instance of [`EventHandler`].
+    ///
+    /// Arguments:
+    ///   * `tick_rate` - The rate at which the terminal should tick.
+    ///
+    /// Returns:
+    ///   * A new instance of [`EventHandler`].
     pub fn new(tick_rate: Duration) -> Self {
         let clock_rate_hz = 100;
         let clock_rate = Duration::from_millis(1000 / clock_rate_hz);
