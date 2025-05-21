@@ -124,10 +124,7 @@ impl<'a> Parser<'a> {
         if operand.len() > 2 {
             return None;
         }
-        match u8::from_str_radix(operand, 16) {
-            Ok(byte) => Some(byte),
-            Err(_) => None,
-        }
+        u8::from_str_radix(operand, 16).ok()
     }
 
     #[tracing::instrument]
@@ -137,10 +134,7 @@ impl<'a> Parser<'a> {
         if operand.len() < 2 || operand.len() > 4 {
             return None;
         }
-        match u16::from_str_radix(operand, 16) {
-            Ok(word) => Some(word),
-            Err(_) => None,
-        }
+        u16::from_str_radix(operand, 16).ok()
     }
 
     #[tracing::instrument]
@@ -150,10 +144,7 @@ impl<'a> Parser<'a> {
         if operand.len() > 8 {
             return None;
         }
-        match u8::from_str_radix(operand, 2) {
-            Ok(byte) => Some(byte),
-            Err(_) => None,
-        }
+        u8::from_str_radix(operand, 2).ok()
     }
 
     #[tracing::instrument]
@@ -163,10 +154,7 @@ impl<'a> Parser<'a> {
         if operand.len() < 8 || operand.len() > 16 {
             return None;
         }
-        match u16::from_str_radix(operand, 2) {
-            Ok(word) => Some(word),
-            Err(_) => None,
-        }
+        u16::from_str_radix(operand, 2).ok()
     }
 
     fn try_parse_decimal_u8(&mut self) -> Option<u8> {
