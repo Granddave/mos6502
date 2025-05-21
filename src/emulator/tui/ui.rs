@@ -285,7 +285,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             Constraint::Min(1), // App layout
             Constraint::Max(4), // Bottom bar
         ])
-        .split(frame.size());
+        .split(frame.area());
 
     // App layout
     let app_layout = Layout::default()
