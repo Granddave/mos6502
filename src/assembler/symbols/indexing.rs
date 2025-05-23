@@ -17,6 +17,8 @@ pub fn index_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), Sym
             })?,
             Node::Directive(directive) => match directive {
                 Directive::Origin(org_addr) => current_addr = *org_addr as usize,
+                Directive::Byte(_) => current_addr += 1,
+                Directive::Word(_) => current_addr += 2,
             },
             _ => (),
         }
@@ -77,6 +79,8 @@ mod tests {
     fn example_ast() -> AST {
         vec![
             Node::Directive(Directive::Origin(0x8000)),
+            Node::Directive(Directive::Byte(0x12)),
+            Node::Directive(Directive::Word(0x3456)),
             Node::Constant(Constant::new_byte("zero".to_string(), 0x00)),
             Node::Constant(Constant::new_word("addr".to_string(), 0x1234)),
             Node::new_instruction(
@@ -144,12 +148,12 @@ mod tests {
         assert_eq!(symbol_table.symbols[0].name, "firstloop");
         assert_eq!(
             symbol_table.symbols[0].symbol,
-            SymbolType::Label(0x8000 + 0x04)
+            SymbolType::Label(0x8000 + 0x07)
         );
         assert_eq!(symbol_table.symbols[1].name, "secondloop");
         assert_eq!(
             symbol_table.symbols[1].symbol,
-            SymbolType::Label(0x8000 + 0x0f)
+            SymbolType::Label(0x8000 + 0x12)
         );
         assert_eq!(symbol_table.symbols[2].name, "zero");
         assert_eq!(

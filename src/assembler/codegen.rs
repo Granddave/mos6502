@@ -25,16 +25,11 @@ fn verify_org_directives(ast: &AST) -> Result<(), CodeGenError> {
     // Warn about org directives that are not specified in ascending order
     let mut prev_org_addr = 0;
     for node in ast.iter() {
-        if let Node::Directive(directive) = node {
-            match directive {
-                Directive::Origin(org_addr) => {
-                    if *org_addr < prev_org_addr {
-                        return Err(CodeGenError::OrgDirectiveNotInAscendingOrder(*org_addr));
-                    }
-
-                    prev_org_addr = *org_addr;
-                }
+        if let Node::Directive(Directive::Origin(org_addr)) = node {
+            if *org_addr < prev_org_addr {
+                return Err(CodeGenError::OrgDirectiveNotInAscendingOrder(*org_addr));
             }
+            prev_org_addr = *org_addr;
         }
     }
 
@@ -97,6 +92,8 @@ fn ast_to_bytes(ast: &mut AST) -> Result<Vec<u8>, CodeGenError> {
 
                     bytes.resize(*org_addr as usize, 0x00);
                 }
+                Directive::Byte(byte) => bytes.push(*byte),
+                Directive::Word(word) => bytes.extend_from_slice(&word.to_le_bytes()),
             },
             _ => (),
         }
@@ -255,6 +252,14 @@ mod tests {
                     /* LDY */ 0xAC, 0x10, 0xD0, /* LDX */ 0xA2, 0x0C,
                     /* LDA */ 0xA5, 0x02,
                 ],
+            ),
+            (
+                vec![
+                    Node::Directive(Directive::Byte(0x01)),
+                    Node::Directive(Directive::Byte(0x02)),
+                    Node::Directive(Directive::Word(0x0403)),
+                ],
+                vec![0x01, 0x02, 0x03, 0x04],
             ),
         ];
 
