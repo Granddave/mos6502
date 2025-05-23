@@ -207,6 +207,8 @@ impl<'a> Lexer<'a> {
                     match text {
                         "define" => Some(Token::new(TokenType::Define, text, span)),
                         "org" => Some(Token::new(TokenType::OrgDirective, text, span)),
+                        "byte" => Some(Token::new(TokenType::ByteDirective, text, span)),
+                        "word" => Some(Token::new(TokenType::WordDirective, text, span)),
                         _ => Some(Token::new(TokenType::Identifier, text, span)),
                     }
                 }

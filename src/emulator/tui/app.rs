@@ -72,10 +72,9 @@ fn disassemble_program(program: &[u8], program_start: u16) -> Result<Vec<(usize,
             *acc += ins.size();
             Some((addr, ins.clone()))
         })
-        .map(|(addr, node)| {
+        .filter_map(|(addr, node)| {
             let memory_addr = program_start as usize + addr;
-            let line = listing::generate_line(memory_addr, &node);
-            (memory_addr, line)
+            listing::generate_line(memory_addr, &node).map(|line| (memory_addr, line))
         })
         .collect())
 }

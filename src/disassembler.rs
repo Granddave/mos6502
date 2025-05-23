@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 
-use crate::ast::{AddressingMode, Instruction, Mnemonic, Node, Operand};
+use crate::ast::{AddressingMode, Directive, Instruction, Mnemonic, Node, Operand};
 
 pub mod listing;
 
@@ -16,8 +16,7 @@ pub struct DisassemblyArgs {
 #[tracing::instrument]
 pub fn disassemble(args: &DisassemblyArgs) -> Result<()> {
     let bytes = std::fs::read(&args.input).with_context(|| "Unable to read file")?;
-    let instructions = disassemble_code(&bytes)?;
-    let ast = instructions.into_iter().map(Node::Instruction).collect();
+    let ast = disassemble_code(&bytes)?;
     println!("{}", listing::generate(0x0000, ast));
     Ok(())
 }
@@ -61,6 +60,12 @@ fn decode_opcode(opcode: u8) -> Option<(Mnemonic, AddressingMode)> {
 
 #[tracing::instrument]
 fn decode_instruction(input: &[u8], ix: usize) -> Result<Instruction> {
+    // TODO: If decoding fails, treat it as '.byte' instead and continue.
+    // TODO: Return Result<Disassemly> where
+    // enum Disassemly {
+    //     Instruction(Instruction),
+    //     Byte(u8),
+    // }
     let (mnemonic, addr_mode) = decode_opcode(input[ix]).with_context(|| {
         format!(
             "Invalid opcode: '{:#04x}' at address: {:#06x}",
@@ -80,14 +85,26 @@ fn decode_instruction(input: &[u8], ix: usize) -> Result<Instruction> {
     })
 }
 
-pub fn disassemble_code(input: &[u8]) -> Result<Vec<Instruction>> {
+/// Disassembles a slice of bytes into a vector of AST nodes.
+///
+/// This is a best-effort disassembly, meaning that it will try to decode as many instructions as
+/// possible, and if it encounters an invalid opcode, it will treat that byte as a directive
+/// (e.g., `.byte`).
+pub fn disassemble_code(input: &[u8]) -> Result<Vec<Node>> {
     let mut code = vec![];
     let mut ix = 0;
 
     while ix < input.len() {
-        let node = decode_instruction(input, ix)?;
-        code.push(node.clone());
-        ix += node.size();
+        match decode_instruction(input, ix) {
+            Ok(ins) => {
+                ix += ins.size();
+                code.push(Node::Instruction(ins));
+            }
+            Err(_) => {
+                code.push(Node::Directive(Directive::Byte(input[ix])));
+                ix += 1;
+            }
+        }
     }
 
     Ok(code)
@@ -105,46 +122,46 @@ mod tests {
         let tests = vec![
             (
                 vec![0xA9, 0x01],
-                vec![Instruction::new(
+                vec![Node::Instruction(Instruction::new(
                     Mnemonic::LDA,
                     AddressingMode::Immediate,
                     Operand::Immediate(0x01),
-                )],
+                ))],
             ),
             (
                 vec![0xAD, 0x00, 0x02],
-                vec![Instruction::new(
+                vec![Node::Instruction(Instruction::new(
                     Mnemonic::LDA,
                     AddressingMode::Absolute,
                     Operand::Absolute(0x0200),
-                )],
+                ))],
             ),
             (
                 vec![0xBD, 0x00, 0x02],
-                vec![Instruction::new(
+                vec![Node::Instruction(Instruction::new(
                     Mnemonic::LDA,
                     AddressingMode::AbsoluteX,
                     Operand::Absolute(0x0200),
-                )],
+                ))],
             ),
             (
                 vec![0xA9, 0x01, 0xAD, 0x00, 0x02, 0xBD, 0x00, 0x02],
                 vec![
-                    Instruction::new(
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::Immediate,
                         Operand::Immediate(0x01),
-                    ),
-                    Instruction::new(
+                    )),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::Absolute,
                         Operand::Absolute(0x0200),
-                    ),
-                    Instruction::new(
+                    )),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::AbsoluteX,
                         Operand::Absolute(0x0200),
-                    ),
+                    )),
                 ],
             ),
             (
@@ -154,32 +171,47 @@ mod tests {
                     /* BRK */ 0x00,
                 ],
                 vec![
-                    Instruction::new(
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDX,
                         AddressingMode::Immediate,
                         Operand::Immediate(0x08),
-                    ),
-                    Instruction::new(
+                    )),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::LDA,
                         AddressingMode::Immediate,
                         Operand::Immediate(0x01),
-                    ),
-                    Instruction::new(
+                    )),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::JMP,
                         AddressingMode::Absolute,
                         Operand::Absolute(0x000C),
-                    ),
-                    Instruction::new(
+                    )),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::STA,
                         AddressingMode::Absolute,
                         Operand::Absolute(0x0200),
-                    ),
-                    Instruction::new(
+                    )),
+                    Node::Instruction(Instruction::new(
                         Mnemonic::BNE,
                         AddressingMode::Relative,
                         Operand::Relative(-10),
-                    ),
-                    Instruction::new(Mnemonic::BRK, AddressingMode::Implied, Operand::Implied),
+                    )),
+                    Node::Instruction(Instruction::new(
+                        Mnemonic::BRK,
+                        AddressingMode::Implied,
+                        Operand::Implied,
+                    )),
+                ],
+            ),
+            (
+                vec![0x02, 0xA2, 0x08],
+                vec![
+                    Node::Directive(Directive::Byte(0x02)), // The first value that does not correspond to a valid opcode
+                    Node::Instruction(Instruction::new(
+                        Mnemonic::LDX,
+                        AddressingMode::Immediate,
+                        Operand::Immediate(0x08),
+                    )),
                 ],
             ),
         ];
