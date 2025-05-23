@@ -52,6 +52,12 @@ pub struct Cpu {
     /// A new instruction is fetched and decoded once the current cycle reaches zero.
     cycles_left_for_instruction: usize,
 
+    /// Number of cycles executed since the last reset
+    executed_cycles: usize,
+
+    /// Number of instructions executed since the last reset
+    executed_instructions: usize,
+
     last_instruction: Option<Instruction>,
 }
 
@@ -1216,6 +1222,7 @@ impl Cpu {
     /// Ticks the clock of the CPU.
     #[tracing::instrument]
     pub fn clock(&mut self, memory: &mut Bus) {
+        self.executed_cycles += 1;
         if self.cycles_left_for_instruction > 0 {
             // Processing current instruction
             self.cycles_left_for_instruction -= 1;
@@ -1229,12 +1236,18 @@ impl Cpu {
             return;
         }
 
+        // Instruction finished
+        self.executed_instructions += 1;
+
         // Ok, we're ready to process the next instruction
         let instruction = self.fetch_and_decode(memory);
         self.regs.pc += instruction.size() as u16;
         self.cycles_left_for_instruction = self.execute_instruction(&instruction, memory);
         self.last_instruction = Some(instruction);
-        self.cycles_left_for_instruction -= 1;
+        self.cycles_left_for_instruction = self.cycles_left_for_instruction.checked_sub(1).expect(
+            "Cycles left for instruction should never be negative. \
+             This indicates a bug in the CPU implementation.",
+        );
     }
 
     /// Steps the CPU by one instruction.
@@ -1285,6 +1298,14 @@ impl Cpu {
 
     pub fn registers(&self) -> Registers {
         self.regs.clone()
+    }
+
+    pub fn executed_instructions(&self) -> usize {
+        self.executed_instructions
+    }
+
+    pub fn executed_cycles(&self) -> usize {
+        self.executed_cycles
     }
 }
 

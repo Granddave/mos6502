@@ -262,13 +262,27 @@ fn render_help_text_widget(_app: &mut App, frame: &mut Frame, layout: Rect) {
 
 fn render_simulation_state_widget(app: &mut App, frame: &mut Frame, layout: Rect) {
     let is_step_mode = app.run_mode == RunMode::Step;
-    let text: Vec<Line<'_>> = vec![vec![
-        Span::raw("Run mode: "),
-        Span::styled("Step", style_active_text(is_step_mode)),
-        Span::raw("/"),
-        Span::styled("Continuous", style_active_text(!is_step_mode)),
-    ]
-    .into()];
+    let text: Vec<Line<'_>> = vec![
+        vec![
+            Span::raw("Run mode: "),
+            Span::styled("Step", style_active_text(is_step_mode)),
+            Span::raw("/"),
+            Span::styled("Continuous", style_active_text(!is_step_mode)),
+        ]
+        .into(),
+        vec![
+            Span::raw("Executed instructions: "),
+            Span::raw(format!("{:.01}", app.instructions_per_second())),
+            Span::raw("/s"),
+        ]
+        .into(),
+        vec![
+            Span::raw("Executed cycles:       "),
+            Span::raw(format!("{:.01}", app.cycles_per_second())),
+            Span::raw("/s"),
+        ]
+        .into(),
+    ];
     frame.render_widget(
         Paragraph::new(text)
             .style(Style::default().fg(Color::Yellow))

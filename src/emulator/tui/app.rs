@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::{
     disassembler::{disassemble_code, listing},
     emulator::{
@@ -22,7 +24,6 @@ pub enum RunMode {
     Run,
 }
 
-#[derive(Default)]
 pub struct App {
     /// Emulated CPU
     cpu: Cpu,
@@ -48,6 +49,8 @@ pub struct App {
     pub selected_widget: AppWidget,
 
     pub run_mode: RunMode,
+
+    emulation_start_time: Instant,
 
     /// If the app should quit
     should_quit: bool,
@@ -88,7 +91,15 @@ impl App {
             disassembled_program: disassemble_program(program, program_start)?,
             selected_widget: AppWidget::Disassembly,
             memory: Bus::new(),
-            ..Default::default()
+            cpu: Cpu::new(),
+            disassembly_widget_scroll: 0,
+            disassembly_frame_height: 0,
+            memory_page_to_display: 0,
+            _memory_frame_height: 0,
+            state: EmulationState::default(),
+            run_mode: RunMode::default(),
+            emulation_start_time: Instant::now(),
+            should_quit: false,
         };
 
         app.reset();
@@ -137,6 +148,7 @@ impl App {
 
     /// Run CPU execution until a break instruction is reached.
     pub fn toggle_run_step_mode(&mut self) {
+        self.emulation_start_time = Instant::now();
         match self.run_mode {
             RunMode::Run => self.run_mode = RunMode::Step,
             RunMode::Step => self.run_mode = RunMode::Run,
@@ -162,6 +174,34 @@ impl App {
         self.state.negative.set(status.negative);
 
         self.state.clone()
+    }
+
+    pub fn executed_instructions(&self) -> usize {
+        self.cpu.executed_instructions()
+    }
+
+    pub fn executed_cycles(&self) -> usize {
+        self.cpu.executed_cycles()
+    }
+
+    pub fn instructions_per_second(&self) -> f64 {
+        let elapsed = self.emulation_start_time.elapsed();
+        if elapsed.as_secs() == 0 {
+            return 0.0;
+        }
+        let cycles = self.cpu.executed_instructions() as f64;
+        let seconds = elapsed.as_secs_f64();
+        cycles / seconds
+    }
+
+    pub fn cycles_per_second(&self) -> f64 {
+        let elapsed = self.emulation_start_time.elapsed();
+        if elapsed.as_secs() == 0 {
+            return 0.0;
+        }
+        let cycles = self.cpu.executed_cycles() as f64;
+        let seconds = elapsed.as_secs_f64();
+        cycles / seconds
     }
 
     pub fn memory_slice(&self, start: usize, end: usize) -> &[u8] {
