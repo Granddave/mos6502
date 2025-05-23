@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Args;
 
@@ -8,7 +10,7 @@ pub mod listing;
 #[derive(Args, Debug)]
 pub struct DisassemblyArgs {
     #[clap(help = "Input file to disassemble")]
-    input: String,
+    input: PathBuf,
 }
 
 #[tracing::instrument]

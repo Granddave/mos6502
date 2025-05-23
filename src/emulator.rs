@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Args;
 
@@ -17,7 +19,7 @@ pub mod tui;
 pub struct EmulationArgs {
     #[clap(help = "Input file")]
     #[clap(long_help = "Input file. Allowed file types: .bin, .asm")]
-    input: String,
+    input: PathBuf,
     #[clap(help = "Run the emulator without the terminal user interface")]
     #[clap(long_help = "Run the emulator without the terminal user interface.
 The program will run until it encounters a break instruction.")]
@@ -44,10 +46,10 @@ pub fn run_headless(program_bytes: &[u8], program_start: u16) -> Result<()> {
 pub fn emulate(args: &EmulationArgs) -> Result<()> {
     const PROGRAM_START: u16 = 0x8000;
 
-    let program_bytes = if args.input.ends_with(".bin") {
+    let program_bytes = if args.input.extension().is_some_and(|ext| ext == "bin") {
         // Read binary file
         std::fs::read(&args.input).with_context(|| "Unable to read file")?
-    } else if args.input.ends_with(".asm") {
+    } else if args.input.extension().is_some_and(|ext| ext == "asm") {
         // Read assembly file
         let input_source =
             std::fs::read_to_string(&args.input).with_context(|| "Unable to read file")?;

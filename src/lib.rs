@@ -6,7 +6,8 @@
 
 /// AST (Abstract Syntax Tree) node types.
 ///
-/// The AST is a tree representation of the source code.
+/// The AST is an internal tree representation of both the source code and a resolved program ready
+/// to be compiled into machine code.
 ///
 /// For example, `LDA #$C8` is represented as:
 ///

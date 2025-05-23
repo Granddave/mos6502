@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Args;
 
@@ -40,11 +42,11 @@ pub enum AssemblerError {
 #[derive(Args, Debug)]
 pub struct AssemblyArgs {
     #[clap(help = "Input file")]
-    input: String,
+    input: PathBuf,
     #[clap(help = "Output file")]
     #[clap(long_help = "Output file.")]
     #[clap(short, value_name = "FILENAME", default_value = "a.bin")]
-    output: String,
+    output: PathBuf,
 }
 
 /// Utility function for generating machine code from an assembly program.
