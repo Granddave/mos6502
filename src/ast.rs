@@ -16,12 +16,13 @@ pub enum Node {
     /// A label to mark a location in the code
     ///
     /// Labels are resolved to absolute addresses during compilation.
-    /// E.g. `init:`
+    /// E.g. `init`
     Label(String),
     /// A constant definition
     ///
     /// E.g. `define max_items $FF`
     Constant(Constant),
+    /// Commands to the assembler that are not instructions
     Directive(Directive),
 }
 

@@ -33,11 +33,10 @@ pub mod assembler;
 ///
 /// Usage:
 /// ```
-/// use mos6502::{
-///     ast::{AddressingMode, Instruction, Mnemonic, Operand},
-///     disassembler::disassemble_code,
-/// };
-///
+/// # use mos6502::{
+/// #     ast::{AddressingMode, Instruction, Mnemonic, Operand},
+/// #     disassembler::disassemble_code,
+/// # };
 /// assert_eq!(
 ///     disassemble_code(&[0xA9, 0xC8]).unwrap(),
 ///     vec![Instruction::new(
