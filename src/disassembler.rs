@@ -61,6 +61,12 @@ fn decode_opcode(opcode: u8) -> Option<(Mnemonic, AddressingMode)> {
 
 #[tracing::instrument]
 fn decode_instruction(input: &[u8], ix: usize) -> Result<Instruction> {
+    // TODO: If decoding fails, treat it as '.byte' instead and continue.
+    // TODO: Return Result<Disassemly> where
+    // enum Disassemly {
+    //     Instruction(Instruction),
+    //     Byte(u8),
+    // }
     let (mnemonic, addr_mode) = decode_opcode(input[ix]).with_context(|| {
         format!(
             "Invalid opcode: '{:#04x}' at address: {:#06x}",
@@ -86,8 +92,8 @@ pub fn disassemble_code(input: &[u8]) -> Result<Vec<Instruction>> {
 
     while ix < input.len() {
         let node = decode_instruction(input, ix)?;
-        code.push(node.clone());
         ix += node.size();
+        code.push(node);
     }
 
     Ok(code)

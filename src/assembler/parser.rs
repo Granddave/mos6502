@@ -537,12 +537,36 @@ impl<'a> Parser<'a> {
         if let Some(word) = self.try_parse_u16() {
             Ok(Directive::Origin(word))
         } else {
-            Err(invalid_token!(self, "expected hex number"))
+            Err(invalid_token!(self, "expected word"))
+        }
+    }
+
+    #[tracing::instrument]
+    fn parse_byte_directive(&mut self) -> Result<Directive, ParseError> {
+        self.next_token()?; // Consume the byte keyword
+
+        if let Some(byte) = self.try_parse_u8() {
+            Ok(Directive::Byte(byte))
+        } else {
+            Err(invalid_token!(self, "expected byte"))
+        }
+    }
+
+    #[tracing::instrument]
+    fn parse_word_directive(&mut self) -> Result<Directive, ParseError> {
+        self.next_token()?; // Consume the word keyword
+
+        if let Some(word) = self.try_parse_u16() {
+            Ok(Directive::Word(word))
+        } else {
+            Err(invalid_token!(self, "expected word"))
         }
     }
 
     #[tracing::instrument]
     fn parse_directive(&mut self) -> Result<Directive, ParseError> {
+        // TODO: Merge TokenType::Dot and TokenType::XDirective?
+        //       would not make 'byte' and 'word' keywords.
         if !self.current_token_is(TokenType::Dot) {
             return Err(invalid_token!(self, "expected directive"));
         }
@@ -550,6 +574,8 @@ impl<'a> Parser<'a> {
         self.next_token()?; // Consume the dot
         match self.current_token.token {
             TokenType::OrgDirective => Ok(self.parse_org_directive()?),
+            TokenType::ByteDirective => Ok(self.parse_byte_directive()?),
+            TokenType::WordDirective => Ok(self.parse_word_directive()?),
             _ => Err(invalid_token!(self, "invalid directive")),
         }
     }
@@ -1183,7 +1209,14 @@ secondloop:
   STA $0200,Y
   INY
   CPY #$20
-  BNE secondloop";
+  BNE secondloop
+.byte 10
+.byte $10
+.byte %10101010
+.word 1010
+.word $1010
+.word %1010101010101010
+";
         let expected = vec![
             Node::Constant(Constant::new_byte("zero".to_string(), 0x00)),
             Node::Constant(Constant::new_byte("some_constant".to_string(), 0b01010101)),
@@ -1260,6 +1293,12 @@ secondloop:
                 AddressingMode::Relative,
                 Operand::Label("secondloop".to_string()),
             )),
+            Node::Directive(Directive::Byte(10)),
+            Node::Directive(Directive::Byte(0x10)),
+            Node::Directive(Directive::Byte(0b1010_1010)),
+            Node::Directive(Directive::Word(1010)),
+            Node::Directive(Directive::Word(0x1010)),
+            Node::Directive(Directive::Word(0b1010_1010_1010_1010)),
         ];
         let mut lexer = Lexer::new(input);
         let mut parser = Parser::new(&mut lexer)?;

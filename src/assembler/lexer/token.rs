@@ -34,6 +34,10 @@ pub enum TokenType {
     Define,
     /// Org directive keyword
     OrgDirective,
+    /// Byte directive keyword
+    ByteDirective,
+    /// Word directive keyword
+    WordDirective,
 
     /// Eof marks the end of file
     Eof,
@@ -82,6 +86,8 @@ impl Token {
             TokenType::Identifier => self.lexeme.to_owned(),
             TokenType::Define => "define".to_owned(),
             TokenType::OrgDirective => "org".to_owned(),
+            TokenType::ByteDirective => "byte".to_owned(),
+            TokenType::WordDirective => "word".to_owned(),
             TokenType::Eof => "<eof>".to_owned(),
         }
     }
