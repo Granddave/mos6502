@@ -35,16 +35,16 @@ pub mod assembler;
 /// Usage:
 /// ```
 /// # use mos6502::{
-/// #     ast::{AddressingMode, Instruction, Mnemonic, Operand},
+/// #     ast::{AddressingMode, Instruction, Mnemonic, Node, Operand},
 /// #     disassembler::disassemble_code,
 /// # };
 /// assert_eq!(
 ///     disassemble_code(&[0xA9, 0xC8]).unwrap(),
-///     vec![Instruction::new(
+///     vec![Node::Instruction(Instruction::new(
 ///         Mnemonic::LDA,
 ///         AddressingMode::Immediate,
 ///         Operand::Immediate(0xC8)
-///     )]
+///     ))]
 /// );
 /// ```
 pub mod disassembler;

@@ -26,6 +26,17 @@ pub enum Directive {
     Word(u16),
 }
 
+impl Directive {
+    /// Returns the size of the directive in bytes.
+    pub fn size(&self) -> usize {
+        match self {
+            Directive::Origin(_) => 2, // .org takes 2 bytes (address)
+            Directive::Byte(_) => 1,   // .byte takes 1 byte
+            Directive::Word(_) => 2,   // .word takes 2 bytes
+        }
+    }
+}
+
 impl fmt::Display for Directive {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

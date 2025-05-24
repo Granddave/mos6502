@@ -41,6 +41,13 @@ impl Constant {
             value: ConstantValue::Word(word),
         }
     }
+
+    pub fn size(&self) -> usize {
+        match self.value {
+            ConstantValue::Byte(_) => 1,
+            ConstantValue::Word(_) => 2,
+        }
+    }
 }
 
 impl fmt::Display for Constant {

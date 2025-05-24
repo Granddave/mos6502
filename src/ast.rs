@@ -41,6 +41,16 @@ impl Node {
             _ => None,
         }
     }
+
+    /// Returns the size of the node in bytes.
+    pub fn size(&self) -> usize {
+        match self {
+            Node::Instruction(instruction) => instruction.size(),
+            Node::Label(_) => 0, // Labels do not take up space in the memory
+            Node::Constant(constant) => constant.size(),
+            Node::Directive(directive) => directive.size(),
+        }
+    }
 }
 
 impl fmt::Display for Node {
