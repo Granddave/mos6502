@@ -126,7 +126,7 @@ If the file passed to the emulator is a file with assembly code, the program wil
 | Immediate values                      | `#42`, `cmp #max`                          |
 | Labels                                | `main:`                                    |
 | Constants                             | `define max $ff`, `define screen_width 40` |
-| Org directives                        | `.org $8000`                               |
+| Org directives                        | `.org $8000`, `.byte $42`, `.word $8000`   |
 
 
 ## Future development
@@ -134,8 +134,8 @@ If the file passed to the emulator is a file with assembly code, the program wil
 - **Assembler**
     - dot directives
         - ~`.org $8000`~
-        - `.byte 42`
-        - `.word $8000`
+        - ~`.byte 42`~
+        - ~`.word $8000`~
     - `#"A"`
     - Operand arithmetics
 - **Emulator**
