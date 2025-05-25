@@ -235,6 +235,8 @@ impl<'a> Lexer<'a> {
                         "org" => Some(Token::new(TokenType::OrgDirective, text, span)),
                         "byte" => Some(Token::new(TokenType::ByteDirective, text, span)),
                         "word" => Some(Token::new(TokenType::WordDirective, text, span)),
+                        "ascii" => Some(Token::new(TokenType::AsciiDirective, text, span)),
+                        "asciz" => Some(Token::new(TokenType::AscizDirective, text, span)),
                         _ => Some(Token::new(TokenType::Identifier, text, span)),
                     }
                 }

@@ -116,17 +116,17 @@ If the file passed to the emulator is a file with assembly code, the program wil
 
 ## Supported assembler syntax
 
-| Syntax type                           | Example                                    |
-|---------------------------------------|--------------------------------------------|
-| Instructions (Mnemonic with operands) | `JSR main`, `LDA $00`                      |
-| Comments                              | `; A comment`                              |
-| Hex literals                          | `$ff`, `$8000`                             |
-| Binary literals                       | `%1101`, `%10110000`                       |
-| Decimal literals                      | `42`, `4096`                               |
-| Immediate values                      | `#42`, `cmp #max`, `#"A"`                  |
-| Labels                                | `main:`                                    |
-| Constants                             | `define max $ff`, `define screen_width 40` |
-| Directives                            | `.org $8000`, `.byte $42`, `.word $8000`   |
+| Syntax type                           | Example                                                       |
+|---------------------------------------|---------------------------------------------------------------|
+| Instructions (Mnemonic with operands) | `JSR main`, `LDA $00`                                         |
+| Comments                              | `; A comment`                                                 |
+| Hex literals                          | `$ff`, `$8000`                                                |
+| Binary literals                       | `%1101`, `%10110000`                                          |
+| Decimal literals                      | `42`, `4096`                                                  |
+| Immediate values                      | `#42`, `cmp #max`, `#"A"`                                     |
+| Labels                                | `main:`                                                       |
+| Constants                             | `define max $ff`, `define screen_width 40`                    |
+| Directives                            | `.org $8000`, `.byte $42`, `.word $8000`, `.asci[iz] "Hello"` |
 
 
 ## Future development
@@ -137,8 +137,8 @@ If the file passed to the emulator is a file with assembly code, the program wil
         - ~`.byte 42`~
         - ~`.word $8000`~
         - `.byte 42, $ff`, `.word $8000, $abcd` - Comma separated values
-        - `.ascii "Hello World"`
-        - `.asciz "Hello World"` (Null terminated)
+        - ~`.ascii "Hello World"`~
+        - ~`.asciz "Hello World"` (Null terminated)~
     - ~`#"A"`~
     - Operand arithmetics
 - **Emulator**

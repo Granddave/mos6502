@@ -587,7 +587,25 @@ impl<'a> Parser<'a> {
             TokenType::OrgDirective => Ok(self.parse_org_directive()?),
             TokenType::ByteDirective => Ok(self.parse_byte_directive()?),
             TokenType::WordDirective => Ok(self.parse_word_directive()?),
-            _ => Err(invalid_token!(self, "invalid directive")),
+            TokenType::AsciiDirective => {
+                self.next_token()?; // Consume the ascii keyword
+                if self.current_token_is(TokenType::StringLiteral) {
+                    Ok(Directive::Ascii(self.current_token.lexeme.clone()))
+                } else {
+                    Err(invalid_token!(self, "expected string literal"))
+                }
+            }
+            TokenType::AscizDirective => {
+                self.next_token()?; // Consume the asciz keyword
+                if self.current_token_is(TokenType::StringLiteral) {
+                    Ok(Directive::Ascii(
+                        self.current_token.lexeme.clone() + "\0", // Null-terminate the string
+                    ))
+                } else {
+                    Err(invalid_token!(self, "expected string literal"))
+                }
+            }
+            _ => Err(invalid_token!(self, "expected directive keyword")),
         }
     }
 

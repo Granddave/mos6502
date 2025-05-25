@@ -24,15 +24,26 @@ pub enum Directive {
     /// E.g. `.word $FFFF` in the assembly code. Instructs the code generator to place a word with
     /// value $FFFF in the memory.
     Word(u16),
+    /// Ascii directive
+    ///
+    /// Defines a string in the memory.
+    /// E.g. `.ascii "Hello"` in the assembly code. Instructs the code generator to place the ASCII
+    /// string "Hello" in the memory.
+    ///
+    /// Can either be constructed from
+    /// - `.ascii` For a non-null-terminated string
+    /// - `.asciz` For a null-terminated string
+    Ascii(String),
 }
 
 impl Directive {
     /// Returns the size of the directive in bytes.
     pub fn size(&self) -> usize {
         match self {
-            Directive::Origin(_) => 2, // .org takes 2 bytes (address)
-            Directive::Byte(_) => 1,   // .byte takes 1 byte
-            Directive::Word(_) => 2,   // .word takes 2 bytes
+            Directive::Origin(_) => 2,      // .org takes 2 bytes (address)
+            Directive::Byte(_) => 1,        // .byte takes 1 byte
+            Directive::Word(_) => 2,        // .word takes 2 bytes
+            Directive::Ascii(s) => s.len(), // .ascii takes the length of the string
         }
     }
 }
@@ -43,6 +54,7 @@ impl fmt::Display for Directive {
             Directive::Origin(address) => write!(f, ".org ${:04x}", address),
             Directive::Byte(byte) => write!(f, ".byte ${:02x}", byte),
             Directive::Word(word) => write!(f, ".word ${:04x}", word),
+            Directive::Ascii(string) => write!(f, ".ascii \"{}\"", string),
         }
     }
 }

@@ -19,6 +19,7 @@ pub fn index_labels(ast: &AST, symbol_table: &mut SymbolTable) -> Result<(), Sym
                 Directive::Origin(org_addr) => current_addr = *org_addr as usize,
                 Directive::Byte(_) => current_addr += 1,
                 Directive::Word(_) => current_addr += 2,
+                Directive::Ascii(string) => current_addr += string.len(),
             },
             _ => (),
         }

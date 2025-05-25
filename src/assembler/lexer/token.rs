@@ -33,13 +33,23 @@ pub enum TokenType {
 
     // --- Keywords ---
     /// Constant definition keyword
+    /// `define`
     Define,
     /// Org directive keyword
+    /// `.org`
     OrgDirective,
     /// Byte directive keyword
+    /// `.byte`, i.e. 1 byte
     ByteDirective,
     /// Word directive keyword
+    /// `.word`, i.e. 2 bytes
     WordDirective,
+    /// Ascii directive keyword
+    /// `.ascii`, i.e. a string of bytes
+    AsciiDirective,
+    /// Ascii null-terminated directive keyword
+    /// `.asciz`, i.e. a string of bytes with a null terminator
+    AscizDirective,
 
     /// Eof marks the end of file
     Eof,
@@ -92,6 +102,8 @@ impl Token {
             TokenType::OrgDirective => "org".to_owned(),
             TokenType::ByteDirective => "byte".to_owned(),
             TokenType::WordDirective => "word".to_owned(),
+            TokenType::AsciiDirective => "ascii".to_owned(),
+            TokenType::AscizDirective => "asciz".to_owned(),
             TokenType::Eof => "<eof>".to_owned(),
         }
     }

@@ -94,6 +94,7 @@ fn ast_to_bytes(ast: &mut AST) -> Result<Vec<u8>, CodeGenError> {
                 }
                 Directive::Byte(byte) => bytes.push(*byte),
                 Directive::Word(word) => bytes.extend_from_slice(&word.to_le_bytes()),
+                Directive::Ascii(string) => bytes.extend_from_slice(string.as_bytes()),
             },
             _ => (),
         }
@@ -171,6 +172,10 @@ mod tests {
                     ),
                 ],
                 vec![0xA9, 0x01, 0xAD, 0x00, 0x02, 0xBD, 0x00, 0x02],
+            ),
+            (
+                vec![Node::Directive(Directive::Ascii("ABCD\0".to_string()))],
+                vec![0x41, 0x42, 0x43, 0x44, 0x00],
             ),
         ];
 
