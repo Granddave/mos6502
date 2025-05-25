@@ -192,6 +192,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[tracing::instrument]
+    fn try_parse_char_literal(&mut self) -> Option<u8> {
+        if self.current_token_is(TokenType::StringLiteral) && self.current_token.lexeme.len() == 1 {
+            return Some(self.current_token.lexeme.as_bytes()[0]);
+        }
+        None
+    }
+
     /// Parse a literal number or identifier.
     ///
     /// The literal number is denoted by the following tokens:
@@ -199,6 +207,7 @@ impl<'a> Parser<'a> {
     /// - Binary: #%xx
     /// - Decimal: #xx
     /// - Identifier: #some_constant
+    /// - Character literal: #"H"
     #[tracing::instrument]
     fn parse_literal_number(&mut self) -> Result<(AddressingMode, Operand), ParseError> {
         self.next_token()?; // Consume the literal token '#'
@@ -206,6 +215,8 @@ impl<'a> Parser<'a> {
             Ok((AddressingMode::Immediate, Operand::Immediate(byte)))
         } else if let Some(identifier) = self.try_parse_identifier() {
             Ok((AddressingMode::Immediate, Operand::Constant(identifier)))
+        } else if let Some(char_literal) = self.try_parse_char_literal() {
+            Ok((AddressingMode::Immediate, Operand::Immediate(char_literal)))
         } else {
             Err(invalid_token!(self, "invalid literal u8 or constant"))
         }
@@ -668,6 +679,24 @@ mod tests {
             let mut lexer = Lexer::new(input);
             let mut parser = Parser::new(&mut lexer)?;
             assert_eq!(parser.parse_label()?, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_char_literal() -> Result<(), ParseError> {
+        let tests = vec![(
+            "LDA #\"A\"",
+            Instruction::new(
+                Mnemonic::LDA,
+                AddressingMode::Immediate,
+                Operand::Immediate(b'A'),
+            ),
+        )];
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let mut parser = Parser::new(&mut lexer)?;
+            assert_eq!(parser.parse_instruction()?, expected);
         }
         Ok(())
     }

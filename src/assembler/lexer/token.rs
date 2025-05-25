@@ -24,6 +24,8 @@ pub enum TokenType {
     BinaryNumber,
     /// Decimal number (no prefix)
     DecimalNumber,
+    /// String literal (e.g. `"Hello, World!"`)
+    StringLiteral,
     /// Instruction mnemonic, label or constant definition.
     ///
     /// Basically anything that starts with a letter or underscore.
@@ -57,7 +59,8 @@ pub struct Token {
     pub token: TokenType,
     /// Literal string of token, e.g. `"LDA"`, `"00"`, `":"` etc.
     pub lexeme: String,
-    /// Line number in file where token is found
+    /// Span of the token in the source code
+    /// Start position is inclusive, end position is exclusive.
     pub span: SourcePositionSpan,
 }
 
@@ -83,6 +86,7 @@ impl Token {
             TokenType::HexNumber => "$".to_string() + &self.lexeme,
             TokenType::BinaryNumber => "%".to_string() + &self.lexeme,
             TokenType::DecimalNumber => self.lexeme.to_owned(),
+            TokenType::StringLiteral => format!("\"{}\"", self.lexeme),
             TokenType::Identifier => self.lexeme.to_owned(),
             TokenType::Define => "define".to_owned(),
             TokenType::OrgDirective => "org".to_owned(),

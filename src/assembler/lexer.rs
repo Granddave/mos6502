@@ -54,9 +54,10 @@ impl<'a> Lexer<'a> {
         self.ch = self.src.chars().nth(self.next_src_index);
         self.current_src_index = self.next_src_index;
         self.current_source_position = self.next_source_position;
-        self.next_source_position.increment_column();
         if self.ch == Some('\n') {
             self.next_source_position.increment_line();
+        } else {
+            self.next_source_position.increment_column();
         }
         self.next_src_index += 1;
     }
@@ -108,6 +109,15 @@ impl<'a> Lexer<'a> {
     }
 
     #[tracing::instrument]
+    fn consume_one_char(&mut self) -> SourcePositionSpan {
+        let start_position = self.current_source_position;
+        if self.ch.is_some() {
+            self.read_char();
+        }
+        SourcePositionSpan::new(start_position, self.current_source_position)
+    }
+
+    #[tracing::instrument]
     fn read_string(&mut self) -> (&str, SourcePositionSpan) {
         self.read_while(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_')
     }
@@ -129,7 +139,7 @@ impl<'a> Lexer<'a> {
 
     #[tracing::instrument]
     fn read_binary_literal(&mut self, ch: char) -> Result<Token, LexerError> {
-        let (_, span_1) = self.read_one_char();
+        let span_1 = self.consume_one_char(); // Consume '%'
         let (text, span_2) = self.read_binary();
         if text.is_empty() {
             return Err(LexerError::UnexpectedCharacter(
@@ -146,7 +156,7 @@ impl<'a> Lexer<'a> {
 
     #[tracing::instrument]
     fn read_hex_literal(&mut self, ch: char) -> Result<Token, LexerError> {
-        let (_, span_1) = self.read_one_char();
+        let span_1 = self.consume_one_char(); // Consume '$'
         let (text, span_2) = self.read_hex();
         if text.is_empty() {
             return Err(LexerError::UnexpectedCharacter(
@@ -158,6 +168,18 @@ impl<'a> Lexer<'a> {
             TokenType::HexNumber,
             text,
             SourcePositionSpan::new(span_1.start, span_2.end),
+        ))
+    }
+
+    fn read_string_literal(&mut self) -> Result<Token, LexerError> {
+        let start_span = self.consume_one_char(); // Consume opening quote
+        let (text, _) = self.read_while(|c| c != '"');
+        let text = text.to_string(); // Convert to String to own the data
+        let end_span = self.consume_one_char(); // Consume closing quote
+        Ok(Token::new(
+            TokenType::StringLiteral,
+            text.as_str(),
+            SourcePositionSpan::new(start_span.start, end_span.end),
         ))
     }
 
@@ -203,6 +225,8 @@ impl<'a> Lexer<'a> {
                     let (text, span) = self.read_decimal();
                     Some(Token::new(TokenType::DecimalNumber, text, span))
                 }
+                // String literals
+                '"' => Some(self.read_string_literal()?),
                 // Identifiers and keywords
                 'A'..='Z' | 'a'..='z' | '_' => {
                     let (text, span) = self.read_string();
@@ -647,6 +671,67 @@ LDA #$00 ; Another one
             }
         }
         assert_eq!(tokens, result);
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_literal() -> anyhow::Result<()> {
+        let tests = vec![
+            (
+                "\"a string literal\"",
+                vec![
+                    Token {
+                        token: TokenType::StringLiteral,
+                        lexeme: "a string literal".to_string(),
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 1),
+                            SourcePosition::new(1, 19),
+                        ),
+                    },
+                    Token {
+                        token: TokenType::Eof,
+                        lexeme: "".to_string(),
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 19),
+                            SourcePosition::new(1, 19),
+                        ),
+                    },
+                ],
+            ),
+            (
+                "\"multi\nline\nstring\"",
+                vec![
+                    Token {
+                        token: TokenType::StringLiteral,
+                        lexeme: "multi\nline\nstring".to_string(),
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(1, 1),
+                            SourcePosition::new(3, 8),
+                        ),
+                    },
+                    Token {
+                        token: TokenType::Eof,
+                        lexeme: "".to_string(),
+                        span: SourcePositionSpan::new(
+                            SourcePosition::new(3, 8),
+                            SourcePosition::new(3, 8),
+                        ),
+                    },
+                ],
+            ),
+        ];
+        for (input, expected) in tests {
+            let mut lexer = Lexer::new(input);
+            let mut tokens = Vec::new();
+            loop {
+                let token = lexer.next_token()?.unwrap();
+                tokens.push(token.clone());
+                if token.token == TokenType::Eof {
+                    break;
+                }
+            }
+            assert_eq!(tokens, expected);
+        }
         Ok(())
     }
 }

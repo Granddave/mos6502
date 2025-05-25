@@ -123,7 +123,7 @@ If the file passed to the emulator is a file with assembly code, the program wil
 | Hex literals                          | `$ff`, `$8000`                             |
 | Binary literals                       | `%1101`, `%10110000`                       |
 | Decimal literals                      | `42`, `4096`                               |
-| Immediate values                      | `#42`, `cmp #max`                          |
+| Immediate values                      | `#42`, `cmp #max`, `#"A"`                  |
 | Labels                                | `main:`                                    |
 | Constants                             | `define max $ff`, `define screen_width 40` |
 | Directives                            | `.org $8000`, `.byte $42`, `.word $8000`   |
@@ -136,7 +136,10 @@ If the file passed to the emulator is a file with assembly code, the program wil
         - ~`.org $8000`~
         - ~`.byte 42`~
         - ~`.word $8000`~
-    - `#"A"`
+        - `.byte 42, $ff`, `.word $8000, $abcd` - Comma separated values
+        - `.ascii "Hello World"`
+        - `.asciz "Hello World"` (Null terminated)
+    - ~`#"A"`~
     - Operand arithmetics
 - **Emulator**
     - Peripherals - I/O would be fun to have...

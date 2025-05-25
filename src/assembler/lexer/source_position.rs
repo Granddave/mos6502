@@ -39,6 +39,7 @@ impl fmt::Display for SourcePosition {
 /// Represents a span of positions in the source code.
 ///
 /// The start position is inclusive, while the end position is exclusive.
+/// Empty spans are allowed, where the start and end positions are the same.
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 pub struct SourcePositionSpan {
     pub start: SourcePosition,
