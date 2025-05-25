@@ -149,6 +149,21 @@ If the file passed to the emulator is a file with assembly code, the program wil
     - Scrollable stack
     - Disassemble memory if program memory is changed
 
+## Tracing
+
+Tracing can be enabled by passing the `--tracing` flag. Then a [Chrome
+Tracing](https://www.chromium.org/developers/how-tos/trace-event-profiling-tool/)
+compatible JSON file is created.
+
+```bash
+$ cargo run -r -- --trace asm examples/loop.asm
+$ ls trace*
+trace-1748161187905027.json
+```
+
+This tracing file can then be opened with [about:tracing](about:tracing) in the Chrome web browser, or via [Perfetto](https://ui.perfetto.dev/).
+
+![Perfetto tracing](resources/trace.png)
 
 ## References
 
