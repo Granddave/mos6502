@@ -127,6 +127,7 @@ impl<'a> Lexer<'a> {
         self.read_while(|ch| ch.is_ascii_digit())
     }
 
+    #[tracing::instrument]
     fn read_binary_literal(&mut self, ch: char) -> Result<Token, LexerError> {
         let (_, span_1) = self.read_one_char();
         let (text, span_2) = self.read_binary();
@@ -143,6 +144,7 @@ impl<'a> Lexer<'a> {
         ))
     }
 
+    #[tracing::instrument]
     fn read_hex_literal(&mut self, ch: char) -> Result<Token, LexerError> {
         let (_, span_1) = self.read_one_char();
         let (text, span_2) = self.read_hex();
