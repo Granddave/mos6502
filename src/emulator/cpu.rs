@@ -3,7 +3,7 @@ use self::registers::{Register, Registers, Status};
 use crate::{
     assembler::codegen::opcode::OPCODE_MAPPING,
     ast::{AddressingMode, Instruction, Mnemonic, Operand},
-    emulator::bus::{Bus, Readable, Writeable},
+    emulator::bus::Bus,
 };
 
 pub mod registers;
@@ -70,8 +70,8 @@ impl Cpu {
     /// Returns:
     ///   - The fetched instruction.
     #[tracing::instrument]
-    fn fetch_and_decode(&mut self, memory: &mut Bus) -> Instruction {
-        let opcode = memory.read_byte(self.regs.pc);
+    fn fetch_and_decode(&mut self, bus: &mut Bus) -> Instruction {
+        let opcode = bus.read_byte(self.regs.pc);
         let (mnemonic, addr_mode) = OPCODE_MAPPING
             .find_instruction(opcode)
             .unwrap_or_else(|| panic!("Invalid opcode: '{:#02x}'", opcode));
@@ -80,16 +80,16 @@ impl Cpu {
             AddressingMode::Absolute
             | AddressingMode::AbsoluteX
             | AddressingMode::AbsoluteY
-            | AddressingMode::Indirect => Operand::Absolute(memory.read_word(self.regs.pc + 1)),
+            | AddressingMode::Indirect => Operand::Absolute(bus.read_word(self.regs.pc + 1)),
             AddressingMode::ZeroPage
             | AddressingMode::ZeroPageX
             | AddressingMode::ZeroPageY
             | AddressingMode::IndirectIndexedX
             | AddressingMode::IndirectIndexedY => {
-                Operand::ZeroPage(memory.read_byte(self.regs.pc + 1))
+                Operand::ZeroPage(bus.read_byte(self.regs.pc + 1))
             }
-            AddressingMode::Relative => Operand::Relative(memory.read_byte(self.regs.pc + 1) as i8),
-            AddressingMode::Immediate => Operand::Immediate(memory.read_byte(self.regs.pc + 1)),
+            AddressingMode::Relative => Operand::Relative(bus.read_byte(self.regs.pc + 1) as i8),
+            AddressingMode::Immediate => Operand::Immediate(bus.read_byte(self.regs.pc + 1)),
             AddressingMode::Accumulator | AddressingMode::Implied => Operand::Implied,
             _ => panic!("Invalid addressing mode: '{:#?}'", addr_mode),
         };
@@ -106,28 +106,28 @@ impl Cpu {
     /// Returns:
     ///   - Number of cycles the instruction took to execute.
     #[tracing::instrument]
-    fn execute_instruction(&mut self, ins: &Instruction, memory: &mut Bus) -> usize {
+    fn execute_instruction(&mut self, ins: &Instruction, bus: &mut Bus) -> usize {
         match (&ins.mnemonic, &ins.addr_mode, &ins.operand) {
             (Mnemonic::ADC, _, Operand::Immediate(value)) => {
                 self.add_with_carry(*value);
                 2
             }
             (Mnemonic::ADC, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.add_with_carry(memory.read_byte(*addr as u16));
+                self.add_with_carry(bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::ADC, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.add_with_carry(memory.read_byte((*addr + self.regs.x) as u16));
+                self.add_with_carry(bus.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (Mnemonic::ADC, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.add_with_carry(memory.read_byte(*addr));
+                self.add_with_carry(bus.read_byte(*addr));
                 4
             }
             (Mnemonic::ADC, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.add_with_carry(memory.read_byte(indexed_addr));
+                self.add_with_carry(bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -137,7 +137,7 @@ impl Cpu {
             (Mnemonic::ADC, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.add_with_carry(memory.read_byte(indexed_addr));
+                self.add_with_carry(bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -145,13 +145,13 @@ impl Cpu {
                 }
             }
             (Mnemonic::ADC, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.add_with_carry(memory.read_byte(indirect_addr));
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.add_with_carry(bus.read_byte(indirect_addr));
                 6
             }
             (Mnemonic::ADC, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.add_with_carry(memory.read_byte(indexed_addr & 0xff));
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.add_with_carry(bus.read_byte(indexed_addr & 0xff));
                 if page_boundary_crossed {
                     6
                 } else {
@@ -165,24 +165,24 @@ impl Cpu {
                 2
             }
             (Mnemonic::AND, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.regs.a &= memory.read_byte(*addr as u16);
+                self.regs.a &= bus.read_byte(*addr as u16);
                 self.set_zero_and_negative_flags(self.regs.a);
                 3
             }
             (Mnemonic::AND, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.regs.a &= memory.read_byte((*addr + self.regs.x) as u16);
+                self.regs.a &= bus.read_byte((*addr + self.regs.x) as u16);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (Mnemonic::AND, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.regs.a &= memory.read_byte(*addr);
+                self.regs.a &= bus.read_byte(*addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (Mnemonic::AND, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.regs.a &= memory.read_byte(indexed_addr);
+                self.regs.a &= bus.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
@@ -193,7 +193,7 @@ impl Cpu {
             (Mnemonic::AND, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.regs.a &= memory.read_byte(indexed_addr);
+                self.regs.a &= bus.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
@@ -202,14 +202,14 @@ impl Cpu {
                 }
             }
             (Mnemonic::AND, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.regs.a &= memory.read_byte(indirect_addr);
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.regs.a &= bus.read_byte(indirect_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 6
             }
             (Mnemonic::AND, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.regs.a &= memory.read_byte(indexed_addr & 0xff);
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.regs.a &= bus.read_byte(indexed_addr & 0xff);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     6
@@ -224,25 +224,25 @@ impl Cpu {
             }
             (Mnemonic::ASL, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.shift_left(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.shift_left(value));
                 5
             }
             (Mnemonic::ASL, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
                 let addr = (*addr + self.regs.x) as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.shift_left(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.shift_left(value));
                 6
             }
             (Mnemonic::ASL, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr);
-                memory.write_byte(*addr, self.shift_left(value));
+                let value = bus.read_byte(*addr);
+                bus.write_byte(*addr, self.shift_left(value));
                 6
             }
             (Mnemonic::ASL, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.regs.x as u16);
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.shift_left(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.shift_left(value));
                 7
             }
             // Branch instructions
@@ -272,12 +272,12 @@ impl Cpu {
             }
             // BIT
             (Mnemonic::BIT, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                let value = memory.read_byte(*addr as u16);
+                let value = bus.read_byte(*addr as u16);
                 self.bit_test(value);
                 3
             }
             (Mnemonic::BIT, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr);
+                let value = bus.read_byte(*addr);
                 self.bit_test(value);
                 4
             }
@@ -285,12 +285,12 @@ impl Cpu {
             (Mnemonic::BRK, _, Operand::Implied) => {
                 // Causes a non-maskable interrupt
                 self.regs.pc += 2;
-                self.push_to_stack(memory, (self.regs.pc >> 8) as u8);
-                self.push_to_stack(memory, self.regs.pc as u8);
+                self.push_to_stack(bus, (self.regs.pc >> 8) as u8);
+                self.push_to_stack(bus, self.regs.pc as u8);
                 self.regs.status.break_command = true;
-                self.push_to_stack(memory, self.regs.status.into());
+                self.push_to_stack(bus, self.regs.status.into());
                 self.regs.status.interrupt_disable = true;
-                self.regs.pc = memory.read_word(INTERRUPT_VECTOR);
+                self.regs.pc = bus.read_word(INTERRUPT_VECTOR);
                 7
             }
             // CLC
@@ -314,21 +314,21 @@ impl Cpu {
                 2
             }
             (Mnemonic::CMP, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.compare(Register::A, memory.read_byte(*addr as u16));
+                self.compare(Register::A, bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::CMP, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.compare(Register::A, memory.read_byte((*addr + self.regs.x) as u16));
+                self.compare(Register::A, bus.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (Mnemonic::CMP, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.compare(Register::A, memory.read_byte(*addr));
+                self.compare(Register::A, bus.read_byte(*addr));
                 4
             }
             (Mnemonic::CMP, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.compare(Register::A, memory.read_byte(indexed_addr));
+                self.compare(Register::A, bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -338,7 +338,7 @@ impl Cpu {
             (Mnemonic::CMP, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.compare(Register::A, memory.read_byte(indexed_addr));
+                self.compare(Register::A, bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -346,13 +346,13 @@ impl Cpu {
                 }
             }
             (Mnemonic::CMP, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.compare(Register::A, memory.read_byte(indirect_addr));
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.compare(Register::A, bus.read_byte(indirect_addr));
                 6
             }
             (Mnemonic::CMP, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.compare(Register::A, memory.read_byte(indexed_addr & 0xff));
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.compare(Register::A, bus.read_byte(indexed_addr & 0xff));
                 if page_boundary_crossed {
                     6
                 } else {
@@ -365,11 +365,11 @@ impl Cpu {
                 2
             }
             (Mnemonic::CPX, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.compare(Register::X, memory.read_byte(*addr as u16));
+                self.compare(Register::X, bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::CPX, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.compare(Register::X, memory.read_byte(*addr));
+                self.compare(Register::X, bus.read_byte(*addr));
                 4
             }
             // CPY
@@ -378,38 +378,38 @@ impl Cpu {
                 2
             }
             (Mnemonic::CPY, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.compare(Register::Y, memory.read_byte(*addr as u16));
+                self.compare(Register::Y, bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::CPY, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.compare(Register::Y, memory.read_byte(*addr));
+                self.compare(Register::Y, bus.read_byte(*addr));
                 4
             }
             // DEC
             (Mnemonic::DEC, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
-                let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write_byte(addr, value);
+                let value = bus.read_byte(addr).wrapping_sub(1);
+                bus.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 5
             }
             (Mnemonic::DEC, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
                 let addr = (*addr + self.regs.x) as u16;
-                let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write_byte(addr, value);
+                let value = bus.read_byte(addr).wrapping_sub(1);
+                bus.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 6
             }
             (Mnemonic::DEC, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr).wrapping_sub(1);
-                memory.write_byte(*addr, value);
+                let value = bus.read_byte(*addr).wrapping_sub(1);
+                bus.write_byte(*addr, value);
                 self.set_zero_and_negative_flags(value);
                 6
             }
             (Mnemonic::DEC, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.regs.x as u16);
-                let value = memory.read_byte(addr).wrapping_sub(1);
-                memory.write_byte(addr, value);
+                let value = bus.read_byte(addr).wrapping_sub(1);
+                bus.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 7
             }
@@ -432,24 +432,24 @@ impl Cpu {
                 2
             }
             (Mnemonic::EOR, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.regs.a ^= memory.read_byte(*addr as u16);
+                self.regs.a ^= bus.read_byte(*addr as u16);
                 self.set_zero_and_negative_flags(self.regs.a);
                 3
             }
             (Mnemonic::EOR, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.regs.a ^= memory.read_byte((*addr + self.regs.x) as u16);
+                self.regs.a ^= bus.read_byte((*addr + self.regs.x) as u16);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (Mnemonic::EOR, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.regs.a ^= memory.read_byte(*addr);
+                self.regs.a ^= bus.read_byte(*addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (Mnemonic::EOR, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.regs.a ^= memory.read_byte(indexed_addr);
+                self.regs.a ^= bus.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
@@ -460,7 +460,7 @@ impl Cpu {
             (Mnemonic::EOR, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.regs.a ^= memory.read_byte(indexed_addr);
+                self.regs.a ^= bus.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
@@ -469,14 +469,14 @@ impl Cpu {
                 }
             }
             (Mnemonic::EOR, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.regs.a ^= memory.read_byte(indirect_addr);
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.regs.a ^= bus.read_byte(indirect_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 6
             }
             (Mnemonic::EOR, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.regs.a ^= memory.read_byte(indexed_addr & 0xff);
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.regs.a ^= bus.read_byte(indexed_addr & 0xff);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     6
@@ -487,28 +487,28 @@ impl Cpu {
             // INC
             (Mnemonic::INC, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
-                let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write_byte(addr, value);
+                let value = bus.read_byte(addr).wrapping_add(1);
+                bus.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 5
             }
             (Mnemonic::INC, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
                 let addr = (*addr + self.regs.x) as u16;
-                let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write_byte(addr, value);
+                let value = bus.read_byte(addr).wrapping_add(1);
+                bus.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 6
             }
             (Mnemonic::INC, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr).wrapping_add(1);
-                memory.write_byte(*addr, value);
+                let value = bus.read_byte(*addr).wrapping_add(1);
+                bus.write_byte(*addr, value);
                 self.set_zero_and_negative_flags(value);
                 6
             }
             (Mnemonic::INC, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.regs.x as u16);
-                let value = memory.read_byte(addr).wrapping_add(1);
-                memory.write_byte(addr, value);
+                let value = bus.read_byte(addr).wrapping_add(1);
+                bus.write_byte(addr, value);
                 self.set_zero_and_negative_flags(value);
                 7
             }
@@ -530,15 +530,15 @@ impl Cpu {
                 3
             }
             (Mnemonic::JMP, AddressingMode::Indirect, Operand::Absolute(addr)) => {
-                let indirect_addr = memory.read_word(*addr);
+                let indirect_addr = bus.read_word(*addr);
                 self.regs.pc = indirect_addr;
                 5
             }
             // JSR
             (Mnemonic::JSR, AddressingMode::Absolute, Operand::Absolute(addr)) => {
                 let return_addr = self.regs.pc - 1;
-                self.push_to_stack(memory, (return_addr >> 8) as u8);
-                self.push_to_stack(memory, return_addr as u8);
+                self.push_to_stack(bus, (return_addr >> 8) as u8);
+                self.push_to_stack(bus, return_addr as u8);
                 self.regs.pc = *addr;
                 6
             }
@@ -548,21 +548,21 @@ impl Cpu {
                 2
             }
             (Mnemonic::LDA, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.load_register(Register::A, memory.read_byte(*addr as u16));
+                self.load_register(Register::A, bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::LDA, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.load_register(Register::A, memory.read_byte((*addr + self.regs.x) as u16));
+                self.load_register(Register::A, bus.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (Mnemonic::LDA, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.load_register(Register::A, memory.read_byte(*addr));
+                self.load_register(Register::A, bus.read_byte(*addr));
                 4
             }
             (Mnemonic::LDA, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.load_register(Register::A, memory.read_byte(indexed_addr));
+                self.load_register(Register::A, bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -572,7 +572,7 @@ impl Cpu {
             (Mnemonic::LDA, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.load_register(Register::A, memory.read_byte(indexed_addr));
+                self.load_register(Register::A, bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -580,13 +580,13 @@ impl Cpu {
                 }
             }
             (Mnemonic::LDA, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.load_register(Register::A, memory.read_byte(indirect_addr));
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.load_register(Register::A, bus.read_byte(indirect_addr));
                 6
             }
             (Mnemonic::LDA, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.load_register(Register::A, memory.read_byte(indexed_addr & 0xff));
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.load_register(Register::A, bus.read_byte(indexed_addr & 0xff));
                 if page_boundary_crossed {
                     6
                 } else {
@@ -599,21 +599,21 @@ impl Cpu {
                 2
             }
             (Mnemonic::LDX, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.load_register(Register::X, memory.read_byte(*addr as u16));
+                self.load_register(Register::X, bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::LDX, AddressingMode::ZeroPageY, Operand::ZeroPage(addr)) => {
-                self.load_register(Register::X, memory.read_byte((*addr + self.regs.y) as u16));
+                self.load_register(Register::X, bus.read_byte((*addr + self.regs.y) as u16));
                 4
             }
             (Mnemonic::LDX, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.load_register(Register::X, memory.read_byte(*addr));
+                self.load_register(Register::X, bus.read_byte(*addr));
                 4
             }
             (Mnemonic::LDX, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.load_register(Register::X, memory.read_byte(indexed_addr));
+                self.load_register(Register::X, bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -626,21 +626,21 @@ impl Cpu {
                 2
             }
             (Mnemonic::LDY, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.load_register(Register::Y, memory.read_byte(*addr as u16));
+                self.load_register(Register::Y, bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::LDY, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.load_register(Register::Y, memory.read_byte((*addr + self.regs.x) as u16));
+                self.load_register(Register::Y, bus.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (Mnemonic::LDY, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.load_register(Register::Y, memory.read_byte(*addr));
+                self.load_register(Register::Y, bus.read_byte(*addr));
                 4
             }
             (Mnemonic::LDY, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.load_register(Register::Y, memory.read_byte(indexed_addr));
+                self.load_register(Register::Y, bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -654,25 +654,25 @@ impl Cpu {
             }
             (Mnemonic::LSR, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.shift_right(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.shift_right(value));
                 5
             }
             (Mnemonic::LSR, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
                 let addr = (*addr + self.regs.x) as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.shift_right(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.shift_right(value));
                 6
             }
             (Mnemonic::LSR, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr);
-                memory.write_byte(*addr, self.shift_right(value));
+                let value = bus.read_byte(*addr);
+                bus.write_byte(*addr, self.shift_right(value));
                 6
             }
             (Mnemonic::LSR, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.regs.x as u16);
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.shift_right(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.shift_right(value));
                 7
             }
             // NOP
@@ -684,24 +684,24 @@ impl Cpu {
                 2
             }
             (Mnemonic::ORA, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.regs.a |= memory.read_byte(*addr as u16);
+                self.regs.a |= bus.read_byte(*addr as u16);
                 self.set_zero_and_negative_flags(self.regs.a);
                 3
             }
             (Mnemonic::ORA, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.regs.a |= memory.read_byte((*addr + self.regs.x) as u16);
+                self.regs.a |= bus.read_byte((*addr + self.regs.x) as u16);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (Mnemonic::ORA, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.regs.a |= memory.read_byte(*addr);
+                self.regs.a |= bus.read_byte(*addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             (Mnemonic::ORA, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.regs.a |= memory.read_byte(indexed_addr);
+                self.regs.a |= bus.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
@@ -712,7 +712,7 @@ impl Cpu {
             (Mnemonic::ORA, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.regs.a |= memory.read_byte(indexed_addr);
+                self.regs.a |= bus.read_byte(indexed_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     5
@@ -721,14 +721,14 @@ impl Cpu {
                 }
             }
             (Mnemonic::ORA, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.regs.a |= memory.read_byte(indirect_addr);
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.regs.a |= bus.read_byte(indirect_addr);
                 self.set_zero_and_negative_flags(self.regs.a);
                 6
             }
             (Mnemonic::ORA, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.regs.a |= memory.read_byte(indexed_addr & 0xff);
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.regs.a |= bus.read_byte(indexed_addr & 0xff);
                 self.set_zero_and_negative_flags(self.regs.a);
                 if page_boundary_crossed {
                     6
@@ -738,23 +738,23 @@ impl Cpu {
             }
             // PHA
             (Mnemonic::PHA, _, Operand::Implied) => {
-                self.push_to_stack(memory, self.regs.a);
+                self.push_to_stack(bus, self.regs.a);
                 3
             }
             // PHP
             (Mnemonic::PHP, _, Operand::Implied) => {
-                self.push_to_stack(memory, self.regs.status.into());
+                self.push_to_stack(bus, self.regs.status.into());
                 3
             }
             // PLA
             (Mnemonic::PLA, _, Operand::Implied) => {
-                self.regs.a = self.pop_from_stack(memory);
+                self.regs.a = self.pop_from_stack(bus);
                 self.set_zero_and_negative_flags(self.regs.a);
                 4
             }
             // PLP
             (Mnemonic::PLP, _, Operand::Implied) => {
-                self.regs.status = self.pop_from_stack(memory).into();
+                self.regs.status = self.pop_from_stack(bus).into();
                 4
             }
             // ROL
@@ -764,25 +764,25 @@ impl Cpu {
             }
             (Mnemonic::ROL, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.rotate_left(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.rotate_left(value));
                 5
             }
             (Mnemonic::ROL, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
                 let addr = (*addr + self.regs.x) as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.rotate_left(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.rotate_left(value));
                 6
             }
             (Mnemonic::ROL, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr);
-                memory.write_byte(*addr, self.rotate_left(value));
+                let value = bus.read_byte(*addr);
+                bus.write_byte(*addr, self.rotate_left(value));
                 6
             }
             (Mnemonic::ROL, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.regs.x as u16);
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.rotate_left(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.rotate_left(value));
                 7
             }
             // ROR
@@ -792,40 +792,40 @@ impl Cpu {
             }
             (Mnemonic::ROR, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
                 let addr = *addr as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.rotate_right(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.rotate_right(value));
                 5
             }
             (Mnemonic::ROR, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
                 let addr = (*addr + self.regs.x) as u16;
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.rotate_right(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.rotate_right(value));
                 6
             }
             (Mnemonic::ROR, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                let value = memory.read_byte(*addr);
-                memory.write_byte(*addr, self.rotate_right(value));
+                let value = bus.read_byte(*addr);
+                bus.write_byte(*addr, self.rotate_right(value));
                 6
             }
             (Mnemonic::ROR, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let addr = addr.wrapping_add(self.regs.x as u16);
-                let value = memory.read_byte(addr);
-                memory.write_byte(addr, self.rotate_right(value));
+                let value = bus.read_byte(addr);
+                bus.write_byte(addr, self.rotate_right(value));
                 7
             }
             // RTI
             (Mnemonic::RTI, _, Operand::Implied) => {
-                self.regs.status = self.pop_from_stack(memory).into();
+                self.regs.status = self.pop_from_stack(bus).into();
                 self.regs.status.break_command = false;
                 self.regs.status.interrupt_disable = false;
-                self.regs.pc = self.pop_from_stack(memory) as u16;
-                self.regs.pc |= (self.pop_from_stack(memory) as u16) << 8;
+                self.regs.pc = self.pop_from_stack(bus) as u16;
+                self.regs.pc |= (self.pop_from_stack(bus) as u16) << 8;
                 6
             }
             // RTS
             (Mnemonic::RTS, _, Operand::Implied) => {
-                self.regs.pc = self.pop_from_stack(memory) as u16;
-                self.regs.pc |= (self.pop_from_stack(memory) as u16) << 8;
+                self.regs.pc = self.pop_from_stack(bus) as u16;
+                self.regs.pc |= (self.pop_from_stack(bus) as u16) << 8;
                 self.regs.pc += 1;
                 6
             }
@@ -835,21 +835,21 @@ impl Cpu {
                 2
             }
             (Mnemonic::SBC, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.subtract_with_carry(memory.read_byte(*addr as u16));
+                self.subtract_with_carry(bus.read_byte(*addr as u16));
                 3
             }
             (Mnemonic::SBC, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.subtract_with_carry(memory.read_byte((*addr + self.regs.x) as u16));
+                self.subtract_with_carry(bus.read_byte((*addr + self.regs.x) as u16));
                 4
             }
             (Mnemonic::SBC, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.subtract_with_carry(memory.read_byte(*addr));
+                self.subtract_with_carry(bus.read_byte(*addr));
                 4
             }
             (Mnemonic::SBC, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::X, *addr);
-                self.subtract_with_carry(memory.read_byte(indexed_addr));
+                self.subtract_with_carry(bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -859,7 +859,7 @@ impl Cpu {
             (Mnemonic::SBC, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (page_boundary_crossed, indexed_addr) =
                     self.indexed_indirect(Register::Y, *addr);
-                self.subtract_with_carry(memory.read_byte(indexed_addr));
+                self.subtract_with_carry(bus.read_byte(indexed_addr));
                 if page_boundary_crossed {
                     5
                 } else {
@@ -867,13 +867,13 @@ impl Cpu {
                 }
             }
             (Mnemonic::SBC, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.subtract_with_carry(memory.read_byte(indirect_addr));
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.subtract_with_carry(bus.read_byte(indirect_addr));
                 6
             }
             (Mnemonic::SBC, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.subtract_with_carry(memory.read_byte(indexed_addr & 0xff));
+                let (page_boundary_crossed, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.subtract_with_carry(bus.read_byte(indexed_addr & 0xff));
                 if page_boundary_crossed {
                     6
                 } else {
@@ -892,61 +892,61 @@ impl Cpu {
             }
             // STA
             (Mnemonic::STA, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.store_register(Register::A, *addr as u16, memory);
+                self.store_register(Register::A, *addr as u16, bus);
                 3
             }
             (Mnemonic::STA, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.store_register(Register::A, (*addr + self.regs.x) as u16, memory);
+                self.store_register(Register::A, (*addr + self.regs.x) as u16, bus);
                 4
             }
             (Mnemonic::STA, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.store_register(Register::A, *addr, memory);
+                self.store_register(Register::A, *addr, bus);
                 4
             }
             (Mnemonic::STA, AddressingMode::AbsoluteX, Operand::Absolute(addr)) => {
                 let (_, indexed_addr) = self.indexed_indirect(Register::X, *addr);
-                self.store_register(Register::A, indexed_addr, memory);
+                self.store_register(Register::A, indexed_addr, bus);
                 5
             }
             (Mnemonic::STA, AddressingMode::AbsoluteY, Operand::Absolute(addr)) => {
                 let (_, indexed_addr) = self.indexed_indirect(Register::Y, *addr);
-                self.store_register(Register::A, indexed_addr, memory);
+                self.store_register(Register::A, indexed_addr, bus);
                 5
             }
             (Mnemonic::STA, AddressingMode::IndirectIndexedX, Operand::ZeroPage(addr)) => {
-                let indirect_addr = self.indexed_indirect_x(memory, *addr);
-                self.store_register(Register::A, indirect_addr, memory);
+                let indirect_addr = self.indexed_indirect_x(bus, *addr);
+                self.store_register(Register::A, indirect_addr, bus);
                 6
             }
             (Mnemonic::STA, AddressingMode::IndirectIndexedY, Operand::ZeroPage(addr)) => {
-                let (_, indexed_addr) = self.indexed_indirect_y(memory, *addr);
-                self.store_register(Register::A, indexed_addr, memory);
+                let (_, indexed_addr) = self.indexed_indirect_y(bus, *addr);
+                self.store_register(Register::A, indexed_addr, bus);
                 6
             }
             // STX
             (Mnemonic::STX, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.store_register(Register::X, *addr as u16, memory);
+                self.store_register(Register::X, *addr as u16, bus);
                 3
             }
             (Mnemonic::STX, AddressingMode::ZeroPageY, Operand::ZeroPage(addr)) => {
-                self.store_register(Register::X, (*addr + self.regs.y) as u16, memory);
+                self.store_register(Register::X, (*addr + self.regs.y) as u16, bus);
                 4
             }
             (Mnemonic::STX, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.store_register(Register::X, *addr, memory);
+                self.store_register(Register::X, *addr, bus);
                 4
             }
             // STY
             (Mnemonic::STY, AddressingMode::ZeroPage, Operand::ZeroPage(addr)) => {
-                self.store_register(Register::Y, *addr as u16, memory);
+                self.store_register(Register::Y, *addr as u16, bus);
                 3
             }
             (Mnemonic::STY, AddressingMode::ZeroPageX, Operand::ZeroPage(addr)) => {
-                self.store_register(Register::Y, (*addr + self.regs.x) as u16, memory);
+                self.store_register(Register::Y, (*addr + self.regs.x) as u16, bus);
                 4
             }
             (Mnemonic::STY, AddressingMode::Absolute, Operand::Absolute(addr)) => {
-                self.store_register(Register::Y, *addr, memory);
+                self.store_register(Register::Y, *addr, bus);
                 4
             }
             // TAX
@@ -996,13 +996,13 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn indexed_indirect_x(&self, memory: &mut Bus, zp_addr: u8) -> u16 {
-        memory.read_word((zp_addr + self.regs.x) as u16) & 0xff
+    fn indexed_indirect_x(&self, bus: &mut Bus, zp_addr: u8) -> u16 {
+        bus.read_word((zp_addr + self.regs.x) as u16) & 0xff
     }
 
     #[tracing::instrument]
-    fn indexed_indirect_y(&self, memory: &mut Bus, zp_addr: u8) -> (bool, u16) {
-        let indirect_addr = memory.read_word(zp_addr as u16);
+    fn indexed_indirect_y(&self, bus: &mut Bus, zp_addr: u8) -> (bool, u16) {
+        let indirect_addr = bus.read_word(zp_addr as u16);
         self.indexed_indirect(Register::Y, indirect_addr)
     }
 
@@ -1123,25 +1123,25 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn store_register(&mut self, register: Register, addr: u16, memory: &mut Bus) {
+    fn store_register(&mut self, register: Register, addr: u16, bus: &mut Bus) {
         let value = match register {
             Register::A => self.regs.a,
             Register::X => self.regs.x,
             Register::Y => self.regs.y,
         };
-        memory.write_byte(addr, value);
+        bus.write_byte(addr, value);
     }
 
     #[tracing::instrument]
-    fn push_to_stack(&mut self, memory: &mut Bus, value: u8) {
-        memory.write_byte(STACK_PAGE + self.regs.sp as u16, value);
+    fn push_to_stack(&mut self, bus: &mut Bus, value: u8) {
+        bus.write_byte(STACK_PAGE + self.regs.sp as u16, value);
         self.regs.sp = self.regs.sp.wrapping_sub(1);
     }
 
     #[tracing::instrument]
-    fn pop_from_stack(&mut self, memory: &mut Bus) -> u8 {
+    fn pop_from_stack(&mut self, bus: &mut Bus) -> u8 {
         self.regs.sp = self.regs.sp.wrapping_add(1);
-        memory.read_byte(STACK_PAGE + self.regs.sp as u16)
+        bus.read_byte(STACK_PAGE + self.regs.sp as u16)
     }
 
     #[tracing::instrument]
@@ -1150,19 +1150,19 @@ impl Cpu {
     }
 
     #[tracing::instrument]
-    fn handle_interrupt(&mut self, memory: &mut Bus, vector: u16) -> usize {
+    fn handle_interrupt(&mut self, bus: &mut Bus, vector: u16) -> usize {
         let return_addr = self.regs.pc;
-        self.push_to_stack(memory, (return_addr >> 8) as u8);
-        self.push_to_stack(memory, return_addr as u8);
-        self.push_to_stack(memory, self.regs.status.into());
+        self.push_to_stack(bus, (return_addr >> 8) as u8);
+        self.push_to_stack(bus, return_addr as u8);
+        self.push_to_stack(bus, self.regs.status.into());
         self.regs.status.interrupt_disable = true;
-        self.regs.pc = memory.read_word(vector);
+        self.regs.pc = bus.read_word(vector);
 
         7
     }
 
     #[tracing::instrument]
-    fn handle_reset(&mut self, memory: &mut Bus) -> usize {
+    fn handle_reset(&mut self, bus: &mut Bus) -> usize {
         self.regs.a = 0;
         self.regs.x = 0;
         self.regs.y = 0;
@@ -1171,23 +1171,23 @@ impl Cpu {
             interrupt_disable: true,
             ..Default::default()
         };
-        self.regs.pc = memory.read_word(RESET_VECTOR);
+        self.regs.pc = bus.read_word(RESET_VECTOR);
 
         8
     }
 
     #[tracing::instrument]
-    fn handle_interrupt_request(&mut self, memory: &mut Bus) {
+    fn handle_interrupt_request(&mut self, bus: &mut Bus) {
         if self.reset_interrupt_pending {
             self.reset_interrupt_pending = false;
-            self.cycles_left_for_instruction = self.handle_reset(memory);
+            self.cycles_left_for_instruction = self.handle_reset(bus);
         } else if self.nmi_interrupt_pending {
             self.nmi_interrupt_pending = false;
-            self.cycles_left_for_instruction = self.handle_interrupt(memory, NMI_VECTOR);
+            self.cycles_left_for_instruction = self.handle_interrupt(bus, NMI_VECTOR);
         } else if self.irq_interrupt_pending {
             self.irq_interrupt_pending = false;
             if !self.regs.status.interrupt_disable {
-                self.cycles_left_for_instruction = self.handle_interrupt(memory, INTERRUPT_VECTOR);
+                self.cycles_left_for_instruction = self.handle_interrupt(bus, INTERRUPT_VECTOR);
             }
         }
     }
@@ -1215,14 +1215,14 @@ impl Cpu {
 
     /// Ticks the clock of the CPU.
     #[tracing::instrument]
-    pub fn clock(&mut self, memory: &mut Bus) {
+    pub fn clock(&mut self, bus: &mut Bus) {
         if self.cycles_left_for_instruction > 0 {
             // Processing current instruction
             self.cycles_left_for_instruction -= 1;
             return;
         }
 
-        self.handle_interrupt_request(memory);
+        self.handle_interrupt_request(bus);
         if self.cycles_left_for_instruction > 0 {
             // Processing interrupt
             self.cycles_left_for_instruction -= 1;
@@ -1230,32 +1230,32 @@ impl Cpu {
         }
 
         // Ok, we're ready to process the next instruction
-        let instruction = self.fetch_and_decode(memory);
+        let instruction = self.fetch_and_decode(bus);
         self.regs.pc += instruction.size() as u16;
-        self.cycles_left_for_instruction = self.execute_instruction(&instruction, memory);
+        self.cycles_left_for_instruction = self.execute_instruction(&instruction, bus);
         self.last_instruction = Some(instruction);
         self.cycles_left_for_instruction -= 1;
     }
 
     /// Steps the CPU by one instruction.
     #[tracing::instrument]
-    pub fn step(&mut self, memory: &mut Bus) {
+    pub fn step(&mut self, bus: &mut Bus) {
         // Fetch and decode the instruction
-        self.clock(memory);
+        self.clock(bus);
 
         // Execute the instruction
         for _ in 0..self.cycles_left_for_instruction {
-            self.clock(memory);
+            self.clock(bus);
         }
     }
 
     /// Runs the CPU until the given run condition is met.
     #[tracing::instrument]
-    pub fn run(&mut self, memory: &mut Bus, run_option: RunOption) {
+    pub fn run(&mut self, bus: &mut Bus, run_option: RunOption) {
         match run_option {
             RunOption::UntilCycles(cycles_to_run) => {
                 for _ in 0..cycles_to_run {
-                    self.clock(memory);
+                    self.clock(bus);
                 }
             }
             RunOption::StopOnBreakInstruction => loop {
@@ -1265,11 +1265,11 @@ impl Cpu {
                         break;
                     }
                 }
-                self.step(memory);
+                self.step(bus);
             },
             RunOption::StopOnJumpToSelf => loop {
                 let last_instruction = self.last_instruction.clone();
-                self.step(memory);
+                self.step(bus);
 
                 // Break if the last instruction was a jump to itself
                 if let Some(ins) = last_instruction {
@@ -1315,7 +1315,7 @@ mod tests {
         /// Optional function to initialize the memory before running the test.
         init_memory_fn: Option<fn(&mut Bus)>,
         /// Optional function to assert the memory after running the test.
-        expected_memory_fn: Option<fn(&Bus)>,
+        expected_memory_fn: Option<fn(&mut Bus)>,
     }
 
     impl Default for TestCase {
@@ -1354,7 +1354,7 @@ mod tests {
             assert_eq!(cpu.regs.status, self.expected_cpu.regs.status);
 
             if let Some(expected_memory_fn) = self.expected_memory_fn {
-                expected_memory_fn(&bus);
+                expected_memory_fn(&mut bus);
             }
         }
     }
@@ -1733,7 +1733,7 @@ mod tests {
             TestCase {
                 // Indirect jump
                 code: "JMP ($ff00)",
-                init_memory_fn: Some(|memory| memory.write_word(0xff00, 0x1234)),
+                init_memory_fn: Some(|bus| bus.write_word(0xff00, 0x1234)),
                 expected_cpu: Cpu {
                     regs: Registers {
                         pc: 0x1234,
@@ -1757,9 +1757,9 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 6,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x01fe), 0x02);
-                    assert_eq!(memory.read_byte(0x01ff), 0x80);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x01fe), 0x02);
+                    assert_eq!(bus.read_byte(0x01ff), 0x80);
                 }),
                 ..Default::default()
             },
@@ -1767,8 +1767,8 @@ mod tests {
             TestCase {
                 // Return from subroutine
                 code: "JSR $ff00\nLDA #$01",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0xff00, 0x60); // RTS
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0xff00, 0x60); // RTS
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -1944,7 +1944,7 @@ mod tests {
             TestCase {
                 // Test BIT with negative
                 code: "LDA #$80\nBIT $00",
-                init_memory_fn: Some(|memory| memory.write_byte(0x00, 0x80)),
+                init_memory_fn: Some(|bus| bus.write_byte(0x00, 0x80)),
                 expected_cpu: Cpu {
                     regs: Registers {
                         a: 0x80,
@@ -1965,7 +1965,7 @@ mod tests {
             TestCase {
                 // Test BIT with overflow
                 code: "LDA #$40\nBIT $00",
-                init_memory_fn: Some(|memory| memory.write_byte(0x00, 0x40)),
+                init_memory_fn: Some(|bus| bus.write_byte(0x00, 0x40)),
                 expected_cpu: Cpu {
                     regs: Registers {
                         a: 0x40,
@@ -1986,7 +1986,7 @@ mod tests {
             TestCase {
                 // Test BIT with overflow and negative
                 code: "LDA #%11000000\nBIT $00",
-                init_memory_fn: Some(|memory| memory.write_byte(0x00, 0b11000000)),
+                init_memory_fn: Some(|bus| bus.write_byte(0x00, 0b11000000)),
                 expected_cpu: Cpu {
                     regs: Registers {
                         a: 0b11000000,
@@ -2338,11 +2338,11 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x10);
                 }),
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x10), 0x0f);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x10), 0x0f);
                 }),
             },
             TestCase {
@@ -2359,11 +2359,11 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x01);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x01);
                 }),
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x10), 0x00);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x10), 0x00);
                 }),
             },
             TestCase {
@@ -2376,11 +2376,11 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x80);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x80);
                 }),
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x10), 0x7f);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x10), 0x7f);
                 }),
             },
             // DEX
@@ -2438,8 +2438,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x01);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x01);
                 }),
                 ..Default::default()
             },
@@ -2457,8 +2457,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0xff);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0xff);
                 }),
                 ..Default::default()
             },
@@ -2477,8 +2477,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 5,
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x7f);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x7f);
                 }),
                 ..Default::default()
             },
@@ -2576,8 +2576,8 @@ mod tests {
             // Zero page
             TestCase {
                 code: "LDA $10",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2593,8 +2593,8 @@ mod tests {
             // Zero page, X
             TestCase {
                 code: "LDX #$01\nLDA $10,X",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x11, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x11, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2611,8 +2611,8 @@ mod tests {
             // Absolute
             TestCase {
                 code: "LDA $1234",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x1234, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x1234, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2628,8 +2628,8 @@ mod tests {
             // Absolute, X
             TestCase {
                 code: "LDX #$01\nLDA $1234,X",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x1235, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x1235, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2646,8 +2646,8 @@ mod tests {
             // Absolute, X, page boundary crossed
             TestCase {
                 code: "LDX #$01\nLDA $12ff,X",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x1300, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x1300, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2664,8 +2664,8 @@ mod tests {
             // Absolute, Y
             TestCase {
                 code: "LDY #$01\nLDA $1234,Y",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x1235, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x1235, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2682,8 +2682,8 @@ mod tests {
             // Absolute, Y, page boundary crossed
             TestCase {
                 code: "LDY #$01\nLDA $12ff,Y",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x1300, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x1300, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2700,9 +2700,9 @@ mod tests {
             // Indirect, X
             TestCase {
                 code: "LDX #$01\nLDA ($10,X)",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x11, 0x34);
-                    memory.write_byte(0x34, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x11, 0x34);
+                    bus.write_byte(0x34, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2719,9 +2719,9 @@ mod tests {
             // Indirect, Y
             TestCase {
                 code: "LDY #$01\nLDA ($10),Y",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x10, 0x34);
-                    memory.write_byte(0x35, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x10, 0x34);
+                    bus.write_byte(0x35, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2738,9 +2738,9 @@ mod tests {
             // Indirect, Y, page boundary crossed
             TestCase {
                 code: "LDY #$01\nLDA ($34),Y",
-                init_memory_fn: Some(|memory| {
-                    memory.write_byte(0x0034, 0xff);
-                    memory.write_byte(0x0000, 0x10);
+                init_memory_fn: Some(|bus| {
+                    bus.write_byte(0x0034, 0xff);
+                    bus.write_byte(0x0000, 0x10);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -2807,8 +2807,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x10), 0x34);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x10), 0x34);
                 }),
                 ..Default::default()
             },
@@ -2824,8 +2824,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 4,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x1234), 0x34);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x1234), 0x34);
                 }),
                 ..Default::default()
             },
@@ -2956,8 +2956,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x01ff), 0x34);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x01ff), 0x34);
                 }),
                 ..Default::default()
             },
@@ -2993,8 +2993,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x01ff), 0b1000_0000);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x01ff), 0b1000_0000);
                 }),
                 ..Default::default()
             },
@@ -3015,8 +3015,8 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 2 + 3 + 2 + 4,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_byte(0x01ff), 0b1000_0000); // Old stack value
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_byte(0x01ff), 0b1000_0000); // Old stack value
                 }),
                 ..Default::default()
             },
@@ -3031,8 +3031,8 @@ mod tests {
             // BRK
             TestCase {
                 code: "BRK",
-                init_memory_fn: Some(|memory| {
-                    memory.write_word(INTERRUPT_VECTOR, 0x1200);
+                init_memory_fn: Some(|bus| {
+                    bus.write_word(INTERRUPT_VECTOR, 0x1200);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {
@@ -3048,20 +3048,20 @@ mod tests {
                     ..Default::default()
                 },
                 expected_cycles: 7,
-                expected_memory_fn: Some(|memory| {
-                    assert_eq!(memory.read_word(0x01fe), PROGRAM_START + 1 + 2);
+                expected_memory_fn: Some(|bus| {
+                    assert_eq!(bus.read_word(0x01fe), PROGRAM_START + 1 + 2);
                 }),
             },
             // RTI
             TestCase {
                 code: "BRK",
-                init_memory_fn: Some(|memory| {
-                    memory.write_word(INTERRUPT_VECTOR, 0x1200);
+                init_memory_fn: Some(|bus| {
+                    bus.write_word(INTERRUPT_VECTOR, 0x1200);
                     // LDA #$01
-                    memory.write_byte(0x1200, 0xa9);
-                    memory.write_byte(0x1201, 0x01);
+                    bus.write_byte(0x1200, 0xa9);
+                    bus.write_byte(0x1201, 0x01);
                     // RTI
-                    memory.write_byte(0x1202, 0x40);
+                    bus.write_byte(0x1202, 0x40);
                 }),
                 expected_cpu: Cpu {
                     regs: Registers {

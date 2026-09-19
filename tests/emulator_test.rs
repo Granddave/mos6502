@@ -2,7 +2,7 @@ use mos6502::emulator::cpu::RunOption;
 use mos6502::{
     assembler::assemble_code,
     emulator::{
-        bus::{Bus, Readable, Writeable},
+        bus::Bus,
         cpu::{self, Cpu},
     },
 };

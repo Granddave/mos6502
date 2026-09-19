@@ -1,7 +1,7 @@
 use crate::{
     disassembler::{disassemble_code, listing},
     emulator::{
-        bus::{Bus, Readable, Writeable},
+        bus::Bus,
         cpu::{self, Cpu, STACK_BASE, STACK_PAGE},
     },
 };
@@ -27,7 +27,7 @@ pub struct App {
     /// Emulated CPU
     cpu: Cpu,
     /// Emulated memory
-    memory: Bus,
+    bus: Bus,
 
     /// The program to run.
     program: Vec<u8>,
@@ -86,7 +86,7 @@ impl App {
             program_start,
             disassembled_program: disassemble_program(program, program_start)?,
             selected_widget: AppWidget::Disassembly,
-            memory: Bus::new(),
+            bus: Bus::new(),
             ..Default::default()
         };
 
@@ -100,10 +100,9 @@ impl App {
 
     /// Resets the application with the provided program.
     pub fn reset(&mut self) {
-        self.memory = Bus::new();
-        self.memory
-            .write_word(cpu::RESET_VECTOR, self.program_start); // TODO: Include in the program
-        self.memory.load(0x0000, &self.program);
+        self.bus = Bus::new();
+        self.bus.write_word(cpu::RESET_VECTOR, self.program_start); // TODO: Include in the program
+        self.bus.load(0x0000, &self.program);
 
         self.cpu = Cpu::new();
         self.cpu.reset();
@@ -128,8 +127,8 @@ impl App {
     /// Steps the CPU by one instruction.
     pub fn step_cpu(&mut self) {
         match self.run_mode {
-            RunMode::Run => self.cpu.clock(&mut self.memory),
-            RunMode::Step => self.cpu.step(&mut self.memory),
+            RunMode::Run => self.cpu.clock(&mut self.bus),
+            RunMode::Step => self.cpu.step(&mut self.bus),
         }
         self.state.invalidate();
     }
@@ -163,11 +162,11 @@ impl App {
         self.state.clone()
     }
 
-    pub fn memory_slice(&self, start: usize, end: usize) -> &[u8] {
-        self.memory.data()[start..end].as_ref()
+    pub fn memory_slice(&self, start: usize, end: usize) -> Vec<u8> {
+        self.bus.peek_slice(start as u16, end as u16)
     }
 
-    pub fn stack_memory(&self) -> &[u8] {
+    pub fn stack_memory(&self) -> Vec<u8> {
         let sp_addr = STACK_PAGE + self.state.sp.get() as u16 + 1;
         self.memory_slice(sp_addr as usize, STACK_BASE as usize + 1)
     }
